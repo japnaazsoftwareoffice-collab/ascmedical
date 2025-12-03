@@ -1,0 +1,438 @@
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase configuration
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Database service functions
+export const db = {
+    // ==================== AUTHENTICATION ====================
+    async login(email, password) {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*, surgeons(*), patients(*)')
+            .eq('email', email)
+            .eq('password', password)
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async getUsers() {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addUser(user) {
+        const { data, error } = await supabase
+            .from('users')
+            .insert([user])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateUser(id, updates) {
+        const { data, error } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteUser(id) {
+        const { error } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== PATIENTS ====================
+    async getPatients() {
+        const { data, error } = await supabase
+            .from('patients')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getPatientById(id) {
+        const { data, error } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async addPatient(patient) {
+        const { data, error } = await supabase
+            .from('patients')
+            .insert([patient])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updatePatient(id, updates) {
+        const { data, error } = await supabase
+            .from('patients')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deletePatient(id) {
+        const { error } = await supabase
+            .from('patients')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== SURGEONS ====================
+    async getSurgeons() {
+        const { data, error } = await supabase
+            .from('surgeons')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getSurgeonById(id) {
+        const { data, error } = await supabase
+            .from('surgeons')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async addSurgeon(surgeon) {
+        const { data, error } = await supabase
+            .from('surgeons')
+            .insert([surgeon])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateSurgeon(id, updates) {
+        const { data, error } = await supabase
+            .from('surgeons')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteSurgeon(id) {
+        const { error } = await supabase
+            .from('surgeons')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== CPT CODES ====================
+    async getCPTCodes() {
+        const { data, error } = await supabase
+            .from('cpt_codes')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addCPTCode(cptCode) {
+        const { data, error } = await supabase
+            .from('cpt_codes')
+            .insert([cptCode])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateCPTCode(id, updates) {
+        const { data, error } = await supabase
+            .from('cpt_codes')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteCPTCode(id) {
+        const { error } = await supabase
+            .from('cpt_codes')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== CATEGORIES (Virtual) ====================
+    async updateCategoryName(oldName, newName) {
+        const { error } = await supabase
+            .from('cpt_codes')
+            .update({ category: newName })
+            .eq('category', oldName);
+
+        if (error) throw error;
+    },
+
+    async deleteCategory(categoryName) {
+        if (!categoryName) throw new Error('Category name is required');
+
+        // Move codes to 'General' instead of deleting them to prevent data loss
+        const { data, error } = await supabase
+            .from('cpt_codes')
+            .update({ category: 'General' })
+            .eq('category', categoryName)
+            .select();
+
+        if (error) throw error;
+        return data;
+    },
+
+    // ==================== SURGERIES ====================
+    async getSurgeries() {
+        const { data, error } = await supabase
+            .from('surgeries')
+            .select('*, patients(*), surgeons(*)')
+            .order('date', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getSurgeriesByPatient(patientId) {
+        const { data, error } = await supabase
+            .from('surgeries')
+            .select('*, patients(*), surgeons(*)')
+            .eq('patient_id', patientId)
+            .order('date', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getSurgeriesBySurgeon(surgeonId) {
+        const { data, error } = await supabase
+            .from('surgeries')
+            .select('*, patients(*), surgeons(*)')
+            .eq('surgeon_id', surgeonId)
+            .order('date', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addSurgery(surgery) {
+        const { data, error } = await supabase
+            .from('surgeries')
+            .insert([surgery])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateSurgery(id, updates) {
+        const { data, error } = await supabase
+            .from('surgeries')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteSurgery(id) {
+        const { error } = await supabase
+            .from('surgeries')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== BILLING ====================
+    async getBilling() {
+        const { data, error } = await supabase
+            .from('billing')
+            .select('*, patients(*), surgeries(*)')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getBillingByPatient(patientId) {
+        const { data, error } = await supabase
+            .from('billing')
+            .select('*, patients(*), surgeries(*)')
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addBilling(billing) {
+        const { data, error } = await supabase
+            .from('billing')
+            .insert([billing])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateBilling(id, updates) {
+        const { data, error } = await supabase
+            .from('billing')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteBilling(id) {
+        const { error } = await supabase
+            .from('billing')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== OR BLOCK SCHEDULE ====================
+    async getORBlockSchedule() {
+        const { data, error } = await supabase
+            .from('or_block_schedule')
+            .select('*')
+            .order('id', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addORBlockSchedule(schedule) {
+        const { data, error } = await supabase
+            .from('or_block_schedule')
+            .insert([schedule])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateORBlockSchedule(id, updates) {
+        const { data, error } = await supabase
+            .from('or_block_schedule')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteORBlockSchedule(id) {
+        const { error } = await supabase
+            .from('or_block_schedule')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== REAL-TIME SUBSCRIPTIONS ====================
+    subscribeToPatients(callback) {
+        return supabase
+            .channel('patients-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, callback)
+            .subscribe();
+    },
+
+    subscribeToSurgeons(callback) {
+        return supabase
+            .channel('surgeons-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'surgeons' }, callback)
+            .subscribe();
+    },
+
+    subscribeToCPTCodes(callback) {
+        return supabase
+            .channel('cpt-codes-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cpt_codes' }, callback)
+            .subscribe();
+    },
+
+    subscribeToSurgeries(callback) {
+        return supabase
+            .channel('surgeries-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'surgeries' }, callback)
+            .subscribe();
+    },
+
+    subscribeToBilling(callback) {
+        return supabase
+            .channel('billing-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'billing' }, callback)
+            .subscribe();
+    }
+};
