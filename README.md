@@ -39,9 +39,9 @@ I've created a **complete, production-ready hospital management system** with:
 ## 🚀 How to Use
 
 ### 1. **Start the Application**
-```bash
+\`\`\`bash
 npm run dev
-```
+\`\`\`
 
 ### 2. **Login Screen**
 You'll see a beautiful login screen with 3 role options.
@@ -53,16 +53,16 @@ You'll see a beautiful login screen with 3 role options.
 
 ### 4. **Or Login Manually**
 **Admin:**
-- Email: `admin@hospital.com`
-- Password: `admin123`
+- Email: \`admin@hospital.com\`
+- Password: \`admin123\`
 
 **Surgeon:**
-- Email: `surgeon@hospital.com`
-- Password: `surgeon123`
+- Email: \`surgeon@hospital.com\`
+- Password: \`surgeon123\`
 
 **Patient:**
-- Email: `patient@hospital.com`
-- Password: `patient123`
+- Email: \`patient@hospital.com\`
+- Password: \`patient123\`
 
 ---
 
@@ -100,11 +100,11 @@ You'll see a beautiful login screen with 3 role options.
 - All features work, but data won't persist
 
 ### Option 2: Connect to Supabase (Recommended)
-Follow the guide in `SUPABASE_SETUP.md`:
+Follow the guide in \`SUPABASE_SETUP.md\`:
 1. Create free Supabase account (5 min)
 2. Create project
 3. Get API credentials
-4. Create `.env` file
+4. Create \`.env\` file
 5. Run SQL schema
 6. Restart dev server
 
@@ -139,7 +139,7 @@ Follow the guide in `SUPABASE_SETUP.md`:
 
 ## 📁 Project Structure
 
-```
+\`\`\`
 d:/Antigravity/
 ├── src/
 │   ├── components/
@@ -162,7 +162,7 @@ d:/Antigravity/
 ├── SUPABASE_SETUP.md          ← Setup guide
 ├── QUICK_START.md             ← Quick start guide
 └── .env.example               ← Config template
-```
+\`\`\`
 
 ---
 
@@ -220,9 +220,9 @@ Your hospital management system is **fully functional** with:
 
 ## 🆘 Need Help?
 
-- **Setup Issues**: See `SUPABASE_SETUP.md`
-- **Quick Start**: See `QUICK_START.md`
-- **Database Schema**: See `supabase-schema.sql`
+- **Setup Issues**: See \`SUPABASE_SETUP.md\`
+- **Quick Start**: See \`QUICK_START.md\`
+- **Database Schema**: See \`supabase-schema.sql\`
 
 ---
 
