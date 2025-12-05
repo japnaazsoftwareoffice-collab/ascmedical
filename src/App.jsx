@@ -14,6 +14,8 @@ import PatientSurgeries from './components/PatientSurgeries';
 import PatientBilling from './components/PatientBilling';
 import ORBlockSchedule from './components/ORBlockSchedule';
 import UserManagement from './components/UserManagement';
+import ClaimsManagement from './components/ClaimsManagement';
+import Settings from './components/Settings';
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
 import './App.css';
@@ -31,6 +33,7 @@ function App() {
   const [cptCodes, setCptCodes] = useState([]);
   const [users, setUsers] = useState([]);
   const [billing, setBilling] = useState([]);
+  const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -87,13 +90,14 @@ function App() {
       }
 
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData] = await Promise.all([
+      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData] = await Promise.all([
         db.getPatients(),
         db.getSurgeons(),
         db.getCPTCodes(),
         db.getSurgeries(),
         user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling(),
-        user.role === 'admin' ? db.getUsers() : Promise.resolve([])
+        user.role === 'admin' ? db.getUsers() : Promise.resolve([]),
+        db.getClaims ? db.getClaims() : Promise.resolve([])
       ]);
 
       // Transform surgeons to add 'name' property
@@ -108,6 +112,7 @@ function App() {
       setSurgeries(surgeriesData);
       setBilling(billingData);
       setUsers(usersData);
+      setClaims(claimsData || []);
     } catch (err) {
       console.error('Error loading data:', err);
       // Fallback to mock data on error
@@ -175,6 +180,7 @@ function App() {
     setSurgeons([]);
     setCptCodes([]);
     setBilling([]);
+    setClaims([]);
   };
 
   const handleAddPatient = async (newPatient) => {
@@ -521,6 +527,66 @@ function App() {
     }
   };
 
+  // Claims Management Handlers
+  const handleAddClaim = async (newClaim) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        // No database - use local state only
+        const claimWithId = { ...newClaim, id: Date.now() };
+        setClaims([claimWithId, ...claims]);
+        return claimWithId;
+      }
+
+      const addedClaim = await db.addClaim(newClaim);
+      setClaims([addedClaim, ...claims]);
+      return addedClaim;
+    } catch (err) {
+      console.error('Error adding claim:', err);
+      // Fallback to local state
+      const claimWithId = { ...newClaim, id: Date.now() };
+      setClaims([claimWithId, ...claims]);
+      return claimWithId;
+    }
+  };
+
+  const handleUpdateClaim = async (updatedClaim) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setClaims(claims.map(c => c.id === updatedClaim.id ? updatedClaim : c));
+        return;
+      }
+
+      await db.updateClaim(updatedClaim.id, updatedClaim);
+      setClaims(claims.map(c => c.id === updatedClaim.id ? updatedClaim : c));
+    } catch (err) {
+      console.error('Error updating claim:', err);
+      // Fallback
+      setClaims(claims.map(c => c.id === updatedClaim.id ? updatedClaim : c));
+    }
+  };
+
+  const handleDeleteClaim = async (id) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setClaims(claims.filter(c => c.id !== id));
+        return;
+      }
+
+      await db.deleteClaim(id);
+      setClaims(claims.filter(c => c.id !== id));
+    } catch (err) {
+      console.error('Error deleting claim:', err);
+      // Fallback
+      setClaims(claims.filter(c => c.id !== id));
+    }
+  };
+
   // Show login screen if not logged in
   if (!user) {
     return <Login onLogin={handleLogin} />;
@@ -609,6 +675,23 @@ function App() {
           onRefreshCPTCodes={loadAllData}
         />
       );
+      if (view === 'claims') return (
+        <ClaimsManagement
+          claims={claims}
+          patients={patients}
+          surgeries={surgeries}
+          billing={billing}
+          onAdd={handleAddClaim}
+          onUpdate={handleUpdateClaim}
+          onDelete={handleDeleteClaim}
+          onAddBilling={async (bill) => {
+            const addedBill = await db.addBilling(bill);
+            setBilling([addedBill, ...billing]);
+            return addedBill;
+          }}
+        />
+      );
+      if (view === 'settings') return <Settings />;
     }
 
     // Surgeon views

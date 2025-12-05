@@ -1,0 +1,147 @@
+/* HCFA-1500 Form Styling */
+@media print {
+    @page {
+        size: 8.5in 11in;
+        margin: 0.25in;
+    }
+    body * {
+        visibility: hidden;
+    }
+    .hcfa-container, .hcfa-container * {
+        visibility: visible;
+    }
+    .hcfa-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    .no-print {
+        display: none !important;
+    }
+}
+
+.hcfa-container {
+    width: 8.5in;
+    height: 11in;
+    background: white;
+    color: #cc2229; /* Standard OCR Red color for form lines */
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+    position: relative;
+    box-sizing: border-box;
+    padding: 0.25in;
+    margin: 0 auto;
+    border: 1px solid #eee;
+}
+
+.hcfa-content {
+    color: #000; /* Black for data */
+    font-family: 'Courier New', Courier, monospace; /* Monospace for alignment */
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.hcfa-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #cc2229;
+    padding-bottom: 5px;
+}
+
+.hcfa-row {
+    display: flex;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.hcfa-col {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #cc2229;
+    padding: 2px 4px;
+    position: relative;
+}
+
+.hcfa-col:last-child {
+    border-right: none;
+}
+
+.hcfa-label {
+    color: #cc2229;
+    font-size: 8px;
+    margin-bottom: 2px;
+    line-height: 1;
+}
+
+.hcfa-input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    color: #000;
+    font-weight: bold;
+}
+
+.hcfa-checkbox {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 8px;
+}
+
+.hcfa-checkbox input {
+    margin-right: 2px;
+}
+
+.hcfa-section-title {
+    background: #cc2229;
+    color: white;
+    font-weight: bold;
+    padding: 2px 5px;
+    font-size: 10px;
+    margin: 5px 0;
+    display: block;
+}
+
+.box-container {
+    border: 1px solid #cc2229;
+    margin-bottom: -1px; /* Collapse borders */
+    display: flex;
+}
+
+.box {
+    padding: 2px;
+    border-right: 1px solid #cc2229;
+    position: relative;
+}
+
+.box:last-child {
+    border-right: none;
+}
+
+/* Specific Box Widths approx */
+.w-full { width: 100%; }
+.w-half { width: 50%; }
+.w-third { width: 33.33%; }
+.w-quarter { width: 25%; }
+
+.carrier-block {
+    height: 100px;
+    border: 1px solid #cc2229;
+    margin-bottom: 10px;
+    padding: 10px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+}
+
+.carrier-info {
+    width: 50%;
+    color: #000;
+    font-size: 12px;
+    line-height: 1.4;
+}

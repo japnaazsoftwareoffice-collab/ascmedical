@@ -400,6 +400,71 @@ export const db = {
         if (error) throw error;
     },
 
+    // ==================== INSURANCE CLAIMS ====================
+    async getClaims() {
+        const { data, error } = await supabase
+            .from('insurance_claims')
+            .select('*, patients(*), surgeries(*)')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getClaimById(id) {
+        const { data, error } = await supabase
+            .from('insurance_claims')
+            .select('*, patients(*), surgeries(*)')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async getClaimsByPatient(patientId) {
+        const { data, error } = await supabase
+            .from('insurance_claims')
+            .select('*, patients(*), surgeries(*)')
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addClaim(claim) {
+        const { data, error } = await supabase
+            .from('insurance_claims')
+            .insert([claim])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateClaim(id, updates) {
+        const { data, error } = await supabase
+            .from('insurance_claims')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteClaim(id) {
+        const { error } = await supabase
+            .from('insurance_claims')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
     // ==================== REAL-TIME SUBSCRIPTIONS ====================
     subscribeToPatients(callback) {
         return supabase
@@ -434,5 +499,52 @@ export const db = {
             .channel('billing-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'billing' }, callback)
             .subscribe();
+    },
+
+    // ==================== SETTINGS ====================
+    async getSettings() {
+        const { data, error } = await supabase
+            .from('settings')
+            .select('*')
+            .limit(1);
+
+        // Don't throw error if no rows found, just return null
+        if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching settings:', error);
+            throw error;
+        }
+
+        return data && data.length > 0 ? data[0] : null;
+    },
+
+    async updateSettings(updates) {
+        // Get the first (and only) settings record
+        const { data: existing } = await supabase
+            .from('settings')
+            .select('id')
+            .limit(1)
+            .single();
+
+        if (existing) {
+            const { data, error } = await supabase
+                .from('settings')
+                .update({ ...updates, updated_at: new Date().toISOString() })
+                .eq('id', existing.id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        } else {
+            // Insert if no settings exist
+            const { data, error } = await supabase
+                .from('settings')
+                .insert([updates])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        }
     }
 };

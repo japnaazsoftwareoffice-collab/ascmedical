@@ -55,7 +55,10 @@ const PatientBilling = ({ billing, surgeries }) => {
             <div className={`bill-card ${isOverdue ? 'overdue-card' : ''}`}>
                 <div className="bill-header">
                     <div className="bill-info">
-                        <div className="bill-id">Bill #{bill.id}</div>
+                        <div className="bill-id">
+                            Bill #{bill.id}
+                            {bill.claim_id && <span style={{ fontSize: '0.8em', color: '#64748b', marginLeft: '10px', fontWeight: 'normal' }}>Claim #{bill.claim_id}</span>}
+                        </div>
                         <div className="bill-date">Created: {formatDate(bill.created_at)}</div>
                     </div>
                     <div className={`status-badge status-${status.class}`}>

@@ -8,12 +8,14 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
             return [
                 { id: 'dashboard', icon: '📊', label: 'Financial Dashboard' },
                 { id: 'register', icon: '👥', label: 'Patient Management' },
+                { id: 'claims', icon: '📄', label: 'Claims Management' },
                 { id: 'scheduler', icon: '📅', label: 'Surgery Log & OR' },
                 { id: 'or-schedule', icon: '🗓️', label: 'OR Block Schedule' },
                 { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management' },
                 { id: 'users', icon: '🔐', label: 'User Management' },
                 { id: 'analysis', icon: '🏥', label: 'OR Utilization' },
-                { id: 'cpt', icon: '⚙️', label: 'CPT & Categories' }
+                { id: 'cpt', icon: '⚙️', label: 'CPT & Categories' },
+                { id: 'settings', icon: '🔧', label: 'Settings' }
             ];
         } else if (user.role === 'surgeon') {
             return [
