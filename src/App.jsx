@@ -681,6 +681,7 @@ function App() {
           patients={patients}
           surgeries={surgeries}
           billing={billing}
+          cptCodes={cptCodes}
           onAdd={handleAddClaim}
           onUpdate={handleUpdateClaim}
           onDelete={handleDeleteClaim}

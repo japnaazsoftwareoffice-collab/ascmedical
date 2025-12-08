@@ -21,9 +21,12 @@ const calculateCosmeticFees = (durationMinutes) => {
         330: 2100, 360: 2250, 390: 2400, 420: 2550, 480: 2700, 540: 2850
     };
 
+    // Round up to nearest 30 minutes for fee lookup
+    const lookupDuration = Math.ceil(durationMinutes / 30) * 30;
+
     return {
-        facilityFee: facilityRates[durationMinutes] || 0,
-        anesthesiaFee: anesthesiaRates[durationMinutes] || 0
+        facilityFee: facilityRates[lookupDuration] || 0,
+        anesthesiaFee: anesthesiaRates[lookupDuration] || 0
     };
 };
 
@@ -845,22 +848,14 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                             });
                                         }}
                                     >
-                                        <option value={30}>0.5 hour (30 min)</option>
-                                        <option value={60}>1.0 hour (60 min)</option>
-                                        <option value={90}>1.5 hours (90 min)</option>
-                                        <option value={120}>2.0 hours (120 min)</option>
-                                        <option value={150}>2.5 hours (150 min)</option>
-                                        <option value={180}>3.0 hours (180 min)</option>
-                                        <option value={210}>3.5 hours (210 min)</option>
-                                        <option value={240}>4.0 hours (240 min)</option>
-                                        <option value={270}>4.5 hours (270 min)</option>
-                                        <option value={300}>5.0 hours (300 min)</option>
-                                        <option value={330}>5.5 hours (330 min)</option>
-                                        <option value={360}>6.0 hours (360 min)</option>
-                                        <option value={390}>6.5 hours (390 min)</option>
-                                        <option value={420}>7.0 hours (420 min)</option>
-                                        <option value={480}>7.5 hours (480 min)</option>
-                                        <option value={540}>8.0 hours (540 min)</option>
+                                        {Array.from({ length: 32 }, (_, i) => (i + 1) * 15).map(mins => {
+                                            const hours = mins / 60;
+                                            return (
+                                                <option key={mins} value={mins}>
+                                                    {hours} hour{hours !== 1 ? 's' : ''} ({mins} min)
+                                                </option>
+                                            );
+                                        })}
                                     </select>
 
                                     {!isCosmeticSurgeon && (

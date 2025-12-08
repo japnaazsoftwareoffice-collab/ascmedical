@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import Swal from 'sweetalert2';
 import HCFA1500Form from './HCFA1500Form';
+import { calculateORCost } from '../utils/hospitalUtils';
 import './Management.css';
 
-const ClaimsManagement = ({ claims = [], patients, surgeries, billing = [], onAdd, onUpdate, onDelete, onAddBilling }) => {
+const ClaimsManagement = ({ claims = [], patients, surgeries, billing = [], cptCodes = [], onAdd, onUpdate, onDelete, onAddBilling }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClaim, setEditingClaim] = useState(null);
     const [printingClaim, setPrintingClaim] = useState(null);
@@ -306,10 +307,44 @@ const ClaimsManagement = ({ claims = [], patients, surgeries, billing = [], onAd
         if (name === 'surgery_id' && value) {
             const surgery = surgeries.find(s => s.id === parseInt(value));
             if (surgery) {
+                // Calculate Total Charges
+                let totalCharges = 0;
+                const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
+
+                if (isCosmeticSurgery) {
+                    // Parse cosmetic fees from notes
+                    if (surgery.notes) {
+                        const facilityMatch = surgery.notes.match(/Facility Fee: \$([\d,]+)/);
+                        const anesthesiaMatch = surgery.notes.match(/Anesthesia: \$([\d,]+)/);
+                        const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+                        const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+                        totalCharges = facilityFee + anesthesiaFee;
+                    }
+                } else {
+                    // Regular Surgery: CPT Codes + OR Cost
+                    const cptTotal = (surgery.cpt_codes || []).reduce((sum, code) => {
+                        const cpt = cptCodes.find(c => c.code === code);
+                        return sum + (cpt?.reimbursement || 0);
+                    }, 0);
+
+                    let orCost = calculateORCost(surgery.duration_minutes || 0);
+
+                    // Check for Self-Pay Anesthesia in notes
+                    if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
+                        const match = surgery.notes.match(/Self-Pay Anesthesia: \$([\d,]+)/);
+                        if (match) {
+                            orCost += parseFloat(match[1].replace(/,/g, ''));
+                        }
+                    }
+
+                    totalCharges = cptTotal + orCost;
+                }
+
                 setFormData(prev => ({
                     ...prev,
                     service_date: surgery.date,
-                    procedure_codes: surgery.cpt_codes || []
+                    procedure_codes: surgery.cpt_codes || [],
+                    total_charges: totalCharges
                 }));
             }
         }

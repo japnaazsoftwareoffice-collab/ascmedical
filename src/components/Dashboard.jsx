@@ -2,6 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { calculateORCost, formatCurrency } from '../utils/hospitalUtils';
 import AIAnalystModal from './AIAnalystModal';
 import './Dashboard.css';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+import Swal from 'sweetalert2';
+import emailjs from '@emailjs/browser';
+
+// EmailJS Configuration (Replace with your actual keys from emailjs.com)
+const EMAILJS_SERVICE_ID = 'service_1uqpug2';
+const EMAILJS_TEMPLATE_ID = 'template_7bwe5or';
+const EMAILJS_PUBLIC_KEY = 'kemMSpgMmsNS0Hcu5';
 
 const Dashboard = ({ surgeries, cptCodes }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -17,6 +27,23 @@ const Dashboard = ({ surgeries, cptCodes }) => {
         profitChange: 0
     });
     const [chartData, setChartData] = useState([]);
+    const [topSurgeons, setTopSurgeons] = useState({
+        daily: null,
+        weekly: null,
+        monthly: null
+    });
+    const [utilizationData, setUtilizationData] = useState([]);
+    const [isExporting, setIsExporting] = useState(false);
+
+    // Email Modal State
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailAddress, setEmailAddress] = useState('');
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+    useEffect(() => {
+        // Initialize EmailJS
+        emailjs.init(EMAILJS_PUBLIC_KEY);
+    }, []);
 
     useEffect(() => {
         const calculateStats = (filteredSurgeries) => {
@@ -123,7 +150,265 @@ const Dashboard = ({ surgeries, cptCodes }) => {
 
         setChartData(currentStats.perCaseData);
 
+        // Calculate Top Surgeons for all timeframes independent of selected view
+        const calculateTopSurgeon = (subset) => {
+            const profits = {};
+            subset.forEach(s => {
+                const name = s.doctor_name || 'Unknown';
+                let revenue = 0;
+                const codes = s.cpt_codes || s.cptCodes || [];
+                codes.forEach(c => {
+                    const cpt = cptCodes.find(code => code.code === c);
+                    if (cpt) revenue += cpt.reimbursement;
+                });
+                const cost = calculateORCost(s.duration_minutes || s.durationMinutes || 0);
+                profits[name] = (profits[name] || 0) + (revenue - cost);
+            });
+
+            let top = null;
+            let max = -Infinity;
+            Object.entries(profits).forEach(([name, profit]) => {
+                if (profit > max) {
+                    max = profit;
+                    top = { name, profit };
+                }
+            });
+            return top;
+        };
+
+        const dateObj = new Date(selectedDate);
+
+        // Daily Range for Top Surgeon
+        const dStart = new Date(dateObj); dStart.setHours(0, 0, 0, 0);
+        const dEnd = new Date(dateObj); dEnd.setHours(23, 59, 59, 999);
+
+        // Weekly Range for Top Surgeon
+        const wStart = new Date(dateObj); wStart.setDate(dateObj.getDate() - dateObj.getDay()); wStart.setHours(0, 0, 0, 0);
+        const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 6); wEnd.setHours(23, 59, 59, 999);
+
+        // Monthly Range for Top Surgeon
+        const mStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1); mStart.setHours(0, 0, 0, 0);
+        const mEnd = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0); mEnd.setHours(23, 59, 59, 999);
+
+        const dailySurgs = surgeries.filter(s => {
+            const d = new Date(s.date);
+            // Reset time for comparison
+            const dCheck = new Date(d); dCheck.setHours(0, 0, 0, 0);
+            return dCheck >= dStart && dCheck <= dEnd;
+        });
+        const weeklySurgs = surgeries.filter(s => {
+            const d = new Date(s.date);
+            const dCheck = new Date(d); dCheck.setHours(0, 0, 0, 0);
+            return dCheck >= wStart && dCheck <= wEnd;
+        });
+        const monthlySurgs = surgeries.filter(s => {
+            const d = new Date(s.date);
+            const dCheck = new Date(d); dCheck.setHours(0, 0, 0, 0);
+            return dCheck >= mStart && dCheck <= mEnd;
+        });
+
+        setTopSurgeons({
+            daily: calculateTopSurgeon(dailySurgs),
+            weekly: calculateTopSurgeon(weeklySurgs),
+            monthly: calculateTopSurgeon(monthlySurgs)
+        });
+
+        // Calculate Utilization for Pie Chart (Current View)
+        const calculateUtilization = (subset) => {
+            const util = {};
+            let totalMinutes = 0;
+            subset.forEach(s => {
+                const name = s.doctor_name || 'Unknown';
+                const duration = s.duration_minutes || s.durationMinutes || 0;
+                util[name] = (util[name] || 0) + duration;
+                totalMinutes += duration;
+            });
+
+            return Object.entries(util).map(([name, minutes]) => ({
+                name,
+                value: minutes,
+                percentage: totalMinutes > 0 ? (minutes / totalMinutes) * 100 : 0,
+                color: generateColor(name) // Helper to generate consistent colors
+            })).sort((a, b) => b.value - a.value);
+        };
+
+        setUtilizationData(calculateUtilization(currentSurgeries));
+
     }, [surgeries, selectedDate, cptCodes, timeframe]);
+
+    // Helper for consistent colors
+    const generateColor = (str) => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+        return '#' + '00000'.substring(0, 6 - c.length) + c;
+    };
+
+    const generatePDF = () => {
+        const doc = new jsPDF();
+
+        // Title
+        doc.setFontSize(20);
+        doc.text('Financial Dashboard Report', 14, 22);
+
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Date: ${selectedDate} | View: ${timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}`, 14, 30);
+
+        // 1. Financial Summary
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.text('Financial Summary', 14, 45);
+
+        autoTable(doc, {
+            startY: 50,
+            head: [['Metric', 'Value']],
+            body: [
+                ['Total Revenue', formatCurrency(stats.totalRevenue)],
+                ['Total Cost', formatCurrency(stats.totalCost)],
+                ['Net Profit', formatCurrency(stats.netProfit)],
+                ['Total Surgeries', stats.totalSurgeries.toString()]
+            ],
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] }
+        });
+
+        // 2. Top Surgeons
+        let finalY = doc.lastAutoTable.finalY + 15;
+        doc.text('Top Performing Surgeons', 14, finalY);
+
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['Timeframe', 'Surgeon Name', 'Profit']],
+            body: [
+                ['Daily', topSurgeons.daily ? topSurgeons.daily.name : 'N/A', topSurgeons.daily ? formatCurrency(topSurgeons.daily.profit) : '-'],
+                ['Weekly', topSurgeons.weekly ? topSurgeons.weekly.name : 'N/A', topSurgeons.weekly ? formatCurrency(topSurgeons.weekly.profit) : '-'],
+                ['Monthly', topSurgeons.monthly ? topSurgeons.monthly.name : 'N/A', topSurgeons.monthly ? formatCurrency(topSurgeons.monthly.profit) : '-']
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: [39, 174, 96] }
+        });
+
+        // 3. OR Utilization
+        finalY = doc.lastAutoTable.finalY + 15;
+        doc.text('OR Utilization', 14, finalY);
+
+        const utilizationRows = utilizationData.map(u => [u.name, `${u.value} mins`, `${u.percentage.toFixed(1)}%`]);
+
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['Surgeon', 'Total Minutes', 'Percentage']],
+            body: utilizationRows.length > 0 ? utilizationRows : [['No data', '-', '-']],
+            theme: 'striped'
+        });
+
+        // 4. Case Detail
+        finalY = doc.lastAutoTable.finalY + 15;
+        // Check if we need a new page
+        if (finalY > 250) {
+            doc.addPage();
+            finalY = 20;
+        }
+
+        doc.text('Case Profitability Detail', 14, finalY);
+
+        const caseRows = chartData.map((c, index) => [
+            `Case #${index + 1}`,
+            formatCurrency(c.revenue),
+            formatCurrency(c.cost),
+            formatCurrency(c.profit)
+        ]);
+
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['Case ID', 'Revenue', 'Cost', 'Profit']],
+            body: caseRows.length > 0 ? caseRows : [['No surgeries', '-', '-', '-']],
+            theme: 'striped',
+            headStyles: { fillColor: [142, 68, 173] }
+        });
+
+        return doc;
+    };
+
+    const handleExport = () => {
+        setIsExporting(true);
+        try {
+            const doc = generatePDF();
+            doc.save(`financial_report_${selectedDate}.pdf`);
+        } catch (error) {
+            console.error('Export failed:', error);
+            Swal.fire('Error', 'Failed to generate PDF report.', 'error');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleEmailClick = () => {
+        setShowEmailModal(true);
+    };
+
+    const handleSendEmail = async () => {
+        if (!emailAddress || !emailAddress.includes('@')) {
+            Swal.fire('Invalid Email', 'Please enter a valid email address.', 'warning');
+            return;
+        }
+
+        if (EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID') {
+            Swal.fire({
+                title: 'Configuration Required',
+                html: `
+                    <p>To send real emails, you need to configure EmailJS.</p>
+                    <p>1. Sign up at <a href="https://www.emailjs.com" target="_blank">emailjs.com</a> (it's free).</p>
+                    <p>2. Create a Service and a Template.</p>
+                    <p>3. Update the keys in <b>Dashboard.jsx</b> (lines 8-10).</p>
+                    <br/>
+                    <p><i>For now, the PDF has been downloaded to your computer.</i></p>
+                `,
+                icon: 'info',
+                confirmButtonColor: '#3b82f6'
+            });
+            // Fallback to download
+            const doc = generatePDF();
+            doc.save(`financial_report_${selectedDate}.pdf`);
+            return;
+        }
+
+        setIsSendingEmail(true);
+        try {
+            // 1. Generate PDF as Base64
+            const doc = generatePDF();
+            const pdfBase64 = doc.output('datauristring').split(',')[1]; // Remove data:application/pdf;base64, prefix
+
+            // 2. Send via EmailJS
+            const templateParams = {
+                to_email: emailAddress,
+                date: selectedDate,
+                total_revenue: formatCurrency(stats.totalRevenue),
+                net_profit: formatCurrency(stats.netProfit),
+                content: pdfBase64 // Ensure your EmailJS template has an attachment field mapped to this
+            };
+
+            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+
+            setShowEmailModal(false);
+            setEmailAddress('');
+
+            Swal.fire({
+                title: 'Sent!',
+                text: `The financial report has been successfully sent to ${emailAddress}`,
+                icon: 'success',
+                confirmButtonColor: '#3b82f6'
+            });
+
+        } catch (error) {
+            console.error('Email failed:', error);
+            Swal.fire('Error', 'Failed to send email. Check your EmailJS configuration.', 'error');
+        } finally {
+            setIsSendingEmail(false);
+        }
+    };
 
     return (
         <div className="dashboard fade-in">
@@ -147,9 +432,17 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                         />
                     </div>
                 </div>
-                <button className="btn-ai" onClick={() => setIsAIModalOpen(true)}>
-                    ✨ Ask ASC Analyst
-                </button>
+                <div className="header-actions">
+                    <button className="btn-action" onClick={handleExport} disabled={isExporting}>
+                        {isExporting ? '⏳ Exporting...' : '📥 Export PDF'}
+                    </button>
+                    <button className="btn-action" onClick={handleEmailClick}>
+                        📧 Email Report
+                    </button>
+                    <button className="btn-ai" onClick={() => setIsAIModalOpen(true)}>
+                        ✨ Ask ASC Analyst
+                    </button>
+                </div>
             </div>
 
             <div className="dashboard-content">
@@ -197,6 +490,40 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                                 <span className="mini-stat-label">Cases Today</span>
                                 <span className="mini-stat-value">{stats.totalSurgeries}</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Top Surgeons Section */}
+                <div className="top-surgeons-section">
+                    <h3 className="section-title">🏆 Most Profitable Surgeons</h3>
+                    <div className="top-surgeons-grid">
+                        <div className="top-surgeon-card">
+                            <div className="ts-header">Daily Top Performer</div>
+                            {topSurgeons.daily ? (
+                                <div className="ts-content">
+                                    <div className="ts-name">{topSurgeons.daily.name}</div>
+                                    <div className="ts-profit positive">+{formatCurrency(topSurgeons.daily.profit)}</div>
+                                </div>
+                            ) : <div className="ts-empty">No surgeries today</div>}
+                        </div>
+                        <div className="top-surgeon-card">
+                            <div className="ts-header">Weekly Top Performer</div>
+                            {topSurgeons.weekly ? (
+                                <div className="ts-content">
+                                    <div className="ts-name">{topSurgeons.weekly.name}</div>
+                                    <div className="ts-profit positive">+{formatCurrency(topSurgeons.weekly.profit)}</div>
+                                </div>
+                            ) : <div className="ts-empty">No surgeries this week</div>}
+                        </div>
+                        <div className="top-surgeon-card">
+                            <div className="ts-header">Monthly Top Performer</div>
+                            {topSurgeons.monthly ? (
+                                <div className="ts-content">
+                                    <div className="ts-name">{topSurgeons.monthly.name}</div>
+                                    <div className="ts-profit positive">+{formatCurrency(topSurgeons.monthly.profit)}</div>
+                                </div>
+                            ) : <div className="ts-empty">No surgeries this month</div>}
                         </div>
                     </div>
                 </div>
@@ -311,7 +638,85 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* OR Utilization Chart */}
+                <div className="chart-card utilization-chart-card" style={{ marginTop: '1.5rem' }}>
+                    <div className="chart-header">
+                        <h3>OR Utilization by Surgeon ({timeframe})</h3>
+                    </div>
+                    <div className="utilization-chart-container">
+                        {utilizationData.length === 0 ? (
+                            <div className="empty-chart-state">No surgeries for this period</div>
+                        ) : (
+                            <div className="pie-chart-wrapper">
+                                <div
+                                    className="pie-chart"
+                                    style={{
+                                        background: `conic-gradient(${utilizationData.reduce((acc, item, index) => {
+                                            const prevPerc = index === 0 ? 0 : utilizationData.slice(0, index).reduce((p, i) => p + i.percentage, 0);
+                                            return `${acc}${index > 0 ? ',' : ''} ${item.color} ${prevPerc}% ${prevPerc + item.percentage}%`;
+                                        }, '')
+                                            })`
+                                    }}
+                                ></div>
+                                <div className="chart-legend-grid">
+                                    {utilizationData.map((item, index) => (
+                                        <div key={index} className="legend-item">
+                                            <span className="legend-dot" style={{ background: item.color }}></span>
+                                            <div className="legend-info">
+                                                <span className="legend-name">{item.name}</span>
+                                                <span className="legend-val">{Math.round(item.percentage)}% ({item.value} mins)</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
+            {/* Email Report Modal */}
+            {showEmailModal && (
+                <div className="email-modal-overlay" onClick={() => setShowEmailModal(false)}>
+                    <div className="email-modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="email-modal-header">
+                            <h3 className="email-modal-title">Email Financial Report</h3>
+                            <p className="email-modal-desc">
+                                Enter the recipient's email address to send the PDF report for {selectedDate}.
+                            </p>
+                        </div>
+
+                        <div className="email-input-group">
+                            <label className="email-input-label">Recipient Email</label>
+                            <input
+                                type="email"
+                                className="email-input"
+                                placeholder="doctor@example.com"
+                                value={emailAddress}
+                                onChange={(e) => setEmailAddress(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="email-modal-actions">
+                            <button
+                                className="btn-cancel"
+                                onClick={() => setShowEmailModal(false)}
+                                disabled={isSendingEmail}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn-send"
+                                onClick={handleSendEmail}
+                                disabled={isSendingEmail}
+                            >
+                                {isSendingEmail ? 'Sending...' : 'Send Report'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
