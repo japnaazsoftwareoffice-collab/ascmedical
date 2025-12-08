@@ -673,6 +673,10 @@
     color: #059669;
 }
 
+.ts-profit.negative {
+    color: #ef4444;
+}
+
 .ts-empty {
     font-style: italic;
     color: #94a3b8;

@@ -65,7 +65,14 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                 if (codes.length === 0 && surgery.notes) {
                     // CPT codes empty implies Cosmetic Surgery (or custom logic)
                     // Parse fees from notes
-                    const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,.]+)/i);
+                    // Parse fees from notes - support multiple formats
+                    // Formats: "Facility Fee: $1500", "Fee: 1500", "Paid: 1500", "Price: 1500"
+                    const facilityMatch = surgery.notes.match(/(?:Facility |Cosmetic )?Fee:?\s*\$?\s*([\d,.]+)/i) ||
+                        surgery.notes.match(/Paid:?\s*\$?\s*([\d,.]+)/i) ||
+                        surgery.notes.match(/Price:?\s*\$?\s*([\d,.]+)/i) ||
+                        surgery.notes.match(/Amount:?\s*\$?\s*([\d,.]+)/i) ||
+                        surgery.notes.match(/\$\s*([\d,.]+)/); // Fallback: just a dollar amount
+
                     const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
 
                     const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
@@ -163,17 +170,44 @@ const Dashboard = ({ surgeries, cptCodes }) => {
         setChartData(currentStats.perCaseData);
 
         // Calculate Top Surgeons for all timeframes independent of selected view
+        // Calculate Top Surgeons for all timeframes independent of selected view
         const calculateTopSurgeon = (subset) => {
             const profits = {};
             subset.forEach(s => {
                 const name = s.doctor_name || 'Unknown';
                 let revenue = 0;
+                let isCosmetic = false;
+
                 const codes = s.cpt_codes || s.cptCodes || [];
-                codes.forEach(c => {
-                    const cpt = cptCodes.find(code => code.code === c);
-                    if (cpt) revenue += cpt.reimbursement;
-                });
-                const cost = calculateORCost(s.duration_minutes || s.durationMinutes || 0);
+
+                // Logic to determine revenue
+                if (codes.length === 0 && s.notes) {
+                    // Cosmetic/Custom Logic
+                    // Parse fees from notes - support multiple formats
+                    const facilityMatch = s.notes.match(/(?:Facility |Cosmetic )?Fee:?\s*\$?\s*([\d,.]+)/i) ||
+                        s.notes.match(/Paid:?\s*\$?\s*([\d,.]+)/i) ||
+                        s.notes.match(/Price:?\s*\$?\s*([\d,.]+)/i) ||
+                        s.notes.match(/Amount:?\s*\$?\s*([\d,.]+)/i) ||
+                        s.notes.match(/\$\s*([\d,.]+)/);
+
+                    const anesthesiaMatch = s.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
+
+                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+                    revenue = facilityFee + anesthesiaFee;
+                    isCosmetic = true;
+                } else {
+                    codes.forEach(c => {
+                        const cpt = cptCodes.find(code => code.code === c);
+                        if (cpt) revenue += cpt.reimbursement;
+                    });
+                }
+
+                // If cosmetic, ignore OR cost for profit calculation (or consider it 0)
+                // The user states: "when in plastic and plastic cosmetic cases here is not required profit and loss"
+                // This implies the Fee IS the value they want to see, not Fee - Cost.
+                const cost = isCosmetic ? 0 : calculateORCost(s.duration_minutes || s.durationMinutes || 0);
+
                 profits[name] = (profits[name] || 0) + (revenue - cost);
             });
 
@@ -515,7 +549,9 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                             {topSurgeons.daily ? (
                                 <div className="ts-content">
                                     <div className="ts-name">{topSurgeons.daily.name}</div>
-                                    <div className="ts-profit positive">+{formatCurrency(topSurgeons.daily.profit)}</div>
+                                    <div className={`ts-profit ${topSurgeons.daily.profit >= 0 ? 'positive' : 'negative'}`}>
+                                        {topSurgeons.daily.profit > 0 ? '+' : ''}{formatCurrency(topSurgeons.daily.profit)}
+                                    </div>
                                 </div>
                             ) : <div className="ts-empty">No surgeries today</div>}
                         </div>
@@ -524,7 +560,9 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                             {topSurgeons.weekly ? (
                                 <div className="ts-content">
                                     <div className="ts-name">{topSurgeons.weekly.name}</div>
-                                    <div className="ts-profit positive">+{formatCurrency(topSurgeons.weekly.profit)}</div>
+                                    <div className={`ts-profit ${topSurgeons.weekly.profit >= 0 ? 'positive' : 'negative'}`}>
+                                        {topSurgeons.weekly.profit > 0 ? '+' : ''}{formatCurrency(topSurgeons.weekly.profit)}
+                                    </div>
                                 </div>
                             ) : <div className="ts-empty">No surgeries this week</div>}
                         </div>
@@ -533,7 +571,9 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                             {topSurgeons.monthly ? (
                                 <div className="ts-content">
                                     <div className="ts-name">{topSurgeons.monthly.name}</div>
-                                    <div className="ts-profit positive">+{formatCurrency(topSurgeons.monthly.profit)}</div>
+                                    <div className={`ts-profit ${topSurgeons.monthly.profit >= 0 ? 'positive' : 'negative'}`}>
+                                        {topSurgeons.monthly.profit > 0 ? '+' : ''}{formatCurrency(topSurgeons.monthly.profit)}
+                                    </div>
                                 </div>
                             ) : <div className="ts-empty">No surgeries this month</div>}
                         </div>
