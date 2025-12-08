@@ -22,15 +22,23 @@ export const formatSurgeonName = (surgeon) => {
 };
 
 // Calculate OR cost based on duration
+// Calculate OR cost based on duration
 export const calculateORCost = (durationMinutes) => {
     if (!durationMinutes || durationMinutes <= 0) return 0;
 
-    // Base rate: $1500 for the first hour (0-60 mins)
-    let cost = 1500;
+    let cost = 0;
 
     if (durationMinutes <= 60) {
-        return cost;
+        // Proportional rate for first hour: $1500 / 60 min = $25 per minute
+        // 15 min = $375
+        // 30 min = $750
+        // 45 min = $1125
+        // 60 min = $1500
+        return durationMinutes * 25;
     }
+
+    // Base rate for first full hour
+    cost = 1500;
 
     // Remaining minutes after first hour
     let remainingMinutes = durationMinutes - 60;

@@ -454,10 +454,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
 
                                     if (isCosmeticSurgery) {
                                         if (surgery.notes) {
-                                            const facilityMatch = surgery.notes.match(/Facility Fee: \$([\\d,]+)/);
-                                            const anesthesiaMatch = surgery.notes.match(/Anesthesia: \$([\\d,]+)/);
-                                            const facilityFee = facilityMatch ? parseInt(facilityMatch[1].replace(/,/g, '')) : 0;
-                                            const anesthesiaFee = anesthesiaMatch ? parseInt(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+                                            const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,.]+)/i);
+                                            const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
+                                            const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+                                            const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
                                             totalValue = facilityFee + anesthesiaFee;
                                         }
                                     } else {
@@ -560,10 +560,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                             if (isCosmeticSurgery) {
                                                                 // Parse cosmetic fees from notes
                                                                 if (surgery.notes) {
-                                                                    const facilityMatch = surgery.notes.match(/Facility Fee: \$([\\d,]+)/);
-                                                                    const anesthesiaMatch = surgery.notes.match(/Anesthesia: \$([\\d,]+)/);
-                                                                    const facilityFee = facilityMatch ? parseInt(facilityMatch[1].replace(/,/g, '')) : 0;
-                                                                    const anesthesiaFee = anesthesiaMatch ? parseInt(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+                                                                    const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,.]+)/i);
+                                                                    const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
+                                                                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+                                                                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
                                                                     cptTotal = 0; // No CPT codes for cosmetic surgeries
                                                                     orCost = facilityFee + anesthesiaFee; // Show cosmetic fees as OR Cost
                                                                     totalValue = orCost;

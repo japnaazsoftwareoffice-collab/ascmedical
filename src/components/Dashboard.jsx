@@ -61,13 +61,25 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                 // Calculate Revenue
                 let caseRevenue = 0;
                 const codes = surgery.cpt_codes || surgery.cptCodes || [];
-                codes.forEach(code => {
-                    const cpt = cptCodes.find(c => c.code === code);
-                    if (cpt) {
-                        caseRevenue += cpt.reimbursement;
-                    }
-                    usage[code] = (usage[code] || 0) + 1;
-                });
+
+                if (codes.length === 0 && surgery.notes) {
+                    // CPT codes empty implies Cosmetic Surgery (or custom logic)
+                    // Parse fees from notes
+                    const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,.]+)/i);
+                    const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
+
+                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+                    caseRevenue = facilityFee + anesthesiaFee;
+                } else {
+                    codes.forEach(code => {
+                        const cpt = cptCodes.find(c => c.code === code);
+                        if (cpt) {
+                            caseRevenue += cpt.reimbursement;
+                        }
+                        usage[code] = (usage[code] || 0) + 1;
+                    });
+                }
                 revenue += caseRevenue;
 
                 perCaseData.push({
