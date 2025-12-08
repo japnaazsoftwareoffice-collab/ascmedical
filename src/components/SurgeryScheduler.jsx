@@ -265,7 +265,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
             notes = `Cosmetic Surgery - Facility Fee: $${formData.cosmeticFacilityFee.toLocaleString()}, Anesthesia: $${formData.cosmeticAnesthesiaFee.toLocaleString()}`;
         }
         if (formData.isSelfPayAnesthesia && formData.anesthesiaFee > 0) {
-            const anesthesiaNote = `Self-Pay Anesthesia: $${formData.anesthesiaFee.toLocaleString()}`;
+            const rateName = formData.selfPayRateName ? ` (${formData.selfPayRateName})` : '';
+            const anesthesiaNote = `Self-Pay Anesthesia${rateName}: $${formData.anesthesiaFee.toLocaleString()}`;
             notes = notes ? `${notes}; ${anesthesiaNote}` : anesthesiaNote;
         }
         if (notes) {
@@ -336,15 +337,21 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
         let selfPayRateName = '';
 
         if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-            const match = surgery.notes.match(/Self-Pay Anesthesia: \$([\\d,]+)/);
+            const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
             if (match) {
-                anesthesiaFee = parseFloat(match[1].replace(/,/g, ''));
+                // If regex matches group 1 (name) and group 2 (price)
+                if (match[1]) {
+                    selfPayRateName = match[1];
+                }
+                anesthesiaFee = parseFloat(match[2].replace(/,/g, ''));
                 isSelfPay = true;
 
-                // Attempt to find matching rate name
-                const matchingRate = selfPayRates.find(r => r.price === anesthesiaFee);
-                if (matchingRate) {
-                    selfPayRateName = matchingRate.name;
+                // Fallback attempt to find matching rate name if not parsed
+                if (!selfPayRateName) {
+                    const matchingRate = selfPayRates.find(r => r.price === anesthesiaFee);
+                    if (matchingRate) {
+                        selfPayRateName = matchingRate.name;
+                    }
                 }
             }
         }
@@ -469,7 +476,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                         let orCost = calculateORCost(surgery.duration_minutes || 0);
 
                                         if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                                            const match = surgery.notes.match(/Self-Pay Anesthesia: \$([\\d,]+)/);
+                                            const match = surgery.notes.match(/Self-Pay Anesthesia:?\s*\$?\s*([\d,]+)/i);
                                             if (match) {
                                                 orCost += parseFloat(match[1].replace(/,/g, ''));
                                             }
@@ -580,9 +587,9 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
 
                                                                 // Check for Self-Pay Anesthesia in notes
                                                                 if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                                                                    const match = surgery.notes.match(/Self-Pay Anesthesia: \$([\\d,]+)/);
+                                                                    const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
                                                                     if (match) {
-                                                                        orCost += parseFloat(match[1].replace(/,/g, ''));
+                                                                        orCost += parseFloat(match[2].replace(/,/g, ''));
                                                                     }
                                                                 }
 
@@ -637,6 +644,33 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                                 <span>✨</span>
                                                                                 Cosmetic Surgery
                                                                             </span>
+                                                                        )}
+                                                                        {surgery.notes && surgery.notes.includes('Self-Pay Anesthesia') && (
+                                                                            <div style={{ marginTop: '4px' }}>
+                                                                                {(() => {
+                                                                                    const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
+                                                                                    if (match) {
+                                                                                        const name = match[1] || 'Unknown Rate';
+                                                                                        const price = match[2];
+                                                                                        return (
+                                                                                            <span className="badge" style={{
+                                                                                                background: '#f3e8ff',
+                                                                                                color: '#6b21a8',
+                                                                                                padding: '2px 8px',
+                                                                                                borderRadius: '4px',
+                                                                                                fontSize: '0.8rem',
+                                                                                                border: '1px solid #d8b4fe',
+                                                                                                display: 'inline-flex',
+                                                                                                alignItems: 'center',
+                                                                                                gap: '4px'
+                                                                                            }}>
+                                                                                                💉 Anesthesia: {name} (${price})
+                                                                                            </span>
+                                                                                        );
+                                                                                    }
+                                                                                    return null;
+                                                                                })()}
+                                                                            </div>
                                                                         )}
                                                                     </td>
                                                                     <td style={{ fontWeight: '600', color: '#059669' }}>{formatCurrency(cptTotal)}</td>

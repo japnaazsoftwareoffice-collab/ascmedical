@@ -86,6 +86,14 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                         }
                         usage[code] = (usage[code] || 0) + 1;
                     });
+
+                    // Also check for "Self-Pay Anesthesia" in notes for standard surgeries
+                    if (surgery.notes) {
+                        const anesthesiaMatch = surgery.notes.match(/Self-Pay Anesthesia:?\s*\$?\s*([\d,.]+)/i);
+                        if (anesthesiaMatch) {
+                            caseRevenue += parseFloat(anesthesiaMatch[1].replace(/,/g, ''));
+                        }
+                    }
                 }
                 revenue += caseRevenue;
 
