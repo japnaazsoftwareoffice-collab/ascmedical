@@ -6,7 +6,7 @@ import ORBlockSchedule from './ORBlockSchedule';
 import './Management.css';
 
 // Cosmetic fee calculator based on duration
-const calculateCosmeticFees = (durationMinutes) => {
+const calculateCosmeticFees = (durationMinutes, isPlastic = false) => {
     // CSC Facility Fee rates
     const facilityRates = {
         30: 750, 60: 1500, 90: 1800, 120: 2100, 150: 2500,
@@ -26,7 +26,7 @@ const calculateCosmeticFees = (durationMinutes) => {
 
     return {
         facilityFee: facilityRates[lookupDuration] || 0,
-        anesthesiaFee: anesthesiaRates[lookupDuration] || 0
+        anesthesiaFee: isPlastic ? 0 : (anesthesiaRates[lookupDuration] || 0)
     };
 };
 
@@ -761,7 +761,19 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                             : block.start_time;
                                                     }
                                                 }
-                                                setFormData({ ...formData, doctorName: newDoctorName, startTime: newStartTime });
+
+                                                // Calculate fees based on new surgeon
+                                                const newSurgeon = surgeons.find(s => s.name === newDoctorName);
+                                                const isPlastic = newSurgeon?.specialty === 'Plastic' || newSurgeon?.specialty === 'Plastic/Cosmetic' || newSurgeon?.specialty === 'Plastic / Cosmetic';
+                                                const fees = calculateCosmeticFees(formData.durationMinutes, isPlastic);
+
+                                                setFormData({
+                                                    ...formData,
+                                                    doctorName: newDoctorName,
+                                                    startTime: newStartTime,
+                                                    cosmeticFacilityFee: fees.facilityFee,
+                                                    cosmeticAnesthesiaFee: fees.anesthesiaFee
+                                                });
                                             }}
                                         >
                                             <option value="">-- Select Surgeon --</option>
@@ -839,7 +851,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                         value={formData.durationMinutes}
                                         onChange={(e) => {
                                             const duration = parseInt(e.target.value);
-                                            const fees = calculateCosmeticFees(duration);
+                                            const isPlastic = selectedSurgeon?.specialty === 'Plastic' || selectedSurgeon?.specialty === 'Plastic/Cosmetic' || selectedSurgeon?.specialty === 'Plastic / Cosmetic';
+                                            const fees = calculateCosmeticFees(duration, isPlastic);
                                             setFormData({
                                                 ...formData,
                                                 durationMinutes: duration,
@@ -873,12 +886,14 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                         {formatCurrency(formData.cosmeticFacilityFee)}
                                                     </div>
                                                 </div>
-                                                <div>
-                                                    <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Quantum Anesthesia:</div>
-                                                    <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0369a1' }}>
-                                                        {formatCurrency(formData.cosmeticAnesthesiaFee)}
+                                                {!selectedSurgeon?.specialty || (selectedSurgeon.specialty !== 'Plastic' && selectedSurgeon.specialty !== 'Plastic/Cosmetic' && selectedSurgeon.specialty !== 'Plastic / Cosmetic') ? (
+                                                    <div>
+                                                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Quantum Anesthesia:</div>
+                                                        <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0369a1' }}>
+                                                            {formatCurrency(formData.cosmeticAnesthesiaFee)}
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                ) : <div></div>}
                                             </div>
                                             <div style={{ borderTop: '1px solid #bae6fd', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
                                                 <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Total Cosmetic Fee:</div>
