@@ -16,6 +16,7 @@ import ORBlockSchedule from './components/ORBlockSchedule';
 import UserManagement from './components/UserManagement';
 import ClaimsManagement from './components/ClaimsManagement';
 import Settings from './components/Settings';
+import CPTAutoUpdate from './components/CPTAutoUpdate';
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
 import './App.css';
@@ -693,6 +694,7 @@ function App() {
         />
       );
       if (view === 'settings') return <Settings />;
+      if (view === 'auto-cpt') return <CPTAutoUpdate />;
     }
 
     // Surgeon views

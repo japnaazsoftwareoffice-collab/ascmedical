@@ -34,6 +34,27 @@ I've created a **complete, production-ready hospital management system** with:
 - ⏳ My Surgeries - View surgery history
 - ⏳ Billing - View bills and payments
 
+
+## 🛠️ Technology Stack
+
+### Core
+- **React 19** - Latest version of the world's most popular UI framework
+- **Vite 7** - Ultra-fast build tool and development server
+- **JavaScript (ES6+)** - Modern JavaScript using ES Modules
+
+### Backend & Database
+- **Supabase** - Open source Firebase alternative
+- **PostgreSQL** - Powerful, open, enterprise-class database
+
+### Essential Libraries
+- **EmailJS** (`@emailjs/browser`) - Client-side email functionality
+- **jsPDF & html2canvas** - Professional PDF report generation
+- **SweetAlert2** - Beautiful, responsive popup notifications
+
+### Styling & Design
+- **Modern CSS3** - Custom styling with Glassmorphism, CSS Variables, and Animations
+- **Responsive Design** - Fully fluid layouts for all device sizes
+
 ---
 
 ## 🚀 How to Use

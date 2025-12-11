@@ -15,6 +15,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
                 { id: 'users', icon: '🔐', label: 'User Management' },
                 { id: 'analysis', icon: '🏥', label: 'OR Utilization' },
                 { id: 'cpt', icon: '⚙️', label: 'CPT & Categories' },
+                { id: 'auto-cpt', icon: '🔄', label: 'CPT Auto-Updater' },
                 { id: 'settings', icon: '🔧', label: 'Settings' }
             ];
         } else if (user.role === 'surgeon') {

@@ -1,0 +1,62 @@
+name: ASC CPT Code Auto-Updater
+
+on:
+  schedule:
+    # Run quarterly: 1st day of Jan, Apr, Jul, Oct at 00:00 UTC
+    - cron: '0 0 1 1,4,7,10 *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-cpt-codes:
+    runs-on: ubuntu-latest
+    
+    # Needs permissions to write to repo? User said "store the latest CSV".
+    # Standard GitHub tokens allow pushing if configured, but usually artifacts are better.
+    # We will try to commit the csv back if desired, or just use artifacts.
+    # "After each successful update, store the latest CSV in ./asc_aa"
+    # This implies committing it to the repo.
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: services/cpt-seeder/package-lock.json
+
+    - name: Install Dependencies
+      working-directory: ./services/cpt-seeder
+      run: npm ci
+
+    - name: Run CPT Updater Service
+      working-directory: ./services/cpt-seeder
+      env:
+        # User defined secrets in GitHub Repo
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        PROXY_URL: ${{ secrets.PROXY_URL }} # Optional
+        ASC_YEAR: '2025'
+      run: |
+        npm start -- update
+
+    - name: Commit and Push Latest CSV & Reports
+      run: |
+        git config --global user.name 'ASC-Bot'
+        git config --global user.email 'bot@asc-medical.com'
+        git add services/cpt-seeder/asc_aa/*.csv services/cpt-seeder/reports/*.md
+        git commit -m "chore: update ASC CPT codes and reports [skip ci]" || echo "No changes to commit"
+        git push
+
+    - name: Upload Logs & Data
+      uses: actions/upload-artifact@v4
+      with:
+        name: asc-update-report
+        path: |
+          services/cpt-seeder/asc_aa/*.csv
+          services/cpt-seeder/reports/*.md
+          retention-days: 90
