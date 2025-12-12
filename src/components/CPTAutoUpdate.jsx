@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import Papa from 'papaparse';
+import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import Swal from 'sweetalert2';
+import Papa from 'papaparse';
 import { supabase } from '../lib/supabase';
+import Swal from 'sweetalert2';
+import { CPT_CATEGORY_MAP } from '../data/cptCategoryMap';
 import './CPTAutoUpdate.css';
 
 /**
@@ -115,6 +116,58 @@ const CPTAutoUpdate = () => {
                 if (n.includes('oct')) return 4;
                 return 0;
             };
+
+            // AUTO-CATEGORIZATION HELPER
+            const getCategoryFromCode = (code) => {
+                const codeStr = String(code).toUpperCase().trim();
+
+                // 1. Check Specific Map Override
+                if (CPT_CATEGORY_MAP[codeStr]) {
+                    return CPT_CATEGORY_MAP[codeStr];
+                }
+
+                // 2. Emerging Technology (T-Codes)
+                if (codeStr.endsWith('T')) return 'Emerging Technology (T-Code)';
+
+                const c = parseInt(code);
+                if (isNaN(c)) return 'General';
+
+                // 2. Anesthesiology
+                if (c >= 100 && c <= 1999) return 'Anesthesiology';
+
+                // 3. Integumentary (Breast vs Plastic)
+                if (c >= 19100 && c <= 19299) return 'Breast Oncology'; // Breast procedures
+                if (c >= 10000 && c <= 19999) return 'Plastic / Cosmetic';
+
+                // 4. Musculoskeletal (Podiatry vs Orthopedics)
+                if (c >= 28000 && c <= 28899) return 'Podiatry'; // Foot & Toes
+                if (c >= 20000 && c <= 29999) return 'Orthopedics';
+
+                // 5. Respiratory & Cardiovascular (ENT vs Cardio)
+                if (c >= 30000 && c <= 32999) return 'Otolaryngology (ENT)'; // Nose/Larynx
+                if (c >= 33000 && c <= 39999) return 'Cardiology';
+
+                // 6. Digestive
+                if (c >= 40000 && c <= 49999) return 'Gastroenterology';
+
+                // 7. Urinary
+                if (c >= 50000 && c <= 59999) return 'Urology';
+
+                // 8. Nervous System (Pain vs Neuro)
+                if (c >= 62000 && c <= 64999) return 'Pain Management'; // Injections/Blocks
+                if (c >= 60000 && c <= 64999) return 'Neurology'; // Cranial/Spinal (Fallback)
+
+                // 9. Eye / Ear
+                if (c >= 65000 && c <= 68999) return 'Ophthalmology';
+                if (c >= 69000 && c <= 69999) return 'Otolaryngology (ENT)'; // Auditory
+
+                // 10. Radiology / Pathology / Medicine
+                if (c >= 70000 && c <= 79999) return 'Radiology';
+                if (c >= 80000 && c <= 89999) return 'Pathology / Lab';
+                if (c >= 90000 && c <= 99999) return 'Evaluations / Medicine';
+
+                return 'General';
+            };
             const sortedFiles = [...selectedFiles].sort((a, b) => {
                 const wA = getQuarterWeight(a.name);
                 const wB = getQuarterWeight(b.name);
@@ -211,6 +264,7 @@ const CPTAutoUpdate = () => {
                     if (code && code.length >= 3 && code.length <= 7) {
                         const desc = val(colIdx.desc);
                         const longDesc = val(colIdx.longDesc);
+                        const category = getCategoryFromCode(code);
 
                         allHistory.push({
                             code,
@@ -220,6 +274,7 @@ const CPTAutoUpdate = () => {
                             reimbursement: parseFloat(val(colIdx.payment).replace(/[$,]/g, '')) || 0,
                             payment_indicator: val(colIdx.indicator),
                             discounting: val(colIdx.discounting),
+                            category: category, // AUTO ASSIGNED
                             original_filename: file.name
                         });
                         validCount++;
@@ -299,9 +354,21 @@ const CPTAutoUpdate = () => {
             const CHUNK_SIZE = 1000;
             for (let i = 0; i < mergedMasterData.length; i += CHUNK_SIZE) {
                 const chunk = mergedMasterData.slice(i, i + CHUNK_SIZE);
+
+                // IMPORTANT: Filter out CSV-only fields before sending to DB
+                // Only send columns that actually exist in the 'cpt_codes' table
+                const dbPayload = chunk.map(row => ({
+                    code: row.code,
+                    description: row.short_descriptor, // Map short_descriptor to DB 'description'
+                    reimbursement: row.reimbursement,
+                    procedure_indicator: row.payment_indicator, // Map payment_indicator to DB 'procedure_indicator'
+                    category: row.category
+                    // cost: Omitted to preserve existing cost data in DB
+                }));
+
                 const { error } = await supabase
                     .from('cpt_codes')
-                    .upsert(chunk, { onConflict: 'code' });
+                    .upsert(dbPayload, { onConflict: 'code' });
 
                 if (error) throw error;
                 totalUpserted += chunk.length;
@@ -454,157 +521,317 @@ Generated by ASC Manager
         }
     };
 
-    return (
-        <div className="cpt-auto-update">
-            <header className="page-header">
-                <h1>⚙️ CPT Data Manager</h1>
-                <p>Merge, De-duplicate, and Upload CMS Payment Rates (CSV/Excel).</p>
-            </header>
+    // STEP 3: Handle Import of Enriched/Edited CSV
+    const handleEnrichedImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-            <div className="update-grid">
-                {/* Manual Upload Section */}
-                <div className="card upload-card">
-                    <div className="card-header">
-                        <h2>📁 File Processor</h2>
-                        <span className="badge">Supports: CSV, XLSX, XLS</span>
+        setUploading(true);
+        log(`📖 Reading enriched file: ${file.name}`);
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                const rows = results.data;
+                if (!rows || rows.length === 0) {
+                    Swal.fire('Error', 'File is empty', 'error');
+                    setUploading(false);
+                    return;
+                }
+
+                log(`✅ Parsed ${rows.length} rows. preparing for DB sync...`);
+
+                const enrichedData = rows.map(r => {
+                    const code = r['CPT/HCPCS Code'] || r['Code'] || r['cpt_code'];
+                    if (!code) return null;
+
+                    // Clean Currency
+                    const cleanRate = (val) => {
+                        if (!val) return 0;
+                        return parseFloat(val.toString().replace(/[$,]/g, '')) || 0;
+                    };
+
+                    return {
+                        code: code,
+                        short_descriptor: r['Short Descriptor'] || r['Short Description'] || '',
+                        long_descriptor: r['Long Descriptor'] || r['Long Description'] || '',
+                        reimbursement: cleanRate(r['Payment Rate'] || r['Rate']),
+                        payment_indicator: r['Payment Indicator'] || r['PI'] || '',
+                        category: r['Category'] || 'General', // MAP CATEGORY
+                        discounting: r['Multiple Procedure Discounting'] || '',
+                        version_year: r['Year'] || r['Version Year'] || new Date().getFullYear(),
+                        effective_date: r['Effective Date'],
+                        last_updated_from_source: new Date().toISOString()
+                    };
+                }).filter(x => x !== null);
+
+                setMergedMasterData(enrichedData);
+                setProcessedFiles([{ name: file.name, validRows: enrichedData.length }]);
+                log(`✨ Ready to upload ${enrichedData.length} records to Database.`);
+                Swal.fire('Ready', `Parsed ${enrichedData.length} records from enriched file. Click "Upload to Database" to finish.`, 'success');
+                setUploading(false);
+            },
+            error: (err) => {
+                log(`❌ Parse Error: ${err.message}`);
+                setUploading(false);
+            }
+        });
+    };
+
+    // STEP 4: Full Database Backup (SQL Format)
+    const handleFullBackup = async () => {
+        setUploading(true);
+        log('🛡️ Starting Full Database Backup (SQL Mode)...');
+        
+        const tables = [
+            'surgeons',
+            'patients', 
+            'cpt_codes', 
+            'surgeries', 
+            'billing', 
+            'insurance_claims',
+            'or_block_schedule'
+        ];
+        
+        let sqlContent = `-- ASC MEDICAL DATABASE BACKUP\n-- Generated: ${new Date().toISOString()}\n\n`;
+
+        try {
+            for (const table of tables) {
+                log(`   📥 Fetching table: ${table}...`);
+                const { data, error } = await supabase.from(table).select('*');
+                
+                if (error) {
+                    console.warn(`Skipping table ${table}: ${error.message}`);
+                    continue; // Skip errors, try next table
+                }
+
+                if (!data || data.length === 0) {
+                    sqlContent += `-- Table ${table} is empty\n\n`;
+                    continue;
+                }
+
+                sqlContent += `-- Data for table: ${table}\n`;
+                data.forEach(row => {
+                    const keys = Object.keys(row);
+                    const values = keys.map(k => {
+                        const val = row[k];
+                        if (val === null) return 'NULL';
+                        if (typeof val === 'number') return val;
+                        if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+                        // Clean string & handle SQL injection for backup
+                        const cleanStr = String(val).replace(/'/g, "''");
+                        return `'${cleanStr}'`;
+                    });
+                    sqlContent += `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${values.join(', ')}) ON CONFLICT DO NOTHING;\n`;
+                });
+                sqlContent += '\n';
+            }
+
+            const blob = new Blob([sqlContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `ASC_BACKUP_${new Date().toISOString().slice(0, 10)}.sql`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            log('✅ SQL Backup Downloaded.');
+            Swal.fire('Backup Complete', 'SQL file downloaded.', 'success');
+
+        } catch (error) {
+            log(`❌ Backup Error: ${error.message}`);
+            Swal.fire('Backup Error', error.message, 'error');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+return (
+    <div className="cpt-auto-update">
+        <header className="page-header">
+            <h1>⚙️ CPT Data Manager</h1>
+            <p>Merge, De-duplicate, and Upload CMS Payment Rates (CSV/Excel).</p>
+        </header>
+
+        <div className="update-grid">
+            {/* Manual Upload Section */}
+            <div className="card upload-card">
+                <div className="card-header">
+                    <h2>📁 File Processor</h2>
+                    <span className="badge">Supports: CSV, XLSX, XLS</span>
+                </div>
+                <div className="card-body">
+                    <div className="step-guide" style={{ marginBottom: '1.5rem', background: '#f8f9fa', padding: '15px', borderRadius: '8px' }}>
+                        <h4 style={{ margin: '0 0 10px 0' }}>How to use:</h4>
+                        <ol style={{ margin: '0', paddingLeft: '20px', lineHeight: '1.6' }}>
+                            <li>Download quarterly update files (Jan, Apr, Jul, Oct) from CMS.gov.</li>
+                            <li>Select <b>all files at once</b> below.</li>
+                            <li>We automatically merge them and keep the latest versions.</li>
+                            <li>Review result and <b>Upload</b> to Supabase.</li>
+                        </ol>
                     </div>
-                    <div className="card-body">
-                        <div className="step-guide" style={{ marginBottom: '1.5rem', background: '#f8f9fa', padding: '15px', borderRadius: '8px' }}>
-                            <h4 style={{ margin: '0 0 10px 0' }}>How to use:</h4>
-                            <ol style={{ margin: '0', paddingLeft: '20px', lineHeight: '1.6' }}>
-                                <li>Download quarterly update files (Jan, Apr, Jul, Oct) from CMS.gov.</li>
-                                <li>Select <b>all files at once</b> below.</li>
-                                <li>We automatically merge them and keep the latest versions.</li>
-                                <li>Review result and <b>Upload</b> to Supabase.</li>
-                            </ol>
-                        </div>
 
-                        <div className="file-drop-area">
+                    <div className="file-drop-area">
+                        <input
+                            type="file"
+                            id="csvInput"
+                            multiple
+                            accept=".csv, .xlsx, .xls"
+                            onChange={handleFileSelect}
+                            disabled={uploading}
+                        />
+                        <label htmlFor="csvInput" className="file-label">
+                            {uploading ? 'Processing...' : '📂 Step 1: Select CMS Files'}
+                        </label>
+                    </div>
+
+                    {/* Step 2: Review Selected & Merge */}
+                    {selectedFiles.length > 0 && !mergedMasterData && (
+                        <div className="selection-review" style={{ marginTop: '1.5rem' }}>
+                            <div className="selected-list" style={{ marginBottom: '1rem', background: '#f1f3f5', padding: '10px', borderRadius: '6px', border: '1px solid #dee2e6' }}>
+                                <h4 style={{ margin: '0 0 5px 0', fontSize: '0.95rem' }}>Selected Files ({selectedFiles.length}):</h4>
+                                <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '0.9rem', color: '#555' }}>
+                                    {selectedFiles.map((f, i) => <li key={i}>{f.name} ({Math.round(f.size / 1024)} KB)</li>)}
+                                </ul>
+                            </div>
+
+                            <button className="btn-primary"
+                                onClick={handleMergeFiles}
+                                disabled={uploading}
+                                style={{ width: '100%', padding: '12px', fontSize: '1.1rem', background: 'linear-gradient(to right, #4facfe 0%, #00f2fe 100%)', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
+                                {uploading ? <span className="spinner-sm"></span> : '⚡ Step 2: Merge Files'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Step 3: Action Area (Results) */}
+                    <div className="merge-actions" style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
+                        {!mergedMasterData && selectedFiles.length === 0 ? (
+                            <div className="placeholder-actions" style={{ textAlign: 'center', color: '#888', fontStyle: 'italic' }}>
+                                <p>⬇️ Merge and Upload options will appear here.</p>
+                            </div>
+                        ) : mergedMasterData ? (
+                            <>
+                                {processedFiles.length > 0 && (
+                                    <div className="file-summary" style={{ marginBottom: '1rem', background: '#fff3cd', padding: '10px', borderRadius: '6px', border: '1px solid #ffeeba' }}>
+                                        <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: '#856404' }}>📦 Files Included in Merge:</h4>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                            {processedFiles.map((f, i) => (
+                                                <li key={i} style={{ fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #fae39d', padding: '6px 0' }}>
+                                                    <span>📄 {f.name}</span>
+                                                    <span style={{ fontWeight: 'bold', color: '#555' }}>{f.validRows} valid codes</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <div className="alert-box success" style={{ background: '#d4edda', color: '#155724', padding: '12px', borderRadius: '6px', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>✅</span>
+                                    <div>
+                                        <strong>Merge Complete!</strong><br />
+                                        Found {mergedMasterData.length} unique CPT codes.
+                                    </div>
+                                </div>
+                                <div className="action-buttons" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <button
+                                        className="btn-primary"
+                                        onClick={handleDownloadMergedCSV}
+                                        style={{ background: '#007bff', flex: 1 }}
+                                    >
+                                        ⬇️ Download Master CSV
+                                    </button>
+
+                                    <button
+                                        className="btn-primary"
+                                        onClick={handleCommitToDb}
+                                        style={{ background: '#28a745', flex: 1 }}
+                                    >
+                                        ☁️ Upload to Database
+                                    </button>
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+
+                    {uploading && <div className="spinner"></div>}
+                </div>
+            </div>
+
+            {/* Master Export & Restore Section */}
+            <div className="card export-card">
+                <div className="card-header">
+                    <h2>� Master Data Tools</h2>
+                </div>
+                <div className="card-body">
+                    <div className="tool-section">
+                        <h3>1. Export Current Master List</h3>
+                        <p>Download all 3,000+ CPT codes currently in the database (with History & Status).</p>
+                        <button className="btn-primary" style={{ marginTop: '1rem', width: '100%', background: '#11998e' }} onClick={handleDownloadMasterCSV}>
+                            ⬇️ Download Master CSV
+                        </button>
+                    </div>
+
+                    <div className="tool-section" style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px dashed #eee' }}>
+                        <h3>2. Import Enriched Master File</h3>
+                        <p>Upload a previously exported Master CSV (with your manual Category edits).</p>
+
+                        <div className="file-drop-area" style={{ marginTop: '1rem', minHeight: '100px' }}>
                             <input
                                 type="file"
-                                id="csvInput"
-                                multiple
-                                accept=".csv, .xlsx, .xls"
-                                onChange={handleFileSelect}
+                                id="enrichedInput"
+                                accept=".csv"
+                                onChange={handleEnrichedImport}
                                 disabled={uploading}
                             />
-                            <label htmlFor="csvInput" className="file-label">
-                                {uploading ? 'Processing...' : '📂 Step 1: Select CMS Files'}
+                            <label htmlFor="enrichedInput" className="file-label">
+                                {uploading ? 'Processing...' : '📂 Select Master CSV to Restore'}
                             </label>
                         </div>
-
-                        {/* Step 2: Review Selected & Merge */}
-                        {selectedFiles.length > 0 && !mergedMasterData && (
-                            <div className="selection-review" style={{ marginTop: '1.5rem' }}>
-                                <div className="selected-list" style={{ marginBottom: '1rem', background: '#f1f3f5', padding: '10px', borderRadius: '6px', border: '1px solid #dee2e6' }}>
-                                    <h4 style={{ margin: '0 0 5px 0', fontSize: '0.95rem' }}>Selected Files ({selectedFiles.length}):</h4>
-                                    <ul style={{ margin: '0', paddingLeft: '20px', fontSize: '0.9rem', color: '#555' }}>
-                                        {selectedFiles.map((f, i) => <li key={i}>{f.name} ({Math.round(f.size / 1024)} KB)</li>)}
-                                    </ul>
-                                </div>
-
-                                <button className="btn-primary"
-                                    onClick={handleMergeFiles}
-                                    disabled={uploading}
-                                    style={{ width: '100%', padding: '12px', fontSize: '1.1rem', background: 'linear-gradient(to right, #4facfe 0%, #00f2fe 100%)', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
-                                    {uploading ? <span className="spinner-sm"></span> : '⚡ Step 2: Merge Files'}
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Step 3: Action Area (Results) */}
-                        <div className="merge-actions" style={{ marginTop: '1.5rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
-                            {!mergedMasterData && selectedFiles.length === 0 ? (
-                                <div className="placeholder-actions" style={{ textAlign: 'center', color: '#888', fontStyle: 'italic' }}>
-                                    <p>⬇️ Merge and Upload options will appear here.</p>
-                                </div>
-                            ) : mergedMasterData ? (
-                                <>
-                                    {processedFiles.length > 0 && (
-                                        <div className="file-summary" style={{ marginBottom: '1rem', background: '#fff3cd', padding: '10px', borderRadius: '6px', border: '1px solid #ffeeba' }}>
-                                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9rem', color: '#856404' }}>📦 Files Included in Merge:</h4>
-                                            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                                                {processedFiles.map((f, i) => (
-                                                    <li key={i} style={{ fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #fae39d', padding: '6px 0' }}>
-                                                        <span>📄 {f.name}</span>
-                                                        <span style={{ fontWeight: 'bold', color: '#555' }}>{f.validRows} valid codes</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    <div className="alert-box success" style={{ background: '#d4edda', color: '#155724', padding: '12px', borderRadius: '6px', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <span style={{ fontSize: '1.2rem' }}>✅</span>
-                                        <div>
-                                            <strong>Merge Complete!</strong><br />
-                                            Found {mergedMasterData.length} unique CPT codes.
-                                        </div>
-                                    </div>
-                                    <div className="action-buttons" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                        <button
-                                            className="btn-primary"
-                                            onClick={handleDownloadMergedCSV}
-                                            style={{ background: '#007bff', flex: 1 }}
-                                        >
-                                            ⬇️ Download Master CSV
-                                        </button>
-
-                                        <button
-                                            className="btn-primary"
-                                            onClick={handleCommitToDb}
-                                            style={{ background: '#28a745', flex: 1 }}
-                                        >
-                                            ☁️ Upload to Database
-                                        </button>
-                                    </div>
-                                </>
-                            ) : null}
-                        </div>
-
-                        {uploading && <div className="spinner"></div>}
                     </div>
-                </div>
 
-                {/* Master Export Section */}
-                <div className="card export-card">
-                    <div className="card-header">
-                        <h2>📤 Master Data Export</h2>
-                        <span className="badge success">Download</span>
-                    </div>
-                    <div className="card-body">
-                        <p>Download a complete Master CSV with all current CPT codes.</p>
-                        <p className="hint">Consolidated data from all updates.</p>
-
-                        <button className="btn-primary" style={{ marginTop: '1.5rem', background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' }} onClick={handleDownloadMasterCSV}>
-                            ⬇️ Download Master CSV
+                    <div className="tool-section" style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid #eee', background: '#e3f2fd', padding: '15px', borderRadius: '8px' }}>
+                        <h3 style={{ color: '#0d47a1', margin: '0 0 10px 0' }}>🛡️ System-Wide Backup</h3>
+                        <p style={{ fontSize: '0.9rem', color: '#555' }}>
+                            Download a complete snapshot of the <b>entire database</b> (Patients, Surgeries, Billing, CPT, Surgeons, Users).
+                        </p>
+                        <button
+                            className="btn-primary"
+                            style={{ marginTop: '1rem', width: '100%', background: '#0d47a1' }}
+                            onClick={handleFullBackup}
+                            disabled={uploading}
+                        >
+                            {uploading ? 'Backing up...' : '💾 Download Full Database Backup'}
                         </button>
                     </div>
                 </div>
             </div>
+        </div>
 
-            {/* Logs & Report Section */}
-            <div className="logs-section">
-                <div className="card">
-                    <div className="card-header">
-                        <h3>📜 Activity Log</h3>
-                        {report && (
-                            <button className="btn-secondary btn-sm" onClick={downloadReport}>
-                                ⬇️ Download Report
-                            </button>
-                        )}
-                    </div>
-                    <div className="log-window">
-                        {logs.length === 0 ? (
-                            <span className="placeholder">Activity logs will appear here...</span>
-                        ) : (
-                            logs.map((L, i) => <div key={i} className="log-line">{L}</div>)
-                        )}
-                    </div>
+        {/* Logs & Report Section */}
+        <div className="logs-section">
+            <div className="card">
+                <div className="card-header">
+                    <h3>📜 Activity Log</h3>
+                    {report && (
+                        <button className="btn-secondary btn-sm" onClick={downloadReport}>
+                            ⬇️ Download Report
+                        </button>
+                    )}
+                </div>
+                <div className="log-window">
+                    {logs.length === 0 ? (
+                        <span className="placeholder">Activity logs will appear here...</span>
+                    ) : (
+                        logs.map((L, i) => <div key={i} className="log-line">{L}</div>)
+                    )}
                 </div>
             </div>
         </div>
-    );
-};
+    </div>
+);
+    };
 
 export default CPTAutoUpdate;
