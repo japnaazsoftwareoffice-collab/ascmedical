@@ -10,7 +10,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         code: '',
         description: '',
         reimbursement: '',
-        procedure_indicator: ''
+        procedure_indicator: '',
+        body_part: ''
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [editingId, setEditingId] = useState(null);
@@ -48,7 +49,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             description: formData.description,
             reimbursement: parseFloat(formData.reimbursement),
             category: formData.category,
-            procedure_indicator: formData.procedure_indicator
+            procedure_indicator: formData.procedure_indicator,
+            body_part: formData.body_part
         };
 
         if (editingId) {
@@ -72,7 +74,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
         setIsNewCategory(false);
     };
 
@@ -82,7 +84,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             code: cpt.code,
             description: cpt.description,
             reimbursement: cpt.reimbursement,
-            procedure_indicator: cpt.procedure_indicator || ''
+            procedure_indicator: cpt.procedure_indicator || '',
+            body_part: cpt.body_part || ''
         });
         setEditingId(cpt.id);
 
@@ -109,7 +112,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     const handleCancelEdit = () => {
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
         setEditingId(null);
         setIsNewCategory(false);
     };
@@ -291,6 +294,17 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                         </div>
 
                         <div className="form-group">
+                            <label>Body Part</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                placeholder="e.g. Brain, Heart, Knee"
+                                value={formData.body_part}
+                                onChange={(e) => setFormData({ ...formData, body_part: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="form-group">
                             <label>Procedure Indicator</label>
                             <select
                                 className="form-input"
@@ -361,6 +375,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                 <tr>
                                     <th>Code</th>
                                     <th>Description</th>
+                                    <th>Body Part</th>
                                     <th>Indicator</th>
                                     <th>Category</th>
                                     <th>Reimbursement</th>
@@ -373,6 +388,13 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                         <tr key={cpt.id || index}>
                                             <td className="font-mono" style={{ fontWeight: 600 }}>{cpt.code}</td>
                                             <td>{cpt.description}</td>
+                                            <td>
+                                                {cpt.body_part ? (
+                                                    <span className="badge" style={{ background: '#f0f9ff', color: '#0369a1' }}>
+                                                        {cpt.body_part}
+                                                    </span>
+                                                ) : <span style={{ color: '#94a3b8' }}>-</span>}
+                                            </td>
                                             <td>
                                                 {cpt.procedure_indicator ? (
                                                     <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca' }}>
@@ -400,6 +422,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                                         className="btn-icon btn-delete"
                                                         onClick={() => handleDelete(cpt.id)}
                                                         title="Delete"
+                                                        style={{ color: '#ef4444' }}
                                                     >
                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <polyline points="3 6 5 6 21 6"></polyline>
@@ -414,7 +437,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
                                             No CPT codes found for this category
                                         </td>
                                     </tr>
@@ -498,7 +521,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                                         title="Delete"
                                                         style={{ color: '#ef4444' }}
                                                     >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2-2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                                                     </button>
                                                 </div>
                                             </>
