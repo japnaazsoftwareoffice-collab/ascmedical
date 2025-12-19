@@ -59,10 +59,82 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
 
             // Convert to readable format: "YYYY-MM-DD: Dr. Name (Status)"
             const surgeryList = sortedSurgeries.map(s => {
-                return `- Date: ${s.date}, Time: ${s.start_time}, Surgeon: ${s.doctor_name}, Status: ${s.status}`;
+                // Find CPT details for cost context if possible
+                const cptDetails = (s.cpt_codes || []).map(code => {
+                    const found = cptCodes.find(c => c.code === code);
+                    return found ? found.reimbursement : 0;
+                });
+                const totalRev = cptDetails.reduce((a, b) => a + b, 0);
+                return `- Date: ${s.date}, Time: ${s.start_time}, Surgeon: ${s.doctor_name}, Status: ${s.status} (Est. Rev: $${totalRev})`;
             });
 
             contextParts.push(`Surgery Schedule:\n${surgeryList.join('\n')}`);
+
+            // --- Financial Performance Context ---
+            // Calculate Top Performers on the fly to match Dashboard logic
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            // Helper to get week number
+            const getWeek = (d) => {
+                const date = new Date(d.getTime());
+                date.setHours(0, 0, 0, 0);
+                date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+                const week1 = new Date(date.getFullYear(), 0, 4);
+                return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+            };
+            const currentWeek = getWeek(now);
+
+            const surgeonStats = {};
+
+            surgeries.forEach(surgery => {
+                if (surgery.status === 'cancelled') return;
+                const surgeryDate = new Date(surgery.date);
+                const name = surgery.doctor_name;
+
+                if (!surgeonStats[name]) surgeonStats[name] = { daily: 0, weekly: 0, monthly: 0 };
+
+                // Calculate Profit for this surgery
+                let profit = 0;
+                if (surgery.cpt_codes && cptCodes.length > 0) {
+                    surgery.cpt_codes.forEach(code => {
+                        const cpt = cptCodes.find(c => c.code === code);
+                        if (cpt) profit += (cpt.reimbursement - cpt.cost);
+                    });
+                }
+
+                // Daily
+                if (surgeryDate.toDateString() === now.toDateString()) {
+                    surgeonStats[name].daily += profit;
+                }
+                // Monthly
+                if (surgeryDate.getMonth() === currentMonth && surgeryDate.getFullYear() === currentYear) {
+                    surgeonStats[name].monthly += profit;
+                }
+                // Weekly
+                if (getWeek(surgeryDate) === currentWeek && surgeryDate.getFullYear() === currentYear) {
+                    surgeonStats[name].weekly += profit;
+                }
+            });
+
+            // Find leaders
+            const getLeader = (period) => {
+                let max = -1;
+                let leader = "None";
+                Object.entries(surgeonStats).forEach(([name, stats]) => {
+                    if (stats[period] > max && stats[period] > 0) {
+                        max = stats[period];
+                        leader = `${name} ($${stats[period].toFixed(2)})`;
+                    }
+                });
+                return leader;
+            };
+
+            contextParts.push(`Financial Performance Indicators:
+- Daily Top Performer (Profit): ${getLeader('daily')}
+- Weekly Top Performer (Profit): ${getLeader('weekly')}
+- Monthly Top Performer (Profit): ${getLeader('monthly')}`);
         }
 
         return contextParts.join('\n\n');
