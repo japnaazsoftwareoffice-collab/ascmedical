@@ -20,6 +20,7 @@ import CPTAutoUpdate from './components/CPTAutoUpdate';
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
 import './App.css';
+import Chatbot from './components/Chatbot';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -720,6 +721,7 @@ function App() {
       <main className="main-content">
         {renderContent()}
       </main>
+      <Chatbot />
     </div>
   );
 }
