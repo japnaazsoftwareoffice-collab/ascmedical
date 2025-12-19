@@ -1,15 +1,14 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { sendMessageToGemini } from '../services/gemini';
 import './Chatbot.css';
 
-const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [] }) => {
+const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], orBlockSchedule = [] }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([
         {
             id: 1,
             role: 'bot',
-            text: 'Hello! I am your ASC Manager AI Assistant. I can help with questions about surgery schedules, CPT codes, patient management, and more. How can I assist you today?'
+            text: 'Hello! I am your ASC Manager AI Assistant. I can help with questions about surgery schedules, CPT codes, patient management, OR block schedules, and more. How can I assist you today?'
         }
     ]);
     const [inputValue, setInputValue] = useState('');
@@ -34,6 +33,18 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [] }) => {
 
         if (surgeons.length > 0) {
             contextParts.push(`Available Surgeons:\n${surgeons.map(s => `- ${s.name} (${s.specialty})`).join('\n')}`);
+        }
+
+        if (patients.length > 0) {
+            // Simplified patient list for context
+            contextParts.push(`Patient Directory (Count: ${patients.length}):\n${patients.map(p => `- [ID: ${p.id}] ${p.name} (DOB: ${p.dob}, MRN: ${p.mrn})`).join('\n')}`);
+        }
+
+        if (orBlockSchedule.length > 0) {
+            const scheduleStr = orBlockSchedule.map(block =>
+                `- ${block.room_name} (${block.day_of_week}, ${block.week_of_month} Week): ${block.provider_name} [${block.start_time}-${block.end_time}]`
+            ).join('\n');
+            contextParts.push(`OR Block Schedule:\n${scheduleStr}`);
         }
 
         if (cptCodes.length > 0) {

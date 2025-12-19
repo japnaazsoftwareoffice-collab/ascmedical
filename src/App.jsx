@@ -36,6 +36,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [billing, setBilling] = useState([]);
   const [claims, setClaims] = useState([]);
+  const [orBlockSchedule, setOrBlockSchedule] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -92,14 +93,15 @@ function App() {
       }
 
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData] = await Promise.all([
+      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData] = await Promise.all([
         db.getPatients(),
         db.getSurgeons(),
         db.getCPTCodes(),
         db.getSurgeries(),
         user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling(),
         user.role === 'admin' ? db.getUsers() : Promise.resolve([]),
-        db.getClaims ? db.getClaims() : Promise.resolve([])
+        db.getClaims ? db.getClaims() : Promise.resolve([]),
+        db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([])
       ]);
 
       // Transform surgeons to add 'name' property
@@ -115,6 +117,7 @@ function App() {
       setBilling(billingData);
       setUsers(usersData);
       setClaims(claimsData || []);
+      setOrBlockSchedule(orBlockScheduleData || []);
     } catch (err) {
       console.error('Error loading data:', err);
       // Fallback to mock data on error
@@ -721,7 +724,13 @@ function App() {
       <main className="main-content">
         {renderContent()}
       </main>
-      <Chatbot surgeons={surgeons} cptCodes={cptCodes} surgeries={surgeries} />
+      <Chatbot
+        surgeons={surgeons}
+        cptCodes={cptCodes}
+        surgeries={surgeries}
+        patients={patients}
+        orBlockSchedule={orBlockSchedule}
+      />
     </div>
   );
 }

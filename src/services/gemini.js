@@ -40,6 +40,9 @@ export const sendMessageToGemini = async (message, history = [], contextData = n
         return response.text();
     } catch (error) {
         console.error("Gemini API Error:", error);
+        if (error.status === 429 || error.message?.includes("429")) {
+            return "Quota exceeded for the Gemini API (Free Tier). The daily limit for this model has been reached. Please try again tomorrow or upgrade your API plan.";
+        }
         return "Sorry, I encountered an error processing your request. Please try again later.";
     }
 };
