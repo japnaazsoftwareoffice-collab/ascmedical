@@ -28,6 +28,10 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [] }) => {
         // limit data sending to avoid token limits if necessary, but flash models have large windows
         const contextParts = [];
 
+        // Add current date so the AI knows what "today" refers to
+        const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        contextParts.push(`Current System Date: ${today} (ISO: ${new Date().toISOString().split('T')[0]})`);
+
         if (surgeons.length > 0) {
             contextParts.push(`Available Surgeons:\n${surgeons.map(s => `- ${s.name} (${s.specialty})`).join('\n')}`);
         }
@@ -35,6 +39,19 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [] }) => {
         if (cptCodes.length > 0) {
             // Send a summary of CPT codes to save space, or top codes
             contextParts.push(`CPT Codes Database (Sample):\n${cptCodes.slice(0, 50).map(c => `- ${c.code}: ${c.description} (Avg Cost: $${c.cost})`).join('\n')}`);
+        }
+
+        if (surgeries.length > 0) {
+            // Simplify surgery list for context
+            // Sorting by date could be helpful
+            const sortedSurgeries = [...surgeries].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            // Convert to readable format: "YYYY-MM-DD: Dr. Name (Status)"
+            const surgeryList = sortedSurgeries.map(s => {
+                return `- Date: ${s.date}, Time: ${s.start_time}, Surgeon: ${s.doctor_name}, Status: ${s.status}`;
+            });
+
+            contextParts.push(`Surgery Schedule:\n${surgeryList.join('\n')}`);
         }
 
         return contextParts.join('\n\n');
