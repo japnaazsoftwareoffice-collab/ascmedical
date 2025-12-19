@@ -14,6 +14,33 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef(null);
+
+    useEffect(() => {
+        // Initialize speech recognition if supported
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognitionRef.current = new SpeechRecognition();
+            recognitionRef.current.continuous = false; // Stop after one sentence
+            recognitionRef.current.interimResults = false;
+
+            recognitionRef.current.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                setInputValue(prev => prev + (prev ? ' ' : '') + transcript);
+                setIsListening(false);
+            };
+
+            recognitionRef.current.onerror = (event) => {
+                console.error('Speech recognition error', event.error);
+                setIsListening(false);
+            };
+
+            recognitionRef.current.onend = () => {
+                setIsListening(false);
+            };
+        }
+    }, []);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -22,6 +49,21 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
     useEffect(() => {
         scrollToBottom();
     }, [messages, isOpen]);
+
+    const toggleVoiceInput = () => {
+        if (!recognitionRef.current) {
+            alert("Voice recognition is not supported in this browser.");
+            return;
+        }
+
+        if (isListening) {
+            recognitionRef.current.stop();
+            setIsListening(false);
+        } else {
+            recognitionRef.current.start();
+            setIsListening(true);
+        }
+    };
 
     const prepareContextData = () => {
         // limit data sending to avoid token limits if necessary, but flash models have large windows
@@ -220,10 +262,21 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
                     </div>
 
                     <form className="chatbot-input-area" onSubmit={handleSend}>
+                        <button
+                            type="button"
+                            className={`chatbot-mic ${isListening ? 'listening' : ''}`}
+                            onClick={toggleVoiceInput}
+                            title="Voice Input"
+                            style={{ marginRight: '8px', background: 'none', border: 'none', cursor: 'pointer', color: isListening ? '#ef4444' : '#64748b' }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill={isListening ? "currentColor" : "none"} viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" width="24" height="24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                            </svg>
+                        </button>
                         <input
                             type="text"
                             className="chatbot-input"
-                            placeholder="Ask a question..."
+                            placeholder={isListening ? "Listening..." : "Ask a question..."}
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             disabled={isLoading}
