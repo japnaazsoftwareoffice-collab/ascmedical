@@ -14,7 +14,7 @@ if (API_KEY) {
     });
 }
 
-export const sendMessageToGemini = async (message, history = []) => {
+export const sendMessageToGemini = async (message, history = [], contextData = null) => {
     if (!model) {
         if (!API_KEY) {
             return "Error: Gemini API Key is missing. Please add VITE_GEMINI_API_KEY to your .env file.";
@@ -30,7 +30,12 @@ export const sendMessageToGemini = async (message, history = []) => {
             })),
         });
 
-        const result = await chat.sendMessage(message);
+        let finalMessage = message;
+        if (contextData) {
+            finalMessage = `[System Data Context]:\n${contextData}\n\n[User Question]:\n${message}`;
+        }
+
+        const result = await chat.sendMessage(finalMessage);
         const response = await result.response;
         return response.text();
     } catch (error) {

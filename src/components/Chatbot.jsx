@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { sendMessageToGemini } from '../services/gemini';
 import './Chatbot.css';
 
-const Chatbot = () => {
+const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [] }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([
         {
@@ -23,6 +23,22 @@ const Chatbot = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messages, isOpen]);
+
+    const prepareContextData = () => {
+        // limit data sending to avoid token limits if necessary, but flash models have large windows
+        const contextParts = [];
+
+        if (surgeons.length > 0) {
+            contextParts.push(`Available Surgeons:\n${surgeons.map(s => `- ${s.name} (${s.specialty})`).join('\n')}`);
+        }
+
+        if (cptCodes.length > 0) {
+            // Send a summary of CPT codes to save space, or top codes
+            contextParts.push(`CPT Codes Database (Sample):\n${cptCodes.slice(0, 50).map(c => `- ${c.code}: ${c.description} (Avg Cost: $${c.cost})`).join('\n')}`);
+        }
+
+        return contextParts.join('\n\n');
+    };
 
     const handleSend = async (e) => {
         e.preventDefault();
@@ -51,7 +67,8 @@ const Chatbot = () => {
                     text: msg.text
                 }));
 
-            const responseText = await sendMessageToGemini(userMessageText, history);
+            const contextData = prepareContextData();
+            const responseText = await sendMessageToGemini(userMessageText, history, contextData);
 
             setMessages(prev => [...prev, {
                 id: Date.now() + 1,

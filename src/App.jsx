@@ -721,7 +721,7 @@ function App() {
       <main className="main-content">
         {renderContent()}
       </main>
-      <Chatbot />
+      <Chatbot surgeons={surgeons} cptCodes={cptCodes} surgeries={surgeries} />
     </div>
   );
 }
