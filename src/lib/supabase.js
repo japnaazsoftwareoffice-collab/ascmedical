@@ -173,13 +173,33 @@ export const db = {
 
     // ==================== CPT CODES ====================
     async getCPTCodes() {
-        const { data, error } = await supabase
-            .from('cpt_codes')
-            .select('*')
-            .order('created_at', { ascending: false });
+        let allCodes = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
 
-        if (error) throw error;
-        return data || [];
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('cpt_codes')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                allCodes = [...allCodes, ...data];
+                if (data.length < pageSize) {
+                    hasMore = false;
+                } else {
+                    page++;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+
+        return allCodes;
     },
 
     async addCPTCode(cptCode) {

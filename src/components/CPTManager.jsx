@@ -13,6 +13,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         procedure_indicator: ''
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
+    const [searchQuery, setSearchQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [isNewCategory, setIsNewCategory] = useState(false);
 
@@ -114,10 +115,14 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         setIsNewCategory(false);
     };
 
-    // Filter CPT list based on selected category
-    const filteredCPTList = filterCategory === 'All Categories'
-        ? cptCodes
-        : cptCodes.filter(cpt => cpt.category === filterCategory);
+    // Filter CPT list based on selected category and search query
+    const filteredCPTList = cptCodes.filter(cpt => {
+        const matchesCategory = filterCategory === 'All Categories' || cpt.category === filterCategory;
+        const matchesSearch = searchQuery === '' ||
+            (cpt.code && cpt.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (cpt.description && cpt.description.toLowerCase().includes(searchQuery.toLowerCase()));
+        return matchesCategory && matchesSearch;
+    });
 
     // Pagination Logic
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -338,7 +343,38 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                             <h3>Master Price List</h3>
                             <p className="card-subtitle">{filteredCPTList.length} codes found</p>
                         </div>
-                        <div className="list-actions">
+                        <div className="list-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <div className="search-wrapper" style={{ position: 'relative' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Search code or description..."
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="form-input"
+                                    style={{
+                                        paddingLeft: '2.5rem',
+                                        width: '240px',
+                                        height: '40px',
+                                        margin: 0
+                                    }}
+                                />
+                                <span style={{
+                                    position: 'absolute',
+                                    left: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: '#94a3b8',
+                                    pointerEvents: 'none'
+                                }}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                </span>
+                            </div>
                             <select
                                 className="filter-select"
                                 value={filterCategory}
@@ -346,6 +382,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     setFilterCategory(e.target.value);
                                     setCurrentPage(1); // Reset to first page on filter change
                                 }}
+                                style={{ height: '40px' }}
                             >
                                 <option value="All Categories">All Categories</option>
                                 {categories.filter(c => c !== 'All Categories').map(cat => (
