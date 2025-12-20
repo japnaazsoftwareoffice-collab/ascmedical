@@ -338,13 +338,19 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
 
                 {/* Right Side: List */}
                 <div className="content-card list-card" style={{ display: 'flex', flexDirection: 'column', height: 'fit-content' }}>
-                    <div className="card-header list-header">
+                    <div className="card-header list-header" style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '1.5rem'
+                    }}>
                         <div>
                             <h3>Master Price List</h3>
                             <p className="card-subtitle">{filteredCPTList.length} codes found</p>
                         </div>
-                        <div className="list-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                            <div className="search-wrapper" style={{ position: 'relative' }}>
+                        <div className="list-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div className="search-wrapper" style={{ position: 'relative', flex: '1 1 auto' }}>
                                 <input
                                     type="text"
                                     placeholder="Search code or description..."
@@ -356,8 +362,9 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     className="form-input"
                                     style={{
                                         paddingLeft: '2.5rem',
-                                        width: '240px',
-                                        height: '40px',
+                                        width: '320px',
+                                        minWidth: '240px',
+                                        height: '42px',
                                         margin: 0
                                     }}
                                 />
@@ -367,22 +374,30 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     top: '50%',
                                     transform: 'translateY(-50%)',
                                     color: '#94a3b8',
-                                    pointerEvents: 'none'
+                                    pointerEvents: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center'
                                 }}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <circle cx="11" cy="11" r="8"></circle>
                                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                                     </svg>
                                 </span>
                             </div>
                             <select
-                                className="filter-select"
+                                className="filter-select form-input"
                                 value={filterCategory}
                                 onChange={(e) => {
                                     setFilterCategory(e.target.value);
-                                    setCurrentPage(1); // Reset to first page on filter change
+                                    setCurrentPage(1);
                                 }}
-                                style={{ height: '40px' }}
+                                style={{
+                                    height: '42px',
+                                    width: 'auto',
+                                    minWidth: '160px',
+                                    cursor: 'pointer',
+                                    borderColor: '#e2e8f0'
+                                }}
                             >
                                 <option value="All Categories">All Categories</option>
                                 {categories.filter(c => c !== 'All Categories').map(cat => (
