@@ -10,7 +10,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         code: '',
         description: '',
         reimbursement: '',
-        procedure_indicator: ''
+        procedure_indicator: '',
+        body_part: ''
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
@@ -49,7 +50,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             description: formData.description,
             reimbursement: parseFloat(formData.reimbursement),
             category: formData.category,
-            procedure_indicator: formData.procedure_indicator
+            procedure_indicator: formData.procedure_indicator,
+            body_part: formData.body_part
         };
 
         if (editingId) {
@@ -73,7 +75,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
         setIsNewCategory(false);
     };
 
@@ -83,7 +85,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             code: cpt.code,
             description: cpt.description,
             reimbursement: cpt.reimbursement,
-            procedure_indicator: cpt.procedure_indicator || ''
+            procedure_indicator: cpt.procedure_indicator || '',
+            body_part: cpt.body_part || ''
         });
         setEditingId(cpt.id);
 
@@ -110,7 +113,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     const handleCancelEdit = () => {
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
         setEditingId(null);
         setIsNewCategory(false);
     };
@@ -310,6 +313,17 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                         </div>
 
                         <div className="form-group">
+                            <label>Body Part</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                placeholder="e.g. Hand, Shoulder, Knee"
+                                value={formData.body_part}
+                                onChange={(e) => setFormData({ ...formData, body_part: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="form-group">
                             <label>Reimbursement ($) <span style={{ color: 'red' }}>*</span></label>
                             <input
                                 type="number"
@@ -415,6 +429,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <th>Description</th>
                                     <th>Indicator</th>
                                     <th>Category</th>
+                                    <th>Body Part</th>
                                     <th>Reimbursement</th>
                                     <th>Actions</th>
                                 </tr>
@@ -435,6 +450,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                                 )}
                                             </td>
                                             <td><span className="category-tag">{cpt.category}</span></td>
+                                            <td>{cpt.body_part || '-'}</td>
                                             <td style={{ fontWeight: 600, color: '#10b981' }}>{formatCurrency(cpt.reimbursement)}</td>
                                             <td>
                                                 <div className="actions-cell">
