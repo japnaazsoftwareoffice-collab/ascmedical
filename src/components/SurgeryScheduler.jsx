@@ -60,6 +60,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
     });
 
     const [selectedCategory, setSelectedCategory] = useState('');
+    const [selectedBodyPart, setSelectedBodyPart] = useState(''); // New state for body part filter
     const [editingSurgery, setEditingSurgery] = useState(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [showSchedule, setShowSchedule] = useState(false);
@@ -176,15 +177,31 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
             .map(c => c.category))];
     }, [cptCodes, selectedSurgeon]);
 
-    // Filter CPT codes based on surgeon specialty
+    // Extract unique body parts from the CPT codes matching the surgeon's specialty
+    const availableBodyParts = useMemo(() => {
+        if (!selectedSurgeon || !selectedSurgeon.specialty) return [];
+        const specialtyCodes = cptCodes.filter(c => c.category === selectedSurgeon.specialty);
+        // Extract unique, non-empty body parts
+        const parts = [...new Set(specialtyCodes.map(c => c.body_part).filter(Boolean))];
+        return parts.sort();
+    }, [cptCodes, selectedSurgeon]);
+
+    // Filter CPT codes based on surgeon specialty AND selected body part
     const filteredCptCodes = useMemo(() => {
         if (!selectedSurgeon || !selectedSurgeon.specialty) {
             // If no surgeon selected, show all CPT codes
             return cptCodes;
         }
-        // Filter CPT codes to only show those matching surgeon's specialty
-        return cptCodes.filter(c => c.category === selectedSurgeon.specialty);
-    }, [cptCodes, selectedSurgeon]);
+        // Start with specialty filter
+        let codes = cptCodes.filter(c => c.category === selectedSurgeon.specialty);
+
+        // Apply body part filter if selected
+        if (selectedBodyPart) {
+            codes = codes.filter(c => c.body_part === selectedBodyPart);
+        }
+
+        return codes;
+    }, [cptCodes, selectedSurgeon, selectedBodyPart]);
 
     // Group surgeries by month
     const surgeriesByMonth = useMemo(() => {
@@ -808,6 +825,9 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                     cosmeticFacilityFee: fees.facilityFee,
                                                     cosmeticAnesthesiaFee: fees.anesthesiaFee
                                                 });
+
+                                                // Reset filters when doctor changes
+                                                setSelectedBodyPart('');
                                             }}
                                         >
                                             <option value="">-- Select Surgeon --</option>
@@ -968,15 +988,42 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                     border: '1px solid #bae6fd',
                                                     marginBottom: '1rem',
                                                     display: 'flex',
-                                                    alignItems: 'center',
+                                                    flexDirection: 'column',
                                                     gap: '0.5rem'
                                                 }}>
-                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2">
-                                                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                    </svg>
-                                                    <span style={{ fontSize: '0.9rem', color: '#0c4a6e' }}>
-                                                        Showing <strong>{selectedSurgeon.specialty}</strong> procedures for <strong>{selectedSurgeon.name}</strong>
-                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2">
+                                                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        <span style={{ fontSize: '0.9rem', color: '#0c4a6e' }}>
+                                                            Showing <strong>{selectedSurgeon.specialty}</strong> procedures for <strong>{selectedSurgeon.name}</strong>
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Body Part Filter */}
+                                                    {availableBodyParts.length > 0 && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                                            <label style={{ fontSize: '0.85rem', fontWeight: '600', color: '#0c4a6e' }}> Filter by Body Part:</label>
+                                                            <select
+                                                                value={selectedBodyPart}
+                                                                onChange={(e) => setSelectedBodyPart(e.target.value)}
+                                                                style={{
+                                                                    padding: '4px 8px',
+                                                                    borderRadius: '4px',
+                                                                    border: '1px solid #bae6fd',
+                                                                    background: 'white',
+                                                                    fontSize: '0.85rem',
+                                                                    color: '#0369a1',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                <option value="">All Body Parts</option>
+                                                                {availableBodyParts.map(part => (
+                                                                    <option key={part} value={part}>{part}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1rem' }}>
