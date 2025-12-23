@@ -393,7 +393,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
             cosmeticAnesthesiaFee: fees.anesthesiaFee,
             anesthesiaFee: anesthesiaFee,
             isSelfPayAnesthesia: isSelfPay,
-            selfPayRateName: selfPayRateName
+            selfPayRateName: selfPayRateName,
+            suppliesCost: surgery.supplies_cost || 0,
+            implantsCost: surgery.implants_cost || 0,
+            medicationsCost: surgery.medications_cost || 0
         });
 
         setIsFormOpen(true);
