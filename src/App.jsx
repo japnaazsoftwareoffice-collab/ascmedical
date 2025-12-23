@@ -808,7 +808,7 @@ function App() {
         />
       );
       if (view === 'analysis') return <ORUtilization surgeries={surgeries} cptCodes={cptCodes} />;
-      if (view === 'scorecard') return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={cptCodes} />;
+      if (view === 'scorecard') return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={cptCodes} settings={settings} />;
       if (view === 'or-schedule') return <ORBlockSchedule surgeons={surgeons} />;
       if (view === 'users') return (
         <UserManagement

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { calculateORCost, calculateMedicareRevenue, formatCurrency } from '../utils/hospitalUtils';
 import './Management.css';
 
-const SurgeonScorecard = ({ surgeries, surgeons, cptCodes }) => {
+const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings }) => {
     const [sortBy, setSortBy] = useState('netMargin'); // netMargin, cases, efficiency, breaches
     const [sortOrder, setSortOrder] = useState('desc');
 
@@ -42,7 +42,7 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes }) => {
             if (surgery.expected_reimbursement) {
                 revenue = surgery.expected_reimbursement;
             } else if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
-                revenue = calculateMedicareRevenue(surgery.cpt_codes, cptCodes);
+                revenue = calculateMedicareRevenue(surgery.cpt_codes, cptCodes, settings?.apply_medicare_mppr || false);
             }
             stats.totalRevenue += revenue;
 
