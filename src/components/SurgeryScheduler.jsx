@@ -1345,6 +1345,24 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                             )}
                                                         </span>
                                                     </div>
+                                                    <div style={{
+                                                        gridColumn: '1 / -1',
+                                                        borderTop: '2px solid #3b82f6',
+                                                        paddingTop: '0.75rem',
+                                                        marginTop: '0.5rem',
+                                                        background: '#eff6ff'
+                                                    }}>
+                                                        <span style={{ fontSize: '1rem', color: '#1e40af', fontWeight: '700' }}>Total Value: </span>
+                                                        <span style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.3rem' }}>
+                                                            {formatCurrency(
+                                                                projectedRevenue + // Revenue
+                                                                estimatedCost + // OR Cost
+                                                                (estimatedCost * 0.3) + // Labor Cost
+                                                                ((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) + // Supplies
+                                                                (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0) // Self-Pay Anesthesia
+                                                            )}
+                                                        </span>
+                                                    </div>
                                                     <div>
                                                         <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Cost Tier: </span>
                                                         <span style={{
