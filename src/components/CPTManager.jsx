@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Swal from 'sweetalert2';
 import { formatCurrency } from '../utils/hospitalUtils';
 import { db } from '../lib/supabase';
+import CPTDurationUpdater from './CPTDurationUpdater';
 import './Management.css';
 
 const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPTCodes }) => {
@@ -18,6 +19,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     const [sortOrder, setSortOrder] = useState('desc');
     const [editingId, setEditingId] = useState(null);
     const [isNewCategory, setIsNewCategory] = useState(false);
+    const [showDurationUpdater, setShowDurationUpdater] = useState(false);
 
     // Get unique categories from existing codes
     const uniqueCategories = React.useMemo(() => {
@@ -215,24 +217,44 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         <div className="management-container fade-in">
             <div className="management-header">
                 <h2 className="management-title">CPT Codes & Pricing</h2>
-                <button
-                    className="btn-secondary"
-                    onClick={() => setShowCategoryModal(true)}
-                    style={{
-                        padding: '0.5rem 1rem',
-                        background: 'white',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontWeight: '600',
-                        color: '#475569',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem'
-                    }}
-                >
-                    <span style={{ fontSize: '1.2rem' }}>🏷️</span> Manage Categories
-                </button>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                        className="btn-secondary"
+                        onClick={() => setShowDurationUpdater(true)}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}
+                    >
+                        <span style={{ fontSize: '1.2rem' }}>🤖</span> AI Update Durations
+                    </button>
+                    <button
+                        className="btn-secondary"
+                        onClick={() => setShowCategoryModal(true)}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            background: 'white',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            color: '#475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}
+                    >
+                        <span style={{ fontSize: '1.2rem' }}>🏷️</span> Manage Categories
+                    </button>
+                </div>
             </div>
 
             <div className="split-layout">
@@ -609,6 +631,19 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* AI Duration Updater Modal */}
+            {showDurationUpdater && (
+                <CPTDurationUpdater
+                    cptCodes={cptCodes}
+                    onClose={() => {
+                        setShowDurationUpdater(false);
+                        if (onRefreshCPTCodes) {
+                            onRefreshCPTCodes();
+                        }
+                    }}
+                />
             )}
         </div>
     );

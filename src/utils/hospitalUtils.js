@@ -60,6 +60,54 @@ export const calculateORCost = (durationMinutes) => {
     return cost;
 };
 
+// Calculate Medicare revenue with MPPR (Multiple Procedure Payment Reduction)
+// Pays 100% for highest-value code, 50% for all subsequent codes
+export const calculateMedicareRevenue = (cptCodesArray, cptDatabase) => {
+    if (!cptCodesArray || cptCodesArray.length === 0) return 0;
+
+    // Get full CPT code objects with reimbursement values
+    const cptObjects = cptCodesArray
+        .map(code => cptDatabase.find(c => c.code === code))
+        .filter(Boolean); // Remove any not found
+
+    if (cptObjects.length === 0) return 0;
+
+    // Sort by reimbursement value (highest first)
+    const sortedCpts = [...cptObjects].sort((a, b) =>
+        (b.reimbursement || 0) - (a.reimbursement || 0)
+    );
+
+    // Calculate total with MPPR
+    let totalRevenue = 0;
+
+    sortedCpts.forEach((cpt, index) => {
+        if (index === 0) {
+            // First (highest value) code gets 100%
+            totalRevenue += cpt.reimbursement || 0;
+        } else {
+            // All subsequent codes get 50%
+            totalRevenue += (cpt.reimbursement || 0) * 0.5;
+        }
+    });
+
+    return totalRevenue;
+};
+
+// Calculate labor cost based on duration and complexity
+export const calculateLaborCost = (durationMinutes, anesthesiaType = 'standard') => {
+    if (!durationMinutes || durationMinutes <= 0) return 0;
+
+    // Base anesthesia cost per hour
+    const anesthesiaCostPerHour = anesthesiaType === 'complex' ? 300 : 200;
+    const anesthesiaCost = (durationMinutes / 60) * anesthesiaCostPerHour;
+
+    // Nursing/staff cost per hour
+    const staffCostPerHour = 100;
+    const staffCost = (durationMinutes / 60) * staffCostPerHour;
+
+    return anesthesiaCost + staffCost;
+};
+
 // Format currency
 export const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {

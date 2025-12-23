@@ -17,8 +17,10 @@ import UserManagement from './components/UserManagement';
 import ClaimsManagement from './components/ClaimsManagement';
 import Settings from './components/Settings';
 import CPTAutoUpdate from './components/CPTAutoUpdate';
+import SurgeonScorecard from './components/SurgeonScorecard';
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
+import { calculateORCost, calculateMedicareRevenue, calculateLaborCost } from './utils/hospitalUtils';
 import './App.css';
 import Chatbot from './components/Chatbot';
 
@@ -592,6 +594,149 @@ function App() {
     }
   };
 
+  // Complete Surgery with Financial Snapshot
+  const handleCompleteSurgery = async (surgeryId) => {
+    const surgery = surgeries.find(s => s.id === surgeryId);
+    if (!surgery) return;
+
+    try {
+      // Calculate OR cost
+      const actualRoomCost = calculateORCost(surgery.duration_minutes || 0);
+
+      // Calculate labor cost - use ACTUAL anesthesia costs from notes
+      let actualLaborCost = 0;
+      let laborCostSource = 'Estimated';
+
+      if (surgery.notes) {
+        // Check for Self-Pay Anesthesia (e.g., "Self-Pay Anesthesia (Total Hip): $3,200")
+        const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
+        if (selfPayMatch) {
+          actualLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
+          laborCostSource = 'Self-Pay Anesthesia';
+        }
+
+        // Check for Cosmetic Surgery with Quantum Anesthesia
+        const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+        if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
+          actualLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
+          laborCostSource = 'Quantum Anesthesia';
+        }
+      }
+
+      // If no actual anesthesia cost found, use calculated estimate
+      if (actualLaborCost === 0) {
+        actualLaborCost = calculateLaborCost(surgery.duration_minutes || 0);
+        laborCostSource = 'Calculated Estimate';
+      }
+
+      // Calculate expected reimbursement
+      let expectedReimbursement = 0;
+      let reimbursementSource = '';
+
+      // Check if it's a cosmetic surgery
+      const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
+
+      if (isCosmeticSurgery && surgery.notes) {
+        // Parse cosmetic fees from notes
+        const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([0-9,]+)/i);
+        const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+        const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+        const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+        expectedReimbursement = facilityFee + anesthesiaFee;
+        reimbursementSource = 'CSC Facility + Quantum Anesthesia';
+      } else if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
+        // Regular surgery with CPT codes - use MPPR
+        expectedReimbursement = calculateMedicareRevenue(surgery.cpt_codes, cptCodes);
+        reimbursementSource = 'Medicare MPPR';
+      }
+
+      // Get supplies costs (if entered)
+      const suppliesCost = surgery.supplies_cost || 0;
+      const implantsCost = surgery.implants_cost || 0;
+      const medicationsCost = surgery.medications_cost || 0;
+      const totalSuppliesCost = suppliesCost + implantsCost + medicationsCost;
+
+      // Calculate net margin
+      const netMargin = expectedReimbursement - actualRoomCost - actualLaborCost - totalSuppliesCost;
+
+      // Update surgery with financial snapshot
+      const updates = {
+        status: 'completed',
+        actual_room_cost: actualRoomCost,
+        actual_labor_cost: actualLaborCost,
+        expected_reimbursement: expectedReimbursement,
+        financial_snapshot_date: new Date().toISOString(),
+        calculation_version: 'v1.1'
+      };
+
+      await handleUpdateSurgery(surgeryId, updates);
+
+      // Show financial summary
+      await Swal.fire({
+        title: 'Surgery Completed!',
+        html: `
+          <div style="text-align: left; margin-top: 1rem; background: #f8fafc; padding: 1rem; border-radius: 8px;">
+            <h4 style="margin-top: 0; color: #1e293b;">Financial Summary</h4>
+            <div style="display: grid; gap: 0.5rem; font-size: 0.95rem;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #64748b;">Expected Revenue:</span>
+                <strong style="color: #059669;">$${expectedReimbursement.toLocaleString()}</strong>
+              </div>
+              ${reimbursementSource ? `
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: -0.25rem; padding-left: 0.5rem;">
+                  ✓ ${reimbursementSource}
+                </div>
+              ` : ''}
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #64748b;">OR Cost:</span>
+                <strong style="color: #dc2626;">-$${actualRoomCost.toLocaleString()}</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #64748b;">Labor Cost:</span>
+                <strong style="color: #dc2626;">-$${actualLaborCost.toLocaleString()}</strong>
+              </div>
+              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: -0.25rem; padding-left: 0.5rem;">
+                ✓ ${laborCostSource}
+              </div>
+              ${totalSuppliesCost > 0 ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #64748b;">Supplies Cost:</span>
+                  <strong style="color: #dc2626;">-$${totalSuppliesCost.toLocaleString()}</strong>
+                </div>
+              ` : ''}
+              <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e2e8f0;">
+              <div style="display: flex; justify-content: space-between; font-size: 1.1rem;">
+                <span style="color: #1e293b; font-weight: 600;">Net Margin:</span>
+                <strong style="color: ${netMargin >= 0 ? '#059669' : '#dc2626'};">$${netMargin.toLocaleString()}</strong>
+              </div>
+              <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #64748b;">
+                Margin: ${expectedReimbursement > 0 ? ((netMargin / expectedReimbursement) * 100).toFixed(1) : 0}%
+              </div>
+            </div>
+          </div>
+        `,
+        icon: 'success',
+        confirmButtonColor: '#3b82f6',
+        confirmButtonText: 'View Surgeon Scorecard',
+        showCancelButton: true,
+        cancelButtonText: 'Close'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setView('scorecard');
+        }
+      });
+
+    } catch (error) {
+      console.error('Error completing surgery:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to complete surgery',
+        icon: 'error',
+        confirmButtonColor: '#3b82f6'
+      });
+    }
+  };
+
   // Show login screen if not logged in
   if (!user) {
     return <Login onLogin={handleLogin} />;
@@ -650,7 +795,7 @@ function App() {
           onDelete={handleDeletePatient}
         />
       );
-      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={cptCodes} surgeries={surgeries} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} />;
+      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={cptCodes} surgeries={surgeries} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
       if (view === 'surgeons') return (
         <SurgeonManagement
           surgeons={surgeons}
@@ -660,6 +805,7 @@ function App() {
         />
       );
       if (view === 'analysis') return <ORUtilization surgeries={surgeries} cptCodes={cptCodes} />;
+      if (view === 'scorecard') return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={cptCodes} />;
       if (view === 'or-schedule') return <ORBlockSchedule surgeons={surgeons} />;
       if (view === 'users') return (
         <UserManagement

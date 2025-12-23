@@ -49,14 +49,34 @@ const Dashboard = ({ surgeries, cptCodes }) => {
         const calculateStats = (filteredSurgeries) => {
             let revenue = 0;
             let cost = 0;
+            let laborCost = 0;
             const usage = {};
             const perCaseData = [];
 
             filteredSurgeries.forEach(surgery => {
-                // Calculate Cost
+                // Calculate OR Cost
                 const duration = surgery.duration_minutes || surgery.durationMinutes || 0;
                 const caseCost = calculateORCost(duration);
                 cost += caseCost;
+
+                // Calculate Labor Cost from notes or use actual_labor_cost
+                let caseLaborCost = surgery.actual_labor_cost || 0;
+
+                if (!caseLaborCost && surgery.notes) {
+                    // Extract self-pay anesthesia
+                    const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
+                    if (selfPayMatch) {
+                        caseLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
+                    }
+
+                    // Extract cosmetic anesthesia
+                    const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+                    if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
+                        caseLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
+                    }
+                }
+
+                laborCost += caseLaborCost;
 
                 // Calculate Revenue
                 let caseRevenue = 0;
@@ -97,15 +117,20 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                 }
                 revenue += caseRevenue;
 
+                // Get supplies costs
+                const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
+
                 perCaseData.push({
                     id: surgery.id,
                     revenue: caseRevenue,
                     cost: caseCost,
-                    profit: caseRevenue - caseCost
+                    laborCost: caseLaborCost,
+                    suppliesCost: suppliesCost,
+                    profit: caseRevenue - caseCost - caseLaborCost - suppliesCost
                 });
             });
 
-            return { revenue, cost, profit: revenue - cost, usage, perCaseData };
+            return { revenue, cost, laborCost, profit: revenue - cost - laborCost, usage, perCaseData };
         };
 
         const now = new Date(selectedDate);
