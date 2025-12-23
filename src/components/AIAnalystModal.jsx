@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency, calculateORCost } from '../utils/hospitalUtils';
+import { formatCurrency, calculateORCost, calculateMedicareRevenue } from '../utils/hospitalUtils';
 import './AIAnalystModal.css';
 
-const AIAnalystModal = ({ isOpen, onClose, surgeries, cptCodes }) => {
+const AIAnalystModal = ({ isOpen, onClose, surgeries, cptCodes, settings }) => {
     const [utilizationTarget, setUtilizationTarget] = useState(80);
     const [numberOfORs, setNumberOfORs] = useState(1);
     const [selectedCategory, setSelectedCategory] = useState('All');

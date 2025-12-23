@@ -493,6 +493,7 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                 onClose={() => setIsAIModalOpen(false)}
                 surgeries={surgeries}
                 cptCodes={cptCodes}
+                settings={settings}
             />
 
             <div className="dashboard-header">
