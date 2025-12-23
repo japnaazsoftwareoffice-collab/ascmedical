@@ -140,9 +140,10 @@ const AIAnalystModal = ({ isOpen, onClose, surgeries, cptCodes, settings }) => {
                 attempts++;
             }
 
-            // Apply realistic adjustments
-            // 1. MPPR Discount: Assume 15% reduction due to multiple procedures being combined
-            const mpprFactor = 0.85;
+            // Apply MPPR if enabled in settings
+            // When enabled, assume average 15% reduction due to multiple procedures being combined
+            // When disabled, no reduction
+            const mpprFactor = settings?.apply_medicare_mppr ? 0.85 : 1.0;
             const adjustedRevenue = currentRevenue * mpprFactor;
 
             // 2. Availability Factor: Not all recommended procedures will be available (70% realistic)
