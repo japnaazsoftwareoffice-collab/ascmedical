@@ -12,7 +12,8 @@ const Settings = () => {
         facility_zip: '',
         facility_phone: '',
         tax_id: '',
-        npi: ''
+        npi: '',
+        apply_medicare_mppr: false
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -37,10 +38,10 @@ const Settings = () => {
     };
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
+        const { name, value, type, checked } = e.target;
         setSettings(prev => ({
             ...prev,
-            [name]: value
+            [name]: type === 'checkbox' ? checked : value
         }));
     };
 
@@ -238,6 +239,38 @@ const Settings = () => {
                                 onChange={handleChange}
                                 placeholder="1234567890"
                             />
+                        </div>
+                    </div>
+
+                    {/* Medicare MPPR Setting */}
+                    <div className="form-row" style={{ marginTop: '2rem' }}>
+                        <div className="form-group" style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '2px solid #e2e8f0' }}>
+                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    name="apply_medicare_mppr"
+                                    checked={settings.apply_medicare_mppr || false}
+                                    onChange={handleChange}
+                                    style={{ width: '24px', height: '24px', cursor: 'pointer', marginTop: '2px', flexShrink: 0 }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                    <strong style={{ fontSize: '1rem', color: '#1e293b', display: 'block', marginBottom: '0.5rem' }}>
+                                        📊 Apply Medicare Multi-Procedure Payment Reduction (MPPR)
+                                    </strong>
+                                    <div style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: '1.6' }}>
+                                        When enabled, CPT revenue calculations will apply Medicare's 50% reduction for additional procedures (2nd procedure onwards).
+                                        When disabled, full CPT reimbursement rates will be shown without MPPR adjustments.
+                                    </div>
+                                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fbbf24' }}>
+                                        <strong style={{ fontSize: '0.85rem', color: '#92400e' }}>💡 Example:</strong>
+                                        <div style={{ fontSize: '0.85rem', color: '#78350f', marginTop: '0.25rem' }}>
+                                            3 procedures: $5,000 + $3,000 + $2,000<br />
+                                            <strong>MPPR OFF:</strong> $10,000 total<br />
+                                            <strong>MPPR ON:</strong> $5,000 + $1,500 + $1,000 = $7,500 total
+                                        </div>
+                                    </div>
+                                </div>
+                            </label>
                         </div>
                     </div>
 
