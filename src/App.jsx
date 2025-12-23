@@ -39,6 +39,7 @@ function App() {
   const [billing, setBilling] = useState([]);
   const [claims, setClaims] = useState([]);
   const [orBlockSchedule, setOrBlockSchedule] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -95,7 +96,7 @@ function App() {
       }
 
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData] = await Promise.all([
+      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData] = await Promise.all([
         db.getPatients(),
         db.getSurgeons(),
         db.getCPTCodes(),
@@ -103,7 +104,8 @@ function App() {
         user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling(),
         user.role === 'admin' ? db.getUsers() : Promise.resolve([]),
         db.getClaims ? db.getClaims() : Promise.resolve([]),
-        db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([])
+        db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([]),
+        db.getSettings ? db.getSettings() : Promise.resolve(null)
       ]);
 
       // Transform surgeons to add 'name' property
@@ -120,6 +122,7 @@ function App() {
       setUsers(usersData);
       setClaims(claimsData || []);
       setOrBlockSchedule(orBlockScheduleData || []);
+      setSettings(settingsData);
     } catch (err) {
       console.error('Error loading data:', err);
       // Fallback to mock data on error
@@ -795,7 +798,7 @@ function App() {
           onDelete={handleDeletePatient}
         />
       );
-      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={cptCodes} surgeries={surgeries} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
+      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={cptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
       if (view === 'surgeons') return (
         <SurgeonManagement
           surgeons={surgeons}
