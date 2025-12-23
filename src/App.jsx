@@ -267,7 +267,10 @@ function App() {
         duration_minutes: newSurgery.duration_minutes || newSurgery.durationMinutes,
         cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
         notes: newSurgery.notes,
-        status: 'scheduled'
+        status: 'scheduled',
+        supplies_cost: newSurgery.supplies_cost || newSurgery.suppliesCost || 0,
+        implants_cost: newSurgery.implants_cost || newSurgery.implantsCost || 0,
+        medications_cost: newSurgery.medications_cost || newSurgery.medicationsCost || 0
       };
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
@@ -309,6 +312,9 @@ function App() {
         cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
         notes: newSurgery.notes,
         status: 'scheduled',
+        supplies_cost: newSurgery.supplies_cost || newSurgery.suppliesCost || 0,
+        implants_cost: newSurgery.implants_cost || newSurgery.implantsCost || 0,
+        medications_cost: newSurgery.medications_cost || newSurgery.medicationsCost || 0,
         patients: patientDetails // Attach for display
       };
       setSurgeries([surgeryData, ...surgeries]);
@@ -395,6 +401,14 @@ function App() {
 
   const handleUpdateSurgery = async (id, updates) => {
     try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        // No database - use local state only
+        setSurgeries(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+        return;
+      }
+
       await db.updateSurgery(id, updates);
       await loadAllData(); // Reload surgeries from database
     } catch (error) {

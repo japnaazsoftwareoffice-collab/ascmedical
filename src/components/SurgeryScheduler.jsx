@@ -393,7 +393,11 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
             cosmeticAnesthesiaFee: fees.anesthesiaFee,
             anesthesiaFee: anesthesiaFee,
             isSelfPayAnesthesia: isSelfPay,
-            selfPayRateName: selfPayRateName
+            isSelfPayAnesthesia: isSelfPay,
+            selfPayRateName: selfPayRateName,
+            suppliesCost: surgery.supplies_cost || 0,
+            implantsCost: surgery.implants_cost || 0,
+            medicationsCost: surgery.medications_cost || 0
         });
 
         setIsFormOpen(true);
@@ -519,21 +523,23 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                             totalValue = facilityFee + anesthesiaFee;
                                         }
                                     } else {
-                                        const cptTotal = surgery.cpt_codes?.reduce((cptSum, code) => {
-                                            const cptCode = cptCodes.find(c => c.code === code);
-                                            return cptSum + (cptCode?.reimbursement || 0);
-                                        }, 0) || 0;
+                                        // Calculate MPPR Revenue
+                                        const revenue = calculateMedicareRevenue(surgery.cpt_codes || [], cptCodes);
+                                        // Costs
+                                        const orCost = calculateORCost(surgery.duration_minutes || 0);
+                                        const laborCost = orCost * 0.3;
+                                        const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
 
-                                        let orCost = calculateORCost(surgery.duration_minutes || 0);
-
+                                        let additionalRevenue = 0;
                                         if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                                            const match = surgery.notes.match(/Self-Pay Anesthesia:?\s*\$?\s*([\d,]+)/i);
+                                            const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
                                             if (match) {
-                                                orCost += parseFloat(match[1].replace(/,/g, ''));
+                                                additionalRevenue = parseFloat(match[2].replace(/,/g, ''));
                                             }
                                         }
 
-                                        totalValue = cptTotal + orCost;
+                                        // Total Value = Revenue + OR Cost + Labor + Supplies (as requested by user)
+                                        totalValue = revenue + orCost + laborCost + suppliesCost + additionalRevenue;
                                     }
 
                                     return sum + totalValue;
@@ -627,25 +633,25 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                     totalValue = orCost;
                                                                 }
                                                             } else {
-                                                                // Calculate CPT codes total for regular surgeries
-                                                                cptTotal = surgery.cpt_codes?.reduce((sum, code) => {
-                                                                    const cptCode = cptCodes.find(c => c.code === code);
-                                                                    return sum + (cptCode?.reimbursement || 0);
-                                                                }, 0) || 0;
+                                                                // Calculate CPT codes total for regular surgeries using MPPR
+                                                                cptTotal = calculateMedicareRevenue(surgery.cpt_codes || [], cptCodes);
 
-                                                                // Calculate OR cost
+                                                                // Calculate Costs
                                                                 orCost = calculateORCost(surgery.duration_minutes || 0);
+                                                                const laborCost = orCost * 0.3;
+                                                                const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
 
+                                                                let additionalRevenue = 0;
                                                                 // Check for Self-Pay Anesthesia in notes
                                                                 if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
                                                                     const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
                                                                     if (match) {
-                                                                        orCost += parseFloat(match[2].replace(/,/g, ''));
+                                                                        additionalRevenue = parseFloat(match[2].replace(/,/g, ''));
                                                                     }
                                                                 }
 
-                                                                // Calculate total value
-                                                                totalValue = cptTotal + orCost;
+                                                                // Calculate total value as Revenue + Costs
+                                                                totalValue = cptTotal + orCost + laborCost + suppliesCost + additionalRevenue;
                                                             }
 
                                                             return (
