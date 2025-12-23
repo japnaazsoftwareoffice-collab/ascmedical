@@ -129,7 +129,18 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                 });
             });
 
-            return { revenue, cost, laborCost, profit: revenue - cost - laborCost, usage, perCaseData };
+            // Calculate total supplies cost
+            const totalSuppliesCost = perCaseData.reduce((sum, c) => sum + c.suppliesCost, 0);
+
+            return {
+                revenue,
+                cost,
+                laborCost,
+                suppliesCost: totalSuppliesCost,
+                profit: revenue - cost - laborCost - totalSuppliesCost,
+                usage,
+                perCaseData
+            };
         };
 
         const now = new Date(selectedDate);
@@ -233,12 +244,13 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                     revenue = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
                 }
 
-                // If cosmetic, ignore OR cost for profit calculation (or consider it 0)
-                // The user states: "when in plastic and plastic cosmetic cases here is not required profit and loss"
-                // This implies the Fee IS the value they want to see, not Fee - Cost.
-                const cost = isCosmetic ? 0 : calculateORCost(s.duration_minutes || s.durationMinutes || 0);
+                // Calculate total costs: OR + Labor + Supplies
+                const orCost = isCosmetic ? 0 : calculateORCost(s.duration_minutes || s.durationMinutes || 0);
+                const laborCost = orCost * 0.3;
+                const suppliesCost = (s.supplies_cost || 0) + (s.implants_cost || 0) + (s.medications_cost || 0);
+                const totalCosts = orCost + laborCost + suppliesCost;
 
-                profits[name] = (profits[name] || 0) + (revenue - cost);
+                profits[name] = (profits[name] || 0) + (revenue - totalCosts);
             });
 
             let top = null;
