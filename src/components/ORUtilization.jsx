@@ -21,7 +21,9 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
             totalSurgeries: 0,
             totalMinutesUsed: 0,
             totalOperationCost: 0,
-            totalORCost: 0
+            totalORCost: 0,
+            totalLaborCost: 0,
+            totalSuppliesCost: 0
         };
 
         // Filter surgeries for selected date
@@ -29,6 +31,8 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
 
         let totalOperationCost = 0;
         let totalORCost = 0;
+        let totalLaborCost = 0;
+        let totalSuppliesCost = 0;
 
         // Initialize OR data
         const orData = Array.from({ length: OR_COUNT }, (_, i) => ({
@@ -101,6 +105,8 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
             }
 
             totalOperationCost += surgeryRevenue;
+            totalLaborCost += surgeryLaborCost;
+            totalSuppliesCost += surgerySuppliesCost;
 
             // Determine Patient Name
             let patientName = surgery.patient_name;
@@ -154,7 +160,9 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
             totalSurgeries: dateSurgeries.length,
             totalMinutesUsed,
             totalOperationCost,
-            totalORCost
+            totalORCost,
+            totalLaborCost,
+            totalSuppliesCost
         };
     }, [surgeries, cptCodes, selectedDate]);
 
@@ -164,6 +172,8 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
             return {
                 revenue: utilizationData.totalOperationCost,
                 cost: utilizationData.totalORCost,
+                laborCost: utilizationData.totalLaborCost,
+                suppliesCost: utilizationData.totalSuppliesCost,
                 surgeries: utilizationData.totalSurgeries,
                 minutesUsed: utilizationData.totalMinutesUsed,
                 utilization: utilizationData.totalUtilization,
@@ -179,6 +189,8 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
             return {
                 revenue: 0,
                 cost: 0,
+                laborCost: 0,
+                suppliesCost: 0,
                 surgeries: 0,
                 minutesUsed: 0,
                 utilization: 0,
@@ -186,13 +198,17 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
             };
         }
 
-        // Calculate revenue and cost for this specific OR
+        // Calculate revenue and costs for this specific OR
         const orRevenue = orStats.surgeries.reduce((sum, s) => sum + s.revenue, 0);
         const orCost = orStats.surgeries.reduce((sum, s) => sum + s.cost, 0);
+        const orLaborCost = orStats.surgeries.reduce((sum, s) => sum + s.laborCost, 0);
+        const orSuppliesCost = orStats.surgeries.reduce((sum, s) => sum + s.suppliesCost, 0);
 
         return {
             revenue: orRevenue,
             cost: orCost,
+            laborCost: orLaborCost,
+            suppliesCost: orSuppliesCost,
             surgeries: orStats.surgeries.length,
             minutesUsed: orStats.minutesUsed,
             utilization: orStats.utilizationPercent,
@@ -309,8 +325,15 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
                 <div className="stat-card">
                     <div className="stat-content">
                         <div className="stat-label">Net Profit/Loss</div>
-                        <div className="stat-value" style={{ color: filteredMetrics.revenue > filteredMetrics.cost ? '#10b981' : '#ef4444' }}>
-                            {formatCurrency(filteredMetrics.revenue - filteredMetrics.cost)}
+                        <div className="stat-value" style={{
+                            color: (filteredMetrics.revenue - filteredMetrics.cost - filteredMetrics.laborCost - filteredMetrics.suppliesCost) > 0 ? '#10b981' : '#ef4444'
+                        }}>
+                            {formatCurrency(
+                                filteredMetrics.revenue -
+                                filteredMetrics.cost -
+                                filteredMetrics.laborCost -
+                                filteredMetrics.suppliesCost
+                            )}
                         </div>
                         <div className="stat-sublabel">
                             Revenue - Cost
@@ -325,7 +348,10 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
                     <div className="stat-content">
                         <div className="stat-label">Efficiency Ratio</div>
                         <div className="stat-value" style={{ color: '#3b82f6' }}>
-                            {filteredMetrics.cost > 0 ? (filteredMetrics.revenue / filteredMetrics.cost).toFixed(2) : 'N/A'}x
+                            {(() => {
+                                const totalCosts = filteredMetrics.cost + filteredMetrics.laborCost + filteredMetrics.suppliesCost;
+                                return totalCosts > 0 ? (filteredMetrics.revenue / totalCosts).toFixed(2) : 'N/A';
+                            })()}x
                         </div>
                         <div className="stat-sublabel">
                             Revenue per $1 Cost
