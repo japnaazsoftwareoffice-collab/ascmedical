@@ -15,6 +15,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
+    const [sortOrder, setSortOrder] = useState('desc');
     const [editingId, setEditingId] = useState(null);
     const [isNewCategory, setIsNewCategory] = useState(false);
 
@@ -119,13 +120,29 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     // Filter CPT list based on selected category and search query
-    const filteredCPTList = cptCodes.filter(cpt => {
-        const matchesCategory = filterCategory === 'All Categories' || cpt.category === filterCategory;
-        const matchesSearch = searchQuery === '' ||
-            (cpt.code && cpt.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (cpt.description && cpt.description.toLowerCase().includes(searchQuery.toLowerCase()));
-        return matchesCategory && matchesSearch;
-    });
+    const filteredCPTList = React.useMemo(() => {
+        let list = cptCodes.filter(cpt => {
+            const matchesCategory = filterCategory === 'All Categories' || cpt.category === filterCategory;
+            const matchesSearch = searchQuery === '' ||
+                (cpt.code && cpt.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (cpt.description && cpt.description.toLowerCase().includes(searchQuery.toLowerCase()));
+            return matchesCategory && matchesSearch;
+        });
+
+        // Apply sorting
+        if (sortOrder) {
+            list = list.sort((a, b) => {
+                const priceA = parseFloat(a.reimbursement) || 0;
+                const priceB = parseFloat(b.reimbursement) || 0;
+                if (sortOrder === 'asc') {
+                    return priceA - priceB;
+                } else {
+                    return priceB - priceA;
+                }
+            });
+        }
+        return list;
+    }, [cptCodes, filterCategory, searchQuery, sortOrder]);
 
     // Pagination Logic
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -398,6 +415,21 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     </svg>
                                 </span>
                             </div>
+                            <select
+                                className="filter-select form-input"
+                                value={sortOrder}
+                                onChange={(e) => setSortOrder(e.target.value)}
+                                style={{
+                                    height: '42px',
+                                    width: 'auto',
+                                    minWidth: '200px',
+                                    cursor: 'pointer',
+                                    borderColor: '#e2e8f0'
+                                }}
+                            >
+                                <option value="desc">Price: High to Low</option>
+                                <option value="asc">Price: Low to High</option>
+                            </select>
                             <select
                                 className="filter-select form-input"
                                 value={filterCategory}

@@ -95,7 +95,8 @@ const Settings = () => {
             </div>
 
             {/* HCFA Preview Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+            {/* HCFA Preview Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
                 <div style={{ background: '#fff', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '2px solid #e0e7ff' }}>
                     <div style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: '600', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Box 25 - Federal Tax ID</div>
                     <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>{settings.tax_id || 'Not Set'}</div>
@@ -117,10 +118,10 @@ const Settings = () => {
             </div>
 
             <div className="table-container">
-                <form onSubmit={handleSave}>
+                <form onSubmit={handleSave} style={{ padding: '2.5rem', paddingBottom: '4rem' }}>
                     <div className="form-row">
-                        {/* Facility Name - Full Width */}
-                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                        {/* Facility Name & Phone */}
+                        <div className="form-group">
                             <label>Facility Name *</label>
                             <input
                                 className="form-input"
@@ -130,6 +131,45 @@ const Settings = () => {
                                 onChange={handleChange}
                                 required
                                 placeholder="e.g., Naples Surgery Center"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Phone Number *</label>
+                            <input
+                                className="form-input"
+                                type="tel"
+                                name="facility_phone"
+                                value={settings.facility_phone}
+                                onChange={handleChange}
+                                required
+                                placeholder="(555) 123-4567"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="form-row">
+                        {/* Tax ID & NPI */}
+                        <div className="form-group">
+                            <label>Federal Tax ID (EIN) *</label>
+                            <input
+                                className="form-input"
+                                type="text"
+                                name="tax_id"
+                                value={settings.tax_id}
+                                onChange={handleChange}
+                                required
+                                placeholder="59-1234567"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>NPI Number</label>
+                            <input
+                                className="form-input"
+                                type="text"
+                                name="npi"
+                                value={settings.npi}
+                                onChange={handleChange}
+                                placeholder="1234567890"
                             />
                         </div>
                     </div>
@@ -151,7 +191,7 @@ const Settings = () => {
                     </div>
 
                     <div className="form-row">
-                        {/* City */}
+                        {/* City & State */}
                         <div className="form-group">
                             <label>City *</label>
                             <input
@@ -164,8 +204,6 @@ const Settings = () => {
                                 placeholder="e.g., Naples"
                             />
                         </div>
-
-                        {/* State */}
                         <div className="form-group">
                             <label>State *</label>
                             <input
@@ -196,49 +234,8 @@ const Settings = () => {
                                 placeholder="34102"
                             />
                         </div>
-
-                        {/* Phone */}
-                        <div className="form-group">
-                            <label>Phone Number *</label>
-                            <input
-                                className="form-input"
-                                type="tel"
-                                name="facility_phone"
-                                value={settings.facility_phone}
-                                onChange={handleChange}
-                                required
-                                placeholder="(555) 123-4567"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-row">
-                        {/* Tax ID */}
-                        <div className="form-group">
-                            <label>Federal Tax ID (EIN) *</label>
-                            <input
-                                className="form-input"
-                                type="text"
-                                name="tax_id"
-                                value={settings.tax_id}
-                                onChange={handleChange}
-                                required
-                                placeholder="59-1234567"
-                            />
-                        </div>
-
-                        {/* NPI */}
-                        <div className="form-group">
-                            <label>NPI Number</label>
-                            <input
-                                className="form-input"
-                                type="text"
-                                name="npi"
-                                value={settings.npi}
-                                onChange={handleChange}
-                                placeholder="1234567890"
-                            />
-                        </div>
+                        {/* Empty Spacer */}
+                        <div className="form-group"></div>
                     </div>
 
                     {/* Info Box */}
