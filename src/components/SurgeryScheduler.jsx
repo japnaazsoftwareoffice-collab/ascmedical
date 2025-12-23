@@ -41,7 +41,7 @@ const selfPayRates = [
     { name: 'Total Shoulder', price: 3200 }
 ];
 
-const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSchedule, onUpdate, onDelete, onComplete }) => {
+const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settings, onSchedule, onUpdate, onDelete, onComplete }) => {
     // Initial fees for default 60 mins
     const initialFees = calculateCosmeticFees(60);
 
@@ -440,8 +440,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
         if (!formData.selectedCptCodes || formData.selectedCptCodes.length === 0 || isCosmeticSurgeon) {
             return 0;
         }
-        return calculateMedicareRevenue(formData.selectedCptCodes, cptCodes);
-    }, [formData.selectedCptCodes, cptCodes, isCosmeticSurgeon]);
+        return calculateMedicareRevenue(formData.selectedCptCodes, cptCodes, settings?.apply_medicare_mppr || false);
+    }, [formData.selectedCptCodes, cptCodes, isCosmeticSurgeon, settings]);
 
     // Calculate projected margin
     const projectedMargin = useMemo(() => {
@@ -635,10 +635,11 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                 }
                                                             } else {
                                                                 // Calculate CPT codes total for regular surgeries
-                                                                cptTotal = surgery.cpt_codes?.reduce((sum, code) => {
-                                                                    const cptCode = cptCodes.find(c => c.code === code);
-                                                                    return sum + (cptCode?.reimbursement || 0);
-                                                                }, 0) || 0;
+                                                                cptTotal = calculateMedicareRevenue(
+                                                                    surgery.cpt_codes || [],
+                                                                    cptCodes,
+                                                                    settings?.apply_medicare_mppr || false
+                                                                );
 
                                                                 // Calculate OR cost
                                                                 orCost = calculateORCost(surgery.duration_minutes || 0);
