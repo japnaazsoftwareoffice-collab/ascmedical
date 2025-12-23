@@ -50,8 +50,9 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings }) => {
             const orCost = surgery.actual_room_cost || calculateORCost(surgery.duration_minutes || 0);
             stats.totalORCost += orCost;
 
-            // Labor cost
-            stats.totalLaborCost += surgery.actual_labor_cost || 0;
+            // Labor cost - use actual if available, otherwise default to 30% of OR cost
+            const laborCost = surgery.actual_labor_cost || (orCost * 0.3);
+            stats.totalLaborCost += laborCost;
 
             // Supplies cost
             stats.totalSuppliesCost += (surgery.supplies_cost || 0) +

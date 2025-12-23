@@ -69,6 +69,11 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
                 }
             }
 
+            // If still no labor cost, default to 30% of OR cost
+            if (!surgeryLaborCost) {
+                surgeryLaborCost = surgeryORCost * 0.3;
+            }
+
             // Get supplies costs
             const surgerySuppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
 

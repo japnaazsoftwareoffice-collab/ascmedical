@@ -76,6 +76,11 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                     }
                 }
 
+                // If still no labor cost, default to 30% of OR cost
+                if (!caseLaborCost) {
+                    caseLaborCost = caseCost * 0.3;
+                }
+
                 laborCost += caseLaborCost;
 
                 // Calculate Revenue
