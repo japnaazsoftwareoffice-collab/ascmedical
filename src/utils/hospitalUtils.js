@@ -62,7 +62,7 @@ export const calculateORCost = (durationMinutes) => {
 
 // Calculate Medicare revenue with MPPR (Multiple Procedure Payment Reduction)
 // Pays 100% for highest-value code, 50% for all subsequent codes
-export const calculateMedicareRevenue = (cptCodesArray, cptDatabase) => {
+export const calculateMedicareRevenue = (cptCodesArray, cptDatabase, applyMPPR = false) => {
     if (!cptCodesArray || cptCodesArray.length === 0) return 0;
 
     // Get full CPT code objects with reimbursement values
@@ -72,7 +72,12 @@ export const calculateMedicareRevenue = (cptCodesArray, cptDatabase) => {
 
     if (cptObjects.length === 0) return 0;
 
-    // Sort by reimbursement value (highest first)
+    // If MPPR is disabled, return simple sum
+    if (!applyMPPR) {
+        return cptObjects.reduce((sum, cpt) => sum + (cpt.reimbursement || 0), 0);
+    }
+
+    // Sort by reimbursement value (highest first) for MPPR
     const sortedCpts = [...cptObjects].sort((a, b) =>
         (b.reimbursement || 0) - (a.reimbursement || 0)
     );
