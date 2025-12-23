@@ -48,6 +48,26 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
             const surgeryORCost = calculateORCost(duration);
             totalORCost += surgeryORCost;
 
+            // Calculate Labor Cost from notes or use actual_labor_cost
+            let surgeryLaborCost = surgery.actual_labor_cost || 0;
+
+            if (!surgeryLaborCost && surgery.notes) {
+                // Extract self-pay anesthesia
+                const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
+                if (selfPayMatch) {
+                    surgeryLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
+                }
+
+                // Extract cosmetic anesthesia
+                const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+                if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
+                    surgeryLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
+                }
+            }
+
+            // Get supplies costs
+            const surgerySuppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
+
             // Calculate Operation Cost (Revenue)
             let surgeryRevenue = 0;
 
@@ -113,7 +133,9 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
                     startTime: surgery.start_time,
                     duration: duration,
                     revenue: surgeryRevenue,
-                    cost: surgeryORCost
+                    cost: surgeryORCost,
+                    laborCost: surgeryLaborCost,
+                    suppliesCost: surgerySuppliesCost
                 });
             }
         });

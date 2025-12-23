@@ -99,15 +99,52 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
             // Sorting by date could be helpful
             const sortedSurgeries = [...surgeries].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-            // Convert to readable format: "YYYY-MM-DD: Dr. Name (Status)"
+            // Convert to readable format with complete financial data
             const surgeryList = sortedSurgeries.map(s => {
-                // Find CPT details for cost context if possible
-                const cptDetails = (s.cpt_codes || []).map(code => {
-                    const found = cptCodes.find(c => c.code === code);
-                    return found ? found.reimbursement : 0;
-                });
-                const totalRev = cptDetails.reduce((a, b) => a + b, 0);
-                return `- Date: ${s.date}, Time: ${s.start_time}, Surgeon: ${s.doctor_name}, Status: ${s.status} (Est. Rev: $${totalRev})`;
+                // Calculate OR Cost
+                const duration = s.duration_minutes || 0;
+                const orCost = duration <= 60 ? 1500 :
+                    duration <= 120 ? 1500 + Math.ceil((duration - 60) / 30) * 300 :
+                        1500 + 600 + Math.ceil((duration - 120) / 30) * 400;
+
+                // Calculate Labor Cost from notes or actual_labor_cost
+                let laborCost = s.actual_labor_cost || 0;
+                if (!laborCost && s.notes) {
+                    const selfPayMatch = s.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
+                    if (selfPayMatch) {
+                        laborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
+                    }
+                    const cosmeticAnesthesiaMatch = s.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+                    if (cosmeticAnesthesiaMatch && s.notes.includes('Cosmetic Surgery')) {
+                        laborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
+                    }
+                }
+
+                // Get supplies costs
+                const suppliesCost = (s.supplies_cost || 0) + (s.implants_cost || 0) + (s.medications_cost || 0);
+
+                // Calculate Revenue
+                let revenue = 0;
+                if (s.cpt_codes && s.cpt_codes.length > 0) {
+                    const cptDetails = s.cpt_codes.map(code => {
+                        const found = cptCodes.find(c => c.code === code);
+                        return found ? found.reimbursement : 0;
+                    });
+                    revenue = cptDetails.reduce((a, b) => a + b, 0);
+                } else if (s.notes) {
+                    // Cosmetic surgery
+                    const facilityMatch = s.notes.match(/Facility Fee:\s*\$?\s*([0-9,]+)/i);
+                    const anesthesiaMatch = s.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+                    revenue = facilityFee + anesthesiaFee;
+                }
+
+                const totalCost = orCost + laborCost + suppliesCost;
+                const margin = revenue - totalCost;
+                const marginPercent = revenue > 0 ? ((margin / revenue) * 100).toFixed(1) : 0;
+
+                return `- Date: ${s.date}, Time: ${s.start_time}, Surgeon: ${s.doctor_name}, Status: ${s.status} | Revenue: $${revenue}, OR Cost: $${orCost}, Labor: $${laborCost}, Supplies: $${suppliesCost}, Margin: $${margin} (${marginPercent}%)`;
             });
 
             contextParts.push(`Surgery Schedule:\n${surgeryList.join('\n')}`);
@@ -137,14 +174,39 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
 
                 if (!surgeonStats[name]) surgeonStats[name] = { daily: 0, weekly: 0, monthly: 0 };
 
-                // Calculate Profit for this surgery
-                let profit = 0;
+                // Calculate complete profit with all costs
+                const duration = surgery.duration_minutes || 0;
+                const orCost = duration <= 60 ? 1500 :
+                    duration <= 120 ? 1500 + Math.ceil((duration - 60) / 30) * 300 :
+                        1500 + 600 + Math.ceil((duration - 120) / 30) * 400;
+
+                let laborCost = surgery.actual_labor_cost || 0;
+                if (!laborCost && surgery.notes) {
+                    const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
+                    if (selfPayMatch) laborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
+                    const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+                    if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
+                        laborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
+                    }
+                }
+
+                const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
+
+                let revenue = 0;
                 if (surgery.cpt_codes && cptCodes.length > 0) {
                     surgery.cpt_codes.forEach(code => {
                         const cpt = cptCodes.find(c => c.code === code);
-                        if (cpt) profit += (cpt.reimbursement - cpt.cost);
+                        if (cpt) revenue += cpt.reimbursement;
                     });
+                } else if (surgery.notes) {
+                    const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([0-9,]+)/i);
+                    const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+                    revenue = facilityFee + anesthesiaFee;
                 }
+
+                const profit = revenue - orCost - laborCost - suppliesCost;
 
                 // Daily
                 if (surgeryDate.toDateString() === now.toDateString()) {

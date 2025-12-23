@@ -14,6 +14,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
                 { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management' },
                 { id: 'users', icon: '🔐', label: 'User Management' },
                 { id: 'analysis', icon: '🏥', label: 'OR Utilization' },
+                { id: 'scorecard', icon: '🎯', label: 'Surgeon Scorecard' },
                 { id: 'cpt', icon: '⚙️', label: 'CPT & Categories' },
                 { id: 'auto-cpt', icon: '🔄', label: 'CPT Auto-Updater' },
                 { id: 'settings', icon: '🔧', label: 'Settings' }

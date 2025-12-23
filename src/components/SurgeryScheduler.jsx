@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { db } from '../lib/supabase';
-import { calculateORCost, formatCurrency } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency } from '../utils/hospitalUtils';
 import ORBlockSchedule from './ORBlockSchedule';
 import './Management.css';
 
@@ -41,7 +41,7 @@ const selfPayRates = [
     { name: 'Total Shoulder', price: 3200 }
 ];
 
-const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSchedule, onUpdate, onDelete }) => {
+const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSchedule, onUpdate, onDelete, onComplete }) => {
     // Initial fees for default 60 mins
     const initialFees = calculateCosmeticFees(60);
 
@@ -56,7 +56,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
         cosmeticAnesthesiaFee: initialFees.anesthesiaFee,
         anesthesiaFee: 0,
         isSelfPayAnesthesia: false,
-        selfPayRateName: ''
+        selfPayRateName: '',
+        suppliesCost: 0,
+        implantsCost: 0,
+        medicationsCost: 0
     });
 
     const [selectedCategory, setSelectedCategory] = useState('');
@@ -273,7 +276,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
             start_time: formData.startTime,
             duration_minutes: formData.durationMinutes,
             cpt_codes: isCosmeticSurgeon ? [] : formData.selectedCptCodes,
-            status: 'scheduled'
+            status: 'scheduled',
+            supplies_cost: formData.suppliesCost || 0,
+            implants_cost: formData.implantsCost || 0,
+            medications_cost: formData.medicationsCost || 0
         };
 
         // Add notes for cosmetic surgeries or self-pay anesthesia
@@ -337,7 +343,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
             cosmeticAnesthesiaFee: defaultFees.anesthesiaFee,
             anesthesiaFee: 0,
             isSelfPayAnesthesia: false,
-            selfPayRateName: ''
+            selfPayRateName: '',
+            suppliesCost: 0,
+            implantsCost: 0,
+            medicationsCost: 0
         });
     };
 
@@ -422,6 +431,31 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
     };
 
     const estimatedCost = calculateORCost(formData.durationMinutes);
+
+    // Calculate projected revenue with MPPR
+    const projectedRevenue = useMemo(() => {
+        if (!formData.selectedCptCodes || formData.selectedCptCodes.length === 0 || isCosmeticSurgeon) {
+            return 0;
+        }
+        return calculateMedicareRevenue(formData.selectedCptCodes, cptCodes);
+    }, [formData.selectedCptCodes, cptCodes, isCosmeticSurgeon]);
+
+    // Calculate projected margin
+    const projectedMargin = useMemo(() => {
+        const orCost = estimatedCost;
+        const suppliesCost = (formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0);
+        // Estimate labor cost at 30% of OR cost as a rough estimate
+        const estimatedLaborCost = orCost * 0.3;
+        return projectedRevenue - orCost - estimatedLaborCost - suppliesCost;
+    }, [projectedRevenue, estimatedCost, formData.suppliesCost, formData.implantsCost, formData.medicationsCost]);
+
+    // Determine cost tier
+    const costTier = useMemo(() => {
+        const minutes = formData.durationMinutes;
+        if (minutes <= 60) return { name: 'Standard', color: '#059669', level: 1 };
+        if (minutes <= 120) return { name: 'Tier 2 (+$300/30min)', color: '#f59e0b', level: 2 };
+        return { name: 'Tier 3 (+$400/30min)', color: '#dc2626', level: 3 };
+    }, [formData.durationMinutes]);
 
     return (
         <div className="management-container fade-in">
@@ -710,6 +744,21 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                                                 </svg>
                                                                             </button>
+                                                                            {surgery.status !== 'completed' && onComplete && (
+                                                                                <button
+                                                                                    className="btn-icon"
+                                                                                    title="Complete Surgery"
+                                                                                    style={{
+                                                                                        background: '#059669',
+                                                                                        color: 'white'
+                                                                                    }}
+                                                                                    onClick={() => onComplete(surgery.id)}
+                                                                                >
+                                                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                                                                    </svg>
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 className="btn-icon btn-delete"
                                                                                 title="Delete"
@@ -1170,6 +1219,208 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                         </p>
                                     </div>
                                 )}
+
+                                {/* Supplies Cost Tracking */}
+                                {!isCosmeticSurgeon && (
+                                    <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '2px solid #e2e8f0' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '1.1rem' }}>
+                                            💊 Supplies & Materials Cost
+                                        </h4>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label>Surgical Supplies</label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        className="form-input"
+                                                        style={{ paddingLeft: '24px' }}
+                                                        value={formData.suppliesCost || 0}
+                                                        onChange={(e) => setFormData({ ...formData, suppliesCost: parseFloat(e.target.value) || 0 })}
+                                                        placeholder="Sutures, gauze, etc."
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Implants & Devices</label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        className="form-input"
+                                                        style={{ paddingLeft: '24px' }}
+                                                        value={formData.implantsCost || 0}
+                                                        onChange={(e) => setFormData({ ...formData, implantsCost: parseFloat(e.target.value) || 0 })}
+                                                        placeholder="Hip implants, IOLs, etc."
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Medications</label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        className="form-input"
+                                                        style={{ paddingLeft: '24px' }}
+                                                        value={formData.medicationsCost || 0}
+                                                        onChange={(e) => setFormData({ ...formData, medicationsCost: parseFloat(e.target.value) || 0 })}
+                                                        placeholder="Drugs, anesthesia"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Profitability Guardrails */}
+                                {!isCosmeticSurgeon && formData.selectedCptCodes.length > 0 && (
+                                    <div style={{
+                                        marginTop: '2rem',
+                                        padding: '1.5rem',
+                                        background: projectedMargin < 0 ? '#fee2e2' : '#f0fdf4',
+                                        border: `2px solid ${projectedMargin < 0 ? '#dc2626' : '#059669'}`,
+                                        borderRadius: '12px'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                                            <div>
+                                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', color: '#64748b' }}>
+                                                    📊 Financial Projection
+                                                </h4>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
+                                                    <div>
+                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Revenue (MPPR): </span>
+                                                        <span style={{ fontWeight: '600', color: '#059669', fontSize: '1.05rem' }}>
+                                                            {formatCurrency(projectedRevenue)}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>OR Cost: </span>
+                                                        <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
+                                                            {formatCurrency(estimatedCost)}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Est. Labor: </span>
+                                                        <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
+                                                            {formatCurrency(estimatedCost * 0.3)}
+                                                        </span>
+                                                    </div>
+                                                    {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
+                                                        <div>
+                                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Supplies: </span>
+                                                            <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
+                                                                {formatCurrency((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0))}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Cost Tier: </span>
+                                                        <span style={{
+                                                            fontWeight: '600',
+                                                            color: costTier.color,
+                                                            fontSize: '0.9rem'
+                                                        }}>
+                                                            {costTier.name}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
+                                                    Projected Margin
+                                                </div>
+                                                <div style={{
+                                                    fontSize: '2rem',
+                                                    fontWeight: '700',
+                                                    color: projectedMargin < 0 ? '#dc2626' : '#059669'
+                                                }}>
+                                                    {formatCurrency(projectedMargin)}
+                                                </div>
+                                                <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>
+                                                    {projectedRevenue > 0 ? ((projectedMargin / projectedRevenue) * 100).toFixed(1) : 0}% margin
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* High Tier Cost Alert */}
+                                        {projectedMargin < 0 && formData.durationMinutes > 120 && (
+                                            <div style={{
+                                                marginTop: '1rem',
+                                                padding: '1rem',
+                                                background: '#fef2f2',
+                                                border: '2px solid #fca5a5',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.75rem'
+                                            }}>
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
+                                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                                </svg>
+                                                <div>
+                                                    <div style={{ color: '#991b1b', fontSize: '1rem', fontWeight: '700', marginBottom: '0.25rem' }}>
+                                                        ⚠️ High Tier Cost Alert: Projected Margin is Negative
+                                                    </div>
+                                                    <div style={{ color: '#7f1d1d', fontSize: '0.9rem' }}>
+                                                        This case is in Tier 3 (${400}/30min surcharge) with a negative margin. Consider reducing duration or reviewing CPT codes.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Tier Breach Warning */}
+                                        {formData.durationMinutes > 60 && projectedMargin >= 0 && (
+                                            <div style={{
+                                                marginTop: '1rem',
+                                                padding: '0.75rem 1rem',
+                                                background: '#fffbeb',
+                                                border: '1px solid #fcd34d',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem'
+                                            }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
+                                                    <circle cx="12" cy="12" r="10"></circle>
+                                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                                </svg>
+                                                <span style={{ color: '#92400e', fontSize: '0.9rem' }}>
+                                                    Duration exceeds 60 minutes - Tier {formData.durationMinutes > 120 ? '3' : '2'} surcharge applies (${formData.durationMinutes > 120 ? '400' : '300'}/30min)
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Positive Margin Encouragement */}
+                                        {projectedMargin >= 0 && formData.durationMinutes <= 60 && (
+                                            <div style={{
+                                                marginTop: '1rem',
+                                                padding: '0.75rem 1rem',
+                                                background: '#f0fdf4',
+                                                border: '1px solid #bbf7d0',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem'
+                                            }}>
+                                                <span style={{ fontSize: '1.2rem' }}>✅</span>
+                                                <span style={{ color: '#166534', fontSize: '0.9rem', fontWeight: '500' }}>
+                                                    Excellent! This case has a positive margin and stays within the standard cost tier.
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
 
                                 <div className="form-actions" style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                                     <button type="submit" className="btn-save">
