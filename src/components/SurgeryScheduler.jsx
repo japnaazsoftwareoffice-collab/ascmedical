@@ -627,7 +627,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                     const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
                                                                     cptTotal = 0; // No CPT codes for cosmetic surgeries
                                                                     orCost = facilityFee + anesthesiaFee; // Show cosmetic fees as OR Cost
-                                                                    totalValue = orCost;
+
+                                                                    // Add supplies costs
+                                                                    const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
+                                                                    totalValue = orCost + suppliesCost;
                                                                 }
                                                             } else {
                                                                 // Calculate CPT codes total for regular surgeries
@@ -647,8 +650,11 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                     }
                                                                 }
 
+                                                                // Add supplies costs
+                                                                const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
+
                                                                 // Calculate total value
-                                                                totalValue = cptTotal + orCost;
+                                                                totalValue = cptTotal + orCost + suppliesCost;
                                                             }
 
                                                             return (
