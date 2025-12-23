@@ -789,7 +789,7 @@ function App() {
   const renderContent = () => {
     // Admin views
     if (user.role === 'admin') {
-      if (view === 'dashboard') return <Dashboard surgeries={surgeries} cptCodes={cptCodes} />;
+      if (view === 'dashboard') return <Dashboard surgeries={surgeries} cptCodes={cptCodes} settings={settings} />;
       if (view === 'register') return (
         <PatientManagement
           patients={patients}

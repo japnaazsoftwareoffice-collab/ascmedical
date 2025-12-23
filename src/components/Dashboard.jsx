@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { calculateORCost, formatCurrency } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency } from '../utils/hospitalUtils';
 import AIAnalystModal from './AIAnalystModal';
 import './Dashboard.css';
 import { jsPDF } from 'jspdf';
@@ -13,7 +13,7 @@ const EMAILJS_SERVICE_ID = 'service_1uqpug2';
 const EMAILJS_TEMPLATE_ID = 'template_7bwe5or';
 const EMAILJS_PUBLIC_KEY = 'kemMSpgMmsNS0Hcu5';
 
-const Dashboard = ({ surgeries, cptCodes }) => {
+const Dashboard = ({ surgeries, cptCodes, settings }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [timeframe, setTimeframe] = useState('daily'); // daily, weekly, monthly
@@ -99,11 +99,10 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                     const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
                     caseRevenue = facilityFee + anesthesiaFee;
                 } else {
+                    // Use calculateMedicareRevenue for proper MPPR handling
+                    caseRevenue = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
+
                     codes.forEach(code => {
-                        const cpt = cptCodes.find(c => c.code === code);
-                        if (cpt) {
-                            caseRevenue += cpt.reimbursement;
-                        }
                         usage[code] = (usage[code] || 0) + 1;
                     });
 
@@ -230,10 +229,8 @@ const Dashboard = ({ surgeries, cptCodes }) => {
                     revenue = facilityFee + anesthesiaFee;
                     isCosmetic = true;
                 } else {
-                    codes.forEach(c => {
-                        const cpt = cptCodes.find(code => code.code === c);
-                        if (cpt) revenue += cpt.reimbursement;
-                    });
+                    // Use calculateMedicareRevenue for proper MPPR handling
+                    revenue = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
                 }
 
                 // If cosmetic, ignore OR cost for profit calculation (or consider it 0)
