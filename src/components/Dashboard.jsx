@@ -79,6 +79,7 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                 // If still no labor cost, default to 30% of OR cost
                 if (!caseLaborCost) {
                     caseLaborCost = caseCost * 0.3;
+                    console.log('DEBUG: Calculated labor cost', { caseCost, caseLaborCost });
                 }
 
                 laborCost += caseLaborCost;
@@ -208,7 +209,7 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
         setStats({
             totalSurgeries: currentSurgeries.length,
             totalRevenue: currentStats.revenue,
-            totalCost: currentStats.cost,
+            totalCost: currentStats.cost + currentStats.laborCost + currentStats.suppliesCost,
             netProfit: currentStats.profit,
             cptUsage: currentStats.usage,
             revenueChange: calculateChange(currentStats.revenue, prevStats.revenue),
