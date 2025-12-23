@@ -605,6 +605,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                             <th>CPT Total</th>
                                                             <th>OR Cost</th>
                                                             <th>Total Value</th>
+                                                            <th>Net Profit</th>
                                                             <th>Status</th>
                                                             <th>Actions</th>
                                                         </tr>
@@ -656,6 +657,12 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                 // Calculate total value
                                                                 totalValue = cptTotal + orCost + suppliesCost;
                                                             }
+
+                                                            // Calculate net profit (Revenue - Total Costs)
+                                                            const laborCost = orCost * 0.3;
+                                                            const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
+                                                            const totalCosts = orCost + laborCost + suppliesCost;
+                                                            const netProfit = cptTotal - totalCosts;
 
                                                             return (
                                                                 <tr key={surgery.id}>
@@ -736,6 +743,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                                     <td style={{ fontWeight: '600', color: '#059669' }}>{formatCurrency(cptTotal)}</td>
                                                                     <td style={{ fontWeight: '600', color: '#dc2626' }}>{formatCurrency(orCost)}</td>
                                                                     <td style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.05rem' }}>{formatCurrency(totalValue)}</td>
+                                                                    <td style={{
+                                                                        fontWeight: '700',
+                                                                        color: netProfit >= 0 ? '#059669' : '#dc2626',
+                                                                        fontSize: '1.05rem'
+                                                                    }}>
+                                                                        {formatCurrency(netProfit)}
+                                                                    </td>
                                                                     <td>
                                                                         <span className={`status-badge status-${surgery.status}`} style={{ textTransform: 'capitalize' }}>
                                                                             {surgery.status}
