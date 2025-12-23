@@ -1237,8 +1237,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                         min="0"
                                                         className="form-input"
                                                         style={{ paddingLeft: '24px' }}
-                                                        value={formData.suppliesCost || 0}
-                                                        onChange={(e) => setFormData({ ...formData, suppliesCost: parseFloat(e.target.value) || 0 })}
+                                                        value={formData.suppliesCost || ''}
+                                                        onChange={(e) => setFormData({ ...formData, suppliesCost: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                                                         placeholder="Sutures, gauze, etc."
                                                     />
                                                 </div>
@@ -1253,8 +1253,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                         min="0"
                                                         className="form-input"
                                                         style={{ paddingLeft: '24px' }}
-                                                        value={formData.implantsCost || 0}
-                                                        onChange={(e) => setFormData({ ...formData, implantsCost: parseFloat(e.target.value) || 0 })}
+                                                        value={formData.implantsCost || ''}
+                                                        onChange={(e) => setFormData({ ...formData, implantsCost: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                                                         placeholder="Hip implants, IOLs, etc."
                                                     />
                                                 </div>
@@ -1269,8 +1269,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], onSche
                                                         min="0"
                                                         className="form-input"
                                                         style={{ paddingLeft: '24px' }}
-                                                        value={formData.medicationsCost || 0}
-                                                        onChange={(e) => setFormData({ ...formData, medicationsCost: parseFloat(e.target.value) || 0 })}
+                                                        value={formData.medicationsCost || ''}
+                                                        onChange={(e) => setFormData({ ...formData, medicationsCost: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                                                         placeholder="Drugs, anesthesia"
                                                     />
                                                 </div>
