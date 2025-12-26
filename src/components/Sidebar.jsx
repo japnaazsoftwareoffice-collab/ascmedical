@@ -11,6 +11,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
                 { id: 'claims', icon: '📄', label: 'Claims Management' },
                 { id: 'scheduler', icon: '📅', label: 'Surgery Log & OR' },
                 { id: 'or-schedule', icon: '🗓️', label: 'OR Block Schedule' },
+                { id: 'surgery-schedule-sidebar', icon: '🗓️', label: 'Surgery Schedule' },
                 { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management' },
                 { id: 'users', icon: '🔐', label: 'User Management' },
                 { id: 'analysis', icon: '🏥', label: 'OR Utilization' },

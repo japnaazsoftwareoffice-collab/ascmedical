@@ -7,6 +7,7 @@ import SurgeryScheduler from './components/SurgeryScheduler';
 import CPTManager from './components/CPTManager';
 import SurgeonManagement from './components/SurgeonManagement';
 import ORUtilization from './components/ORUtilization';
+import SurgerySchedule from './components/SurgerySchedule';
 import SurgeonSchedule from './components/SurgeonSchedule';
 import SurgeonPatients from './components/SurgeonPatients';
 import PatientInfo from './components/PatientInfo';
@@ -882,6 +883,7 @@ function App() {
       if (view === 'analysis') return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} />;
       if (view === 'scorecard') return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} />;
       if (view === 'or-schedule') return <ORBlockSchedule surgeons={surgeons} />;
+      if (view === 'surgery-schedule-sidebar') return <SurgerySchedule surgeries={surgeries} />;
       if (view === 'users') return (
         <UserManagement
           users={users}
