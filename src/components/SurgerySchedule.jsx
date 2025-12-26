@@ -54,6 +54,30 @@ const SurgerySchedule = ({ surgeries = [] }) => {
         });
     };
 
+    // Colors for different surgeons
+    const COLORS = [
+        { border: '#3b82f6', bg: '#eff6ff' }, // Blue
+        { border: '#10b981', bg: '#ecfdf5' }, // Emerald
+        { border: '#8b5cf6', bg: '#f5f3ff' }, // Violet
+        { border: '#f59e0b', bg: '#fffbeb' }, // Amber
+        { border: '#f43f5e', bg: '#fff1f2' }, // Rose
+        { border: '#06b6d4', bg: '#ecfeff' }, // Cyan
+        { border: '#f97316', bg: '#fff7ed' }, // Orange
+        { border: '#6366f1', bg: '#eef2ff' }, // Indigo
+        { border: '#ec4899', bg: '#fdf2f8' }, // Pink
+        { border: '#14b8a6', bg: '#f0fdfa' }, // Teal
+    ];
+
+    const getSurgeonColor = (name) => {
+        if (!name) return COLORS[0];
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const index = Math.abs(hash) % COLORS.length;
+        return COLORS[index];
+    };
+
     return (
         <div className="surgery-schedule-container fade-in">
             <div className="schedule-header">
@@ -75,31 +99,45 @@ const SurgerySchedule = ({ surgeries = [] }) => {
                             <span className="day-date">{day.getDate()}</span>
                         </div>
                         <div className="day-cards">
-                            {getSurgeriesForDate(day).map(surgery => (
-                                <div key={surgery.id} className="surgery-card">
-                                    <div className="card-time">{formatTime(surgery.start_time)}</div>
-                                    <div className="card-patient">
-                                        {(() => {
-                                            const p = surgery.patients;
-                                            if (!p) return 'Unknown Patient';
-                                            const name = p.name ||
-                                                `${p.first_name || p.firstname || ''} ${p.last_name || p.lastname || ''}`.trim();
-                                            return name || 'Unknown Patient';
-                                        })()}
+                            {getSurgeriesForDate(day).map(surgery => {
+                                const surgeonName = surgery.doctor_name || (surgery.surgeons ? surgery.surgeons.name : 'Unknown');
+                                const colorStyle = getSurgeonColor(surgeonName);
+                                return (
+                                    <div
+                                        key={surgery.id}
+                                        className="surgery-card"
+                                        style={{
+                                            borderLeft: `4px solid ${colorStyle.border}`,
+                                            backgroundColor: colorStyle.bg
+                                        }}
+                                    >
+                                        <div className="card-time">{formatTime(surgery.start_time)}</div>
+                                        <div className="card-patient">
+                                            {(() => {
+                                                const p = surgery.patients;
+                                                if (!p) return 'Unknown Patient';
+                                                const name = p.name ||
+                                                    `${p.first_name || p.firstname || ''} ${p.last_name || p.lastname || ''}`.trim();
+                                                return name || 'Unknown Patient';
+                                            })()}
+                                        </div>
+                                        <div className="card-surgeon">
+                                            DR. {surgeonName}
+                                        </div>
+                                        <div className="card-procedure">
+                                            {surgery.notes || 'No notes'}
+                                        </div>
+                                        <div className={`card-status status-${surgery.status}`}>
+                                            {surgery.status}
+                                        </div>
                                     </div>
-                                    <div className="card-surgeon">
-                                        DR. {surgery.doctor_name || (surgery.surgeons ? surgery.surgeons.name : 'Unknown')}
-                                    </div>
-                                    <div className="card-procedure">
-                                        {surgery.notes || 'No notes'}
-                                    </div>
-                                    <div className={`card-status status-${surgery.status}`}>
-                                        {surgery.status}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             {getSurgeriesForDate(day).length === 0 && (
-                                <div className="no-surgeries">No surgeries</div>
+                                <div className="no-surgeries">
+                                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>☕</div>
+                                    No surgeries
+                                </div>
                             )}
                         </div>
                     </div>

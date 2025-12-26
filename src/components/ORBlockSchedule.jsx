@@ -14,6 +14,29 @@ const formatDate = date => {
     return `${y}-${m}-${d}`;
 };
 
+const COLORS = [
+    { border: '#3b82f6', bg: '#eff6ff' }, // Blue
+    { border: '#10b981', bg: '#ecfdf5' }, // Emerald
+    { border: '#8b5cf6', bg: '#f5f3ff' }, // Violet
+    { border: '#f59e0b', bg: '#fffbeb' }, // Amber
+    { border: '#f43f5e', bg: '#fff1f2' }, // Rose
+    { border: '#06b6d4', bg: '#ecfeff' }, // Cyan
+    { border: '#f97316', bg: '#fff7ed' }, // Orange
+    { border: '#6366f1', bg: '#eef2ff' }, // Indigo
+    { border: '#ec4899', bg: '#fdf2f8' }, // Pink
+    { border: '#14b8a6', bg: '#f0fdfa' }, // Teal
+];
+
+const getProviderColor = (name) => {
+    if (!name) return COLORS[0];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % COLORS.length;
+    return COLORS[index];
+};
+
 /** Helper: get day name (Monday‑Friday) */
 const getDayName = date =>
     ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
@@ -317,15 +340,26 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                     >
                                                         {blocks.length > 0 ? (
                                                             <div className="block-list">
-                                                                {blocks.map((block, idx) => (
-                                                                    <React.Fragment key={block.id}>
-                                                                        {idx > 0 && renderGap(blocks[idx - 1], block)}
-                                                                        <div className="block-item">
-                                                                            <div className="cell-provider">{block.provider_name}</div>
-                                                                            <div className="cell-time">{block.start_time}-{block.end_time}</div>
-                                                                        </div>
-                                                                    </React.Fragment>
-                                                                ))}
+                                                                {blocks.map((block, idx) => {
+                                                                    const colorStyle = getProviderColor(block.provider_name);
+                                                                    return (
+                                                                        <React.Fragment key={block.id}>
+                                                                            {idx > 0 && renderGap(blocks[idx - 1], block)}
+                                                                            <div
+                                                                                className="block-item"
+                                                                                style={{
+                                                                                    borderLeftColor: colorStyle.border,
+                                                                                    backgroundColor: colorStyle.bg
+                                                                                }}
+                                                                            >
+                                                                                <div className="cell-provider" style={{ color: '#1e293b' }}>
+                                                                                    {block.provider_name}
+                                                                                </div>
+                                                                                <div className="cell-time">{block.start_time}-{block.end_time}</div>
+                                                                            </div>
+                                                                        </React.Fragment>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         ) : (
                                                             <div className="empty-cell-placeholder">+ Add</div>
@@ -357,30 +391,40 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                     {getCellBlocks(selectedCell.date, selectedCell.room).length === 0 ? (
                                         <p style={{ textAlign: 'center', color: '#94a3b8' }}>No blocks scheduled.</p>
                                     ) : (
-                                        getCellBlocks(selectedCell.date, selectedCell.room).map(block => (
-                                            <div key={block.id} className="modal-block-item">
-                                                <div className="modal-block-info">
-                                                    <h4>{block.provider_name}</h4>
-                                                    <p>{toInputTime(block.start_time)} - {toInputTime(block.end_time)}</p>
+                                        getCellBlocks(selectedCell.date, selectedCell.room).map(block => {
+                                            const colorStyle = getProviderColor(block.provider_name);
+                                            return (
+                                                <div
+                                                    key={block.id}
+                                                    className="modal-block-item"
+                                                    style={{
+                                                        borderLeft: `4px solid ${colorStyle.border}`,
+                                                        backgroundColor: colorStyle.bg
+                                                    }}
+                                                >
+                                                    <div className="modal-block-info">
+                                                        <h4 style={{ color: '#1e293b' }}>{block.provider_name}</h4>
+                                                        <p>{toInputTime(block.start_time)} - {toInputTime(block.end_time)}</p>
+                                                    </div>
+                                                    <div className="modal-block-actions">
+                                                        <button
+                                                            className="btn-icon edit"
+                                                            onClick={() => handleEditBlock(block)}
+                                                            title="Edit"
+                                                        >
+                                                            ✎
+                                                        </button>
+                                                        <button
+                                                            className="btn-icon delete"
+                                                            onClick={() => handleDelete(block.id)}
+                                                            title="Delete"
+                                                        >
+                                                            🗑
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="modal-block-actions">
-                                                    <button
-                                                        className="btn-icon edit"
-                                                        onClick={() => handleEditBlock(block)}
-                                                        title="Edit"
-                                                    >
-                                                        ✎
-                                                    </button>
-                                                    <button
-                                                        className="btn-icon delete"
-                                                        onClick={() => handleDelete(block.id)}
-                                                        title="Delete"
-                                                    >
-                                                        🗑
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </div>
                                 <button className="btn-add-block" onClick={handleAddNewBlock}>

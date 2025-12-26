@@ -152,17 +152,6 @@
     overflow: hidden;
 }
 
-.surgery-card::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: #3b82f6;
-    /* Accent bar */
-}
-
 .surgery-card:hover {
     transform: translateY(-4px) scale(1.01);
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
@@ -254,14 +243,7 @@
     gap: 0.5rem;
 }
 
-.no-surgeries::before {
-    content: '☕';
-    /* Coffee icon for empty state */
-    font-size: 2.5rem;
-    opacity: 0.6;
-    filter: grayscale(1);
-    margin-bottom: 0.5rem;
-}
+
 
 /* Custom Scrollbar for the grid */
 .weekly-grid::-webkit-scrollbar {
