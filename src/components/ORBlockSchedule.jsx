@@ -32,6 +32,16 @@ const toStorageTime = (str) => {
     return str.replace(':', '');
 };
 
+/** Helper: Calculate duration in minutes between two HHMM times */
+const calcDuration = (start, end) => {
+    if (!start || !end) return 0;
+    const sH = parseInt(start.substring(0, 2));
+    const sM = parseInt(start.substring(2, 4));
+    const eH = parseInt(end.substring(0, 2));
+    const eM = parseInt(end.substring(2, 4));
+    return (eH * 60 + eM) - (sH * 60 + sM);
+};
+
 /** Helper: Get week of month (First, Second, etc.) */
 const getWeekOfMonth = (date) => {
     const day = date.getDate();
@@ -45,7 +55,13 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
     const [schedule, setSchedule] = useState([]); // [{id, date, room_name, provider_name, start_time, end_time}]
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedCell, setSelectedCell] = useState(null); // {date, room, data?}
+
+    // selectedCell identifies the context (Date + Room)
+    const [selectedCell, setSelectedCell] = useState(null); // {date, room, blocks: []}
+
+    // editingBlock identifies the specific block being added/edited within that cell
+    const [editingBlock, setEditingBlock] = useState(null); // null = list view, {} = add mode, {id...} = edit mode
+
     const [formData, setFormData] = useState({ provider_name: '', start_time: '', end_time: '' });
     const [selectedDate, setSelectedDate] = useState(''); // YYYY‑MM‑DD for modal date picker
     const [currentMonth, setCurrentMonth] = useState(new Date()); // month shown in the grid
@@ -88,50 +104,56 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
     const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
     const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    const getCellData = (dateStr, room) =>
-        schedule.find(item => item.date === dateStr && item.room_name === room);
+    // Returns ARRAY of blocks for a cell, sorted by start_time
+    const getCellBlocks = (dateStr, room) => {
+        return schedule
+            .filter(item => item.date === dateStr && item.room_name === room)
+            .sort((a, b) => a.start_time.localeCompare(b.start_time));
+    };
 
     // ----- UI Handlers -----------------------------------------------------
     const handleCellClick = (dateStr, room) => {
-        const existing = getCellData(dateStr, room);
-        setSelectedCell({ date: dateStr, room, data: existing });
-        setFormData({
-            provider_name: existing?.provider_name || '',
-            start_time: toInputTime(existing?.start_time),
-            end_time: toInputTime(existing?.end_time)
-        });
+        const blocks = getCellBlocks(dateStr, room);
+        setSelectedCell({ date: dateStr, room, blocks });
         setSelectedDate(dateStr);
+        setEditingBlock(null); // Mode: List View
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setSelectedCell(null);
+        setEditingBlock(null);
         setSelectedDate('');
+        setFormData({ provider_name: '', start_time: '', end_time: '' });
+    };
+
+    const handleAddNewBlock = () => {
+        setEditingBlock({}); // Empty object = New Block Mode
+        setFormData({ provider_name: '', start_time: '', end_time: '' });
+    };
+
+    const handleEditBlock = (block) => {
+        setEditingBlock(block); // Existing object = Edit Mode
+        setFormData({
+            provider_name: block.provider_name || '',
+            start_time: toInputTime(block.start_time),
+            end_time: toInputTime(block.end_time)
+        });
     };
 
     const handleChange = e => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleDateChange = e => {
-        const val = e.target.value; // YYYY‑MM‑DD
-        setSelectedDate(val);
-        if (selectedCell) {
-            setSelectedCell({ ...selectedCell, date: val });
-        }
-    };
-
     const handleSave = async e => {
         e.preventDefault();
-        if (!selectedCell) return;
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const isMock = !supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co';
-        const dateObj = new Date(selectedDate || selectedCell.date);
-        // Adjust for timezone if needed, but assuming local date string YYYY-MM-DD is sufficient
-        // We need to ensure we get the correct day of week from the string
+
+        // Parse date to correctly identify Day of Week
         const [y, m, d] = (selectedDate || selectedCell.date).split('-').map(Number);
-        const localDate = new Date(y, m - 1, d); // Create date object from parts to avoid timezone shifts
+        const localDate = new Date(y, m - 1, d);
 
         const payload = {
             date: selectedDate || selectedCell.date,
@@ -142,63 +164,62 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
             start_time: toStorageTime(formData.start_time),
             end_time: toStorageTime(formData.end_time)
         };
+
         try {
-            if (selectedCell.data) {
-                // Update existing block
+            if (editingBlock && editingBlock.id) {
+                // Update existing
                 if (isMock) {
-                    setSchedule(prev =>
-                        prev.map(item => (item.id === selectedCell.data.id ? { ...item, ...payload } : item))
-                    );
+                    setSchedule(prev => prev.map(item => (item.id === editingBlock.id ? { ...item, ...payload } : item)));
                 } else {
-                    await db.updateORBlockSchedule(selectedCell.data.id, payload);
-                    await loadSchedule(); // Reload from database
+                    await db.updateORBlockSchedule(editingBlock.id, payload);
+                    await loadSchedule();
                 }
-                await Swal.fire({ title: 'Updated!', icon: 'success', timer: 1500, showConfirmButton: false });
+                await Swal.fire({ title: 'Updated!', icon: 'success', timer: 1000, showConfirmButton: false });
             } else {
-                // Create new block
+                // Create new
                 if (isMock) {
                     setSchedule(prev => [...prev, { ...payload, id: Date.now() }]);
                 } else {
                     await db.addORBlockSchedule(payload);
-                    await loadSchedule(); // Reload from database
+                    await loadSchedule();
                 }
-                await Swal.fire({ title: 'Added!', icon: 'success', timer: 1500, showConfirmButton: false });
+                await Swal.fire({ title: 'Added!', icon: 'success', timer: 1000, showConfirmButton: false });
             }
-            handleCloseModal();
+            // Return to list view
+            // We need to fetch updated blocks (but state is updated by loadSchedule)
+            // We clear editingBlock to show the list view again
+            setEditingBlock(null);
+            // In a real scenario we might need to properly re-select the cell to see updates if we depended on selectedCell.blocks state
+            // But getCellBlocks reads from `schedule`, which is updated.
         } catch (err) {
             console.error('Error saving block:', err);
-            Swal.fire({
-                title: 'Error!',
-                text: 'Could not save block.',
-                icon: 'error',
-                confirmButtonColor: '#3b82f6'
-            });
+            Swal.fire({ title: 'Error!', text: 'Could not save block.', icon: 'error' });
         }
     };
 
-    const handleDelete = async () => {
-        if (!selectedCell?.data) return;
+    const handleDelete = async (id) => {
         const confirm = await Swal.fire({
-            title: 'Clear Block?',
-            text: 'Are you sure?',
+            title: 'Remove Block?',
+            text: 'This cannot be undone.',
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#ef4444',
-            cancelButtonColor: '#64748b',
-            confirmButtonText: 'Yes, clear it!'
+            confirmButtonText: 'Yes, remove it!'
         });
         if (!confirm.isConfirmed) return;
+
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         const isMock = !supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co';
+
         try {
             if (isMock) {
-                setSchedule(prev => prev.filter(item => item.id !== selectedCell.data.id));
+                setSchedule(prev => prev.filter(item => item.id !== id));
             } else {
-                await db.deleteORBlockSchedule(selectedCell.data.id);
-                await loadSchedule(); // Reload from database
+                await db.deleteORBlockSchedule(id);
+                await loadSchedule();
             }
-            await Swal.fire({ title: 'Cleared!', icon: 'success', timer: 1500, showConfirmButton: false });
-            handleCloseModal();
+            // If deleting from list view, we just stay there
+            await Swal.fire({ title: 'Removed!', icon: 'success', timer: 1000, showConfirmButton: false });
         } catch (err) {
             console.error(err);
             Swal.fire({ title: 'Error!', icon: 'error', text: 'Could not delete block.' });
@@ -208,11 +229,42 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
     const prevMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
     const nextMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
 
+    /** Render the Gap Indicator between two blocks */
+    const renderGap = (prevBlock, currentBlock) => {
+        if (!prevBlock) return null;
+        const gapMins = calcDuration(prevBlock.end_time, currentBlock.start_time);
+
+        // 0 or negative gap means overlap or touching
+        if (gapMins <= 0) return null;
+
+        let gapClass = 'gap-green';
+        if (gapMins > 30) gapClass = 'gap-yellow';
+        if (gapMins > 60) gapClass = 'gap-red';
+
+        return (
+            <div className={`gap-indicator ${gapClass}`} title={`${gapMins} min turnover`}>
+                {gapMins}m Gap
+            </div>
+        );
+    };
+
+    // ----- Calculate Monthly Metrics -----
+    const totalBlocks = schedule.filter(s => {
+        const d = new Date(s.date);
+        return d.getMonth() === currentMonth.getMonth() && d.getFullYear() === currentMonth.getFullYear();
+    }).length;
+
     // ----- Render ----------------------------------------------------------
     return (
         <div className={`or-schedule-container fade-in ${embedded ? 'embedded' : ''}`}>
             <div className="or-schedule-header">
-                <h2 className="or-schedule-title">OR Block Schedule</h2>
+                <div>
+                    <h2 className="or-schedule-title">OR Block Schedule</h2>
+                    <div className="header-metrics">
+                        <span className="metric-badge">Total Blocks: {totalBlocks}</span>
+                        {/* Future: Add Utilization % here */}
+                    </div>
+                </div>
                 <div className="month-nav">
                     <button className="btn-nav" onClick={prevMonth}>←</button>
                     <span className="month-label">
@@ -234,7 +286,6 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
 
                     {/* Body rows – Grouped by Day of Week */}
                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(dayName => {
-                        // Find all dates in the current month that match this day name
                         const datesForDay = monthDays.filter(day => {
                             const dateObj = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
                             return getDayName(dateObj) === dayName;
@@ -244,7 +295,6 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
 
                         return (
                             <React.Fragment key={dayName}>
-                                {/* Group Header */}
                                 <div className="grid-group-header">
                                     {dayName}s
                                 </div>
@@ -258,18 +308,25 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                 <span className="week-label">{getWeekOfMonth(dateObj)} Week</span>
                                             </div>
                                             {ROOMS.map(room => {
-                                                const data = getCellData(dateStr, room);
+                                                const blocks = getCellBlocks(dateStr, room);
                                                 return (
                                                     <div
                                                         key={room}
-                                                        className={`grid-cell ${data ? 'has-data' : ''}`}
+                                                        className={`grid-cell ${blocks.length > 0 ? 'has-data' : ''}`}
                                                         onClick={() => handleCellClick(dateStr, room)}
                                                     >
-                                                        {data ? (
-                                                            <>
-                                                                <div className="cell-provider">{data.provider_name}</div>
-                                                                <div className="cell-time">{data.start_time}-{data.end_time}</div>
-                                                            </>
+                                                        {blocks.length > 0 ? (
+                                                            <div className="block-list">
+                                                                {blocks.map((block, idx) => (
+                                                                    <React.Fragment key={block.id}>
+                                                                        {idx > 0 && renderGap(blocks[idx - 1], block)}
+                                                                        <div className="block-item">
+                                                                            <div className="cell-provider">{block.provider_name}</div>
+                                                                            <div className="cell-time">{block.start_time}-{block.end_time}</div>
+                                                                        </div>
+                                                                    </React.Fragment>
+                                                                ))}
+                                                            </div>
                                                         ) : (
                                                             <div className="empty-cell-placeholder">+ Add</div>
                                                         )}
@@ -292,67 +349,106 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                             <h3>{selectedCell?.date} - {selectedCell?.room}</h3>
                             <button className="btn-close" onClick={handleCloseModal}>×</button>
                         </div>
-                        <form onSubmit={handleSave}>
-                            <div className="form-group">
-                                <label>Date</label>
-                                <input
-                                    type="date"
-                                    name="date"
-                                    value={selectedDate}
-                                    onChange={handleDateChange}
-                                    className="form-input"
-                                    required
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Provider / Surgeon</label>
-                                <select
-                                    name="provider_name"
-                                    value={formData.provider_name}
-                                    onChange={handleChange}
-                                    className="form-input"
-                                    required
-                                >
-                                    <option value="">Select Surgeon</option>
-                                    {surgeons.map(surgeon => (
-                                        <option key={surgeon.id} value={surgeon.name}>
-                                            {surgeon.name} {surgeon.specialty ? `- ${surgeon.specialty}` : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Start Time</label>
-                                    <input
-                                        type="time"
-                                        name="start_time"
-                                        value={formData.start_time}
+
+                        {/* VIEW MODE: LIST BLOCKS */}
+                        {!editingBlock && (
+                            <>
+                                <div className="modal-block-list">
+                                    {getCellBlocks(selectedCell.date, selectedCell.room).length === 0 ? (
+                                        <p style={{ textAlign: 'center', color: '#94a3b8' }}>No blocks scheduled.</p>
+                                    ) : (
+                                        getCellBlocks(selectedCell.date, selectedCell.room).map(block => (
+                                            <div key={block.id} className="modal-block-item">
+                                                <div className="modal-block-info">
+                                                    <h4>{block.provider_name}</h4>
+                                                    <p>{toInputTime(block.start_time)} - {toInputTime(block.end_time)}</p>
+                                                </div>
+                                                <div className="modal-block-actions">
+                                                    <button
+                                                        className="btn-icon edit"
+                                                        onClick={() => handleEditBlock(block)}
+                                                        title="Edit"
+                                                    >
+                                                        ✎
+                                                    </button>
+                                                    <button
+                                                        className="btn-icon delete"
+                                                        onClick={() => handleDelete(block.id)}
+                                                        title="Delete"
+                                                    >
+                                                        🗑
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                                <button className="btn-add-block" onClick={handleAddNewBlock}>
+                                    + Add Surgeon Block
+                                </button>
+                                <div className="modal-actions">
+                                    <button className="btn-cancel" onClick={handleCloseModal}>Close</button>
+                                </div>
+                            </>
+                        )}
+
+                        {/* EDIT/ADD MODE: FORM */}
+                        {editingBlock && (
+                            <form onSubmit={handleSave}>
+                                <div className="form-group">
+                                    <label>Surgeon / Provider</label>
+                                    <select
+                                        name="provider_name"
+                                        value={formData.provider_name}
                                         onChange={handleChange}
                                         className="form-input"
                                         required
-                                    />
+                                    >
+                                        <option value="">Select Surgeon</option>
+                                        {surgeons.map(surgeon => (
+                                            <option key={surgeon.id} value={surgeon.name}>
+                                                {surgeon.name} {surgeon.specialty ? `- ${surgeon.specialty}` : ''}
+                                            </option>
+                                        ))}
+                                        {/* Allow custom entry if not in list */}
+                                        <option value="Opthalmology Group">Opthalmology Group</option>
+                                        <option value="Pain Management">Pain Management</option>
+                                    </select>
                                 </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>End Time</label>
-                                    <input
-                                        type="time"
-                                        name="end_time"
-                                        value={formData.end_time}
-                                        onChange={handleChange}
-                                        className="form-input"
-                                        required
-                                    />
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>Start Time</label>
+                                        <input
+                                            type="time"
+                                            name="start_time"
+                                            value={formData.start_time}
+                                            onChange={handleChange}
+                                            className="form-input"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>End Time</label>
+                                        <input
+                                            type="time"
+                                            name="end_time"
+                                            value={formData.end_time}
+                                            onChange={handleChange}
+                                            className="form-input"
+                                            required
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="modal-actions">
-                                {selectedCell?.data && (
-                                    <button type="button" className="btn-delete" onClick={handleDelete}>Clear Block</button>
-                                )}
-                                <button type="button" className="btn-cancel" onClick={handleCloseModal}>Cancel</button>
-                                <button type="submit" className="btn-save">Save Block</button>
-                            </div>
-                        </form>
+                                <div className="modal-actions">
+                                    <button type="button" className="btn-cancel" onClick={() => setEditingBlock(null)}>
+                                        Back
+                                    </button>
+                                    <button type="submit" className="btn-save">
+                                        {editingBlock.id ? 'Save Changes' : 'Add Block'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}
