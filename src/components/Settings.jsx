@@ -50,7 +50,12 @@ const Settings = () => {
 
         try {
             setSaving(true);
-            await db.updateSettings(settings);
+
+            // Create a copy of settings and remove the 'id' field
+            // because 'id' is a generated identity column and cannot be updated
+            const { id, ...settingsToUpdate } = settings;
+
+            await db.updateSettings(settingsToUpdate);
 
             Swal.fire({
                 icon: 'success',
@@ -303,7 +308,39 @@ const Settings = () => {
                         </div>
                     </div>
 
-                    {/* Section 3: Financial Logic */}
+                    {/* Section 3: AI Configuration */}
+                    <div className="content-card" style={{ padding: '2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
+                            <div style={{ background: '#faf5ff', padding: '0.5rem', borderRadius: '8px', color: '#9333ea' }}>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5" /></svg>
+                            </div>
+                            <h3 style={{ fontSize: '1.125rem', color: '#1e293b', margin: 0 }}>AI Configuration</h3>
+                        </div>
+
+                        <div className="form-group">
+                            <label style={{ fontWeight: 600, color: '#475569', marginBottom: '0.5rem', display: 'block' }}>Gemini API Key</label>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    className="form-input"
+                                    type="password"
+                                    name="gemini_api_key"
+                                    value={settings.gemini_api_key || ''}
+                                    onChange={handleChange}
+                                    placeholder="AI..."
+                                    style={{ height: '48px', fontFamily: 'monospace', letterSpacing: '0.05em', paddingRight: '120px' }}
+                                    autoComplete="new-password"
+                                />
+                                <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px' }}>
+                                    Encrypted
+                                </div>
+                            </div>
+                            <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
+                                Provide your Google Gemini API Key to enable the ASC Assistant chatbot. this key will be stored securely in your database.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Section 4: Financial Logic */}
                     <div className="content-card" style={{ padding: '2rem', border: '2px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #f1f5f9' }}>
                             <div style={{ background: '#fff7ed', padding: '0.5rem', borderRadius: '8px', color: '#ea580c' }}>
