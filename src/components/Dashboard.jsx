@@ -55,31 +55,36 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
 
             filteredSurgeries.forEach(surgery => {
                 // Calculate OR Cost
-                const duration = surgery.duration_minutes || surgery.durationMinutes || 0;
+                const duration = parseFloat(surgery.duration_minutes || surgery.durationMinutes || 0);
                 const caseCost = calculateORCost(duration);
                 cost += caseCost;
 
                 // Calculate Labor Cost from notes or use actual_labor_cost
-                let caseLaborCost = surgery.actual_labor_cost || 0;
+                let caseLaborCost = parseFloat(surgery.actual_labor_cost);
 
-                if (!caseLaborCost && surgery.notes) {
-                    // Extract self-pay anesthesia
-                    const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
-                    if (selfPayMatch) {
-                        caseLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
+                // Handle NaN or 0 (force default if 0/missing)
+                if (isNaN(caseLaborCost) || caseLaborCost === 0) {
+                    caseLaborCost = 0; // Reset to 0 before trying other methods
+
+                    if (surgery.notes) {
+                        // Extract self-pay anesthesia
+                        const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
+                        if (selfPayMatch) {
+                            caseLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
+                        }
+
+                        // Extract cosmetic anesthesia
+                        const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
+                        if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
+                            caseLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
+                        }
                     }
 
-                    // Extract cosmetic anesthesia
-                    const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
-                    if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
-                        caseLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
+                    // If still no labor cost, default to 30% of OR cost
+                    if (caseLaborCost === 0) {
+                        caseLaborCost = caseCost * 0.3;
+                        // console.log('DEBUG: Calculated labor cost', { caseCost, caseLaborCost });
                     }
-                }
-
-                // If still no labor cost, default to 30% of OR cost
-                if (!caseLaborCost) {
-                    caseLaborCost = caseCost * 0.3;
-                    console.log('DEBUG: Calculated labor cost', { caseCost, caseLaborCost });
                 }
 
                 laborCost += caseLaborCost;
@@ -90,7 +95,6 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
 
                 if (codes.length === 0 && surgery.notes) {
                     // CPT codes empty implies Cosmetic Surgery (or custom logic)
-                    // Parse fees from notes
                     // Parse fees from notes - support multiple formats
                     // Formats: "Facility Fee: $1500", "Fee: 1500", "Paid: 1500", "Price: 1500"
                     const facilityMatch = surgery.notes.match(/(?:Facility |Cosmetic )?Fee:?\s*\$?\s*([\d,.]+)/i) ||
@@ -123,7 +127,14 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                 revenue += caseRevenue;
 
                 // Get supplies costs
-                const suppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
+                const suppliesCost = (parseFloat(surgery.supplies_cost) || 0) +
+                    (parseFloat(surgery.implants_cost) || 0) +
+                    (parseFloat(surgery.medications_cost) || 0);
+
+                // Track total supplies cost for stats
+                // Note: The original code logic for 'stats' object might need checking, 
+                // but here we just push to perCaseData and accumulate locally if needed.
+                // Wait, perCaseData logic uses local variables.
 
                 perCaseData.push({
                     id: surgery.id,
@@ -135,7 +146,7 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                 });
             });
 
-            // Calculate total supplies cost
+            // Calculate total supplies cost from perCaseData
             const totalSuppliesCost = perCaseData.reduce((sum, c) => sum + c.suppliesCost, 0);
 
             return {

@@ -42,6 +42,10 @@ function App() {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showAllCPTs, setShowAllCPTs] = useState(false); // Global toggle for CPT visibility
+
+  // Filter CPT codes based on active status unless showAllCPTs is true
+  const filteredCptCodes = showAllCPTs ? cptCodes : cptCodes.filter(c => c.is_active !== false);
 
   // Save user to localStorage whenever it changes
   useEffect(() => {
@@ -398,6 +402,29 @@ function App() {
 
   const handleUpdateSurgery = async (id, updates) => {
     try {
+      // Auto-recalculate financials if editing a completed surgery
+      const currentSurgery = surgeries.find(s => s.id === id);
+      const isCompleted = updates.status === 'completed' || (currentSurgery && currentSurgery.status === 'completed');
+
+      if (currentSurgery && isCompleted) {
+        // If duration changed, recalculate costs
+        if (updates.duration_minutes) {
+          const duration = parseFloat(updates.duration_minutes);
+          // Ensure consistent calculation using updated hospitalUtils (30% Labor Rule)
+          updates.actual_room_cost = calculateORCost(duration);
+          updates.actual_labor_cost = calculateLaborCost(duration);
+        }
+
+        // If CPTs changed, recalculate revenue
+        if (updates.cpt_codes || updates.selectedCptCodes) {
+          const codes = updates.cpt_codes || updates.selectedCptCodes || currentSurgery.cpt_codes || [];
+          // Only recalculate if not explicitly provided in updates (e.g. from completion flow)
+          if (!updates.expected_reimbursement) {
+            updates.expected_reimbursement = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
+          }
+        }
+      }
+
       await db.updateSurgery(id, updates);
       await loadAllData(); // Reload surgeries from database
     } catch (error) {
@@ -599,12 +626,55 @@ function App() {
 
   // Complete Surgery with Financial Snapshot
   const handleCompleteSurgery = async (surgeryId) => {
-    const surgery = surgeries.find(s => s.id === surgeryId);
+    let surgery = surgeries.find(s => s.id === surgeryId);
     if (!surgery) return;
 
+    // Prompt for actual values to ensure accurate financial reporting
+    const { value: formValues } = await Swal.fire({
+      title: 'Finalize Surgery Case',
+      html: `
+            <div style="text-align: left;">
+                <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1.5rem;">Please confirm the actual case details for accurate financial reporting.</p>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual Duration (Minutes)</label>
+                    <input id="swal-duration" type="number" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.duration_minutes || 0}">
+                </div>
+                <div style="margin-bottom: 0;">
+                    <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Total Supplies Cost ($)</label>
+                    <input id="swal-supplies" type="number" step="0.01" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.supplies_cost || 0}">
+                </div>
+            </div>
+        `,
+      showCancelButton: true,
+      confirmButtonText: 'Calculate & Complete',
+      confirmButtonColor: '#3b82f6',
+      preConfirm: () => {
+        return {
+          duration: document.getElementById('swal-duration').value,
+          supplies: document.getElementById('swal-supplies').value
+        };
+      }
+    });
+
+    if (!formValues) return;
+
+    // Update surgery object with confirmed values for calculation
+    surgery = {
+      ...surgery,
+      duration_minutes: parseInt(formValues.duration) || 0,
+      supplies_cost: parseFloat(formValues.supplies) || 0
+    };
+
     try {
-      // Calculate OR cost
-      const actualRoomCost = calculateORCost(surgery.duration_minutes || 0);
+      // Calculate costs based on finalized duration
+      // Calculate Room Cost (OR Cost)
+      let actualRoomCost = 0;
+      if (surgery.actual_room_cost) {
+        actualRoomCost = surgery.actual_room_cost;
+      } else {
+        const hourlyRate = 1200; // $1200/hr base rate
+        actualRoomCost = (surgery.duration_minutes / 60) * hourlyRate;
+      }
 
       // Calculate labor cost - use ACTUAL anesthesia costs from notes
       let actualLaborCost = 0;
@@ -665,6 +735,8 @@ function App() {
       // Update surgery with financial snapshot
       const updates = {
         status: 'completed',
+        duration_minutes: surgery.duration_minutes,
+        supplies_cost: suppliesCost,
         actual_room_cost: actualRoomCost,
         actual_labor_cost: actualLaborCost,
         expected_reimbursement: expectedReimbursement,
@@ -789,7 +861,7 @@ function App() {
   const renderContent = () => {
     // Admin views
     if (user.role === 'admin') {
-      if (view === 'dashboard') return <Dashboard surgeries={surgeries} cptCodes={cptCodes} settings={settings} />;
+      if (view === 'dashboard') return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
       if (view === 'register') return (
         <PatientManagement
           patients={patients}
@@ -798,7 +870,7 @@ function App() {
           onDelete={handleDeletePatient}
         />
       );
-      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={cptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
+      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
       if (view === 'surgeons') return (
         <SurgeonManagement
           surgeons={surgeons}
@@ -807,8 +879,8 @@ function App() {
           onDelete={handleDeleteSurgeon}
         />
       );
-      if (view === 'analysis') return <ORUtilization surgeries={surgeries} cptCodes={cptCodes} />;
-      if (view === 'scorecard') return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={cptCodes} settings={settings} />;
+      if (view === 'analysis') return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} />;
+      if (view === 'scorecard') return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} />;
       if (view === 'or-schedule') return <ORBlockSchedule surgeons={surgeons} />;
       if (view === 'users') return (
         <UserManagement
@@ -822,7 +894,9 @@ function App() {
       );
       if (view === 'cpt') return (
         <CPTManager
-          cptCodes={cptCodes}
+          cptCodes={cptCodes} // Pass ALL codes to manager so they can be edited back to active
+          showAllCPTs={showAllCPTs}
+          setShowAllCPTs={setShowAllCPTs}
           onAddCPT={handleAddCPT}
           onUpdateCPT={handleUpdateCPT}
           onDeleteCPT={handleDeleteCPT}
@@ -835,7 +909,7 @@ function App() {
           patients={patients}
           surgeries={surgeries}
           billing={billing}
-          cptCodes={cptCodes}
+          cptCodes={filteredCptCodes}
           onAdd={handleAddClaim}
           onUpdate={handleUpdateClaim}
           onDelete={handleDeleteClaim}
@@ -852,15 +926,15 @@ function App() {
 
     // Surgeon views
     if (user.role === 'surgeon') {
-      if (view === 'my-schedule') return <SurgeonSchedule surgeries={surgeries} surgeon={currentSurgeon} patients={patients} cptCodes={cptCodes} />;
+      if (view === 'my-schedule') return <SurgeonSchedule surgeries={surgeries} surgeon={currentSurgeon} patients={patients} cptCodes={filteredCptCodes} />;
       if (view === 'patients') return <SurgeonPatients patients={patients} surgeries={surgeries} surgeon={currentSurgeon} />;
-      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={cptCodes} onSchedule={handleScheduleSurgery} />;
+      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} onSchedule={handleScheduleSurgery} />;
     }
 
     // Patient views
     if (user.role === 'patient') {
       if (view === 'my-info') return <PatientInfo patient={currentPatient} />;
-      if (view === 'my-surgeries') return <PatientSurgeries surgeries={patientSurgeries} cptCodes={cptCodes} />;
+      if (view === 'my-surgeries') return <PatientSurgeries surgeries={patientSurgeries} cptCodes={filteredCptCodes} />;
       if (view === 'my-bills') return <PatientBilling billing={billing} surgeries={patientSurgeries} />;
     }
 

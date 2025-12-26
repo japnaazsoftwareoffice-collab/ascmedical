@@ -99,18 +99,15 @@ export const calculateMedicareRevenue = (cptCodesArray, cptDatabase, applyMPPR =
 };
 
 // Calculate labor cost based on duration and complexity
-export const calculateLaborCost = (durationMinutes, anesthesiaType = 'standard') => {
+// Calculate labor cost based on duration (Standard: 30% of OR Cost)
+export const calculateLaborCost = (durationMinutes) => {
     if (!durationMinutes || durationMinutes <= 0) return 0;
 
-    // Base anesthesia cost per hour
-    const anesthesiaCostPerHour = anesthesiaType === 'complex' ? 300 : 200;
-    const anesthesiaCost = (durationMinutes / 60) * anesthesiaCostPerHour;
+    // Get OR Cost
+    const orCost = calculateORCost(durationMinutes);
 
-    // Nursing/staff cost per hour
-    const staffCostPerHour = 100;
-    const staffCost = (durationMinutes / 60) * staffCostPerHour;
-
-    return anesthesiaCost + staffCost;
+    // Return 30% of OR Cost
+    return orCost * 0.3;
 };
 
 // Format currency

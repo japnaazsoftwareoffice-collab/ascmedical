@@ -5,7 +5,7 @@ import { db } from '../lib/supabase';
 import CPTDurationUpdater from './CPTDurationUpdater';
 import './Management.css';
 
-const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPTCodes }) => {
+const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPTCodes, showAllCPTs, setShowAllCPTs }) => {
     const [formData, setFormData] = useState({
         category: '',
         code: '',
@@ -16,6 +16,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
+    // showAllCPTs is now a prop
     const [editingId, setEditingId] = useState(null);
     const [isNewCategory, setIsNewCategory] = useState(false);
     const [showDurationUpdater, setShowDurationUpdater] = useState(false);
@@ -120,13 +121,17 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         setIsNewCategory(false);
     };
 
-    // Filter CPT list based on selected category and search query
+    // Filter CPT list based on selected category, search query, and active status
     const filteredCPTList = cptCodes.filter(cpt => {
         const matchesCategory = filterCategory === 'All Categories' || cpt.category === filterCategory;
         const matchesSearch = searchQuery === '' ||
             (cpt.code && cpt.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
             (cpt.description && cpt.description.toLowerCase().includes(searchQuery.toLowerCase()));
-        return matchesCategory && matchesSearch;
+
+        // Show only active codes unless "Show All" is enabled
+        const matchesActive = showAllCPTs || cpt.is_active !== false; // Default to true if undefined
+
+        return matchesCategory && matchesSearch && matchesActive;
     });
 
     // Pagination Logic
@@ -440,6 +445,28 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <option key={cat} value={cat}>{cat}</option>
                                 ))}
                             </select>
+
+                            <button
+                                onClick={() => setShowAllCPTs(!showAllCPTs)}
+                                style={{
+                                    padding: '0 1rem',
+                                    height: '42px',
+                                    background: showAllCPTs ? '#3b82f6' : 'white',
+                                    color: showAllCPTs ? 'white' : '#64748b',
+                                    border: `1px solid ${showAllCPTs ? '#3b82f6' : '#e2e8f0'}`,
+                                    borderRadius: '8px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    transition: 'all 0.2s'
+                                }}
+                                title={showAllCPTs ? "Showing all codes (Active & Inactive)" : "Showing only active codes"}
+                            >
+                                <span>{showAllCPTs ? '👁️' : '👁️‍🗨️'}</span>
+                                {showAllCPTs ? 'Show All' : 'Active Only'}
+                            </button>
                         </div>
                     </div>
 
