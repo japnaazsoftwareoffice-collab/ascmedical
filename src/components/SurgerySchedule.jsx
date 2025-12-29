@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './SurgerySchedule.css';
 
-const SurgerySchedule = ({ surgeries = [] }) => {
+const SurgerySchedule = ({ surgeries = [], cptCodes = [] }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
 
     // Helper: get the start of the week (Monday) from a date
@@ -123,9 +123,6 @@ const SurgerySchedule = ({ surgeries = [] }) => {
                                         </div>
                                         <div className="card-surgeon">
                                             DR. {surgeonName}
-                                        </div>
-                                        <div className="card-procedure">
-                                            {surgery.notes || 'No notes'}
                                         </div>
                                         <div className={`card-status status-${surgery.status}`}>
                                             {surgery.status}

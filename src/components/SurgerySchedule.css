@@ -2,102 +2,97 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 .surgery-schedule-container {
-    padding: 2rem;
-    height: 100%;
+    padding: 1rem;
+    height: 100vh;
     display: flex;
     flex-direction: column;
     background: #f8fafc;
-    /* Lighter, cleaner background */
     font-family: 'Inter', sans-serif;
+    overflow: hidden;
 }
 
 .schedule-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 12px;
     background: white;
-    padding: 1.5rem 2rem;
-    border-radius: 20px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    padding: 0.75rem 1.25rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .schedule-header h2 {
-    font-size: 1.75rem;
+    font-size: 1.25rem;
     color: #0f172a;
     margin: 0;
-    font-weight: 800;
-    letter-spacing: -0.025em;
-    background: linear-gradient(to right, #0f172a, #334155);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+    letter-spacing: -0.01em;
 }
 
 .week-nav {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 8px;
     background: #f1f5f9;
-    padding: 6px;
-    border-radius: 14px;
+    padding: 4px;
+    border-radius: 8px;
     border: 1px solid #e2e8f0;
 }
 
 .current-week-label {
     font-weight: 600;
     color: #475569;
-    min-width: 240px;
+    min-width: 180px;
     text-align: center;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
 }
 
 .btn-nav {
     background: white;
     border: 1px solid #cbd5e1;
-    padding: 8px 16px;
-    border-radius: 10px;
+    padding: 6px 12px;
+    border-radius: 6px;
     cursor: pointer;
     font-weight: 600;
     color: #64748b;
+    font-size: 0.75rem;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .btn-nav:hover {
-    background: #ffffff;
     border-color: #94a3b8;
     color: #0f172a;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    transform: translateY(-1px);
+    background: #f8fafc;
 }
 
 /* Weekly Grid */
 .weekly-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 1.25rem;
+    gap: 0.75rem;
     flex: 1;
-    overflow-x: auto;
-    padding-bottom: 1rem;
+    overflow-x: hidden;
+    padding-bottom: 0.5rem;
 }
 
 /* Day Column */
 .day-column {
     background: white;
-    /* Clean white column */
-    border-radius: 16px;
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
-    min-width: 250px;
-    border: 1px solid #f1f5f9;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+    min-width: 0;
+    /* Allow columns to shrink */
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .day-header {
-    padding: 1.25rem 1rem;
-    background: white;
+    padding: 0.75rem;
+    background: #fff;
     border-bottom: 1px solid #f1f5f9;
-    border-radius: 16px 16px 0 0;
+    border-radius: 12px 12px 0 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -107,158 +102,160 @@
     font-weight: 700;
     color: #94a3b8;
     text-transform: uppercase;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     letter-spacing: 0.05em;
 }
 
 .day-date {
     background: #e0f2fe;
     color: #0369a1;
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    /* Squircle */
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 0.75rem;
 }
 
 .day-cards {
-    padding: 1rem;
+    padding: 0.5rem;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.5rem;
     flex: 1;
     overflow-y: auto;
-    background: #ffffff;
-    border-radius: 0 0 16px 16px;
+    background: #f8fafc;
+    /* Subtle contrast for card area */
 }
 
 /* Surgery Card */
 .surgery-card {
     background: white;
-    padding: 1.25rem;
-    border-radius: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-    border: 1px solid #f1f5f9;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0.75rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    transition: all 0.15s ease;
     cursor: pointer;
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    overflow: hidden;
+    gap: 0.4rem;
 }
 
 .surgery-card:hover {
-    transform: translateY(-4px) scale(1.01);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    z-index: 10;
+    transform: scale(1.02);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 2;
 }
 
 .card-time {
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     font-weight: 700;
     color: #64748b;
     background: #f1f5f9;
-    padding: 4px 8px;
-    border-radius: 6px;
+    padding: 2px 6px;
+    border-radius: 4px;
     align-self: flex-start;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
 }
 
 .card-patient {
     font-weight: 700;
     color: #0f172a;
-    font-size: 1.1rem;
-    line-height: 1.2;
+    font-size: 0.9rem;
+    line-height: 1.3;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .card-surgeon {
-    font-size: 0.85rem;
+    font-size: 0.7rem;
     color: #2563eb;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    font-weight: 600;
+    white-space: normal;
+    line-height: 1.3;
+    word-break: break-word;
 }
 
 .card-procedure {
-    font-size: 0.85rem;
+    font-size: 0.72rem;
     color: #475569;
-    line-height: 1.5;
+    line-height: 1.4;
     background: #f8fafc;
-    padding: 0.75rem;
-    border-radius: 12px;
-    border: 1px dashed #cbd5e1;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px dashed #e2e8f0;
+    max-height: 80px;
+    /* Limit height */
+    overflow-y: auto;
+    /* Allow scroll if content is long */
     display: block;
-    overflow: visible;
+    word-break: break-word;
+}
+
+/* Slim scrollbar for the notes */
+.card-procedure::-webkit-scrollbar {
+    width: 3px;
+}
+
+.card-procedure::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
 }
 
 .card-status {
-    margin-top: 0.25rem;
-    font-size: 0.7rem;
+    margin-top: 0.1rem;
+    font-size: 0.6rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    font-weight: 800;
-    padding: 4px 10px;
-    border-radius: 20px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
     width: fit-content;
     align-self: flex-end;
-    /* Right align status */
 }
 
 /* Status colors refined */
 .status-scheduled {
     color: #0284c7;
     background: #e0f2fe;
-    border: 1px solid #bae6fd;
 }
 
 .status-completed {
     color: #059669;
     background: #dcfce7;
-    border: 1px solid #86efac;
 }
 
 .status-cancelled {
     color: #dc2626;
     background: #fee2e2;
-    border: 1px solid #fca5a5;
 }
 
 .no-surgeries {
     text-align: center;
-    color: #cbd5e1;
+    color: #94a3b8;
     font-weight: 500;
-    font-size: 0.95rem;
-    margin-top: 4rem;
+    font-size: 0.75rem;
+    margin-top: 2rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    opacity: 0.6;
 }
 
-
-
-/* Custom Scrollbar for the grid */
-.weekly-grid::-webkit-scrollbar {
-    height: 8px;
+/* Custom Scrollbar for the cards */
+.day-cards::-webkit-scrollbar {
+    width: 4px;
 }
 
-.weekly-grid::-webkit-scrollbar-track {
+.day-cards::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.weekly-grid::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
-
-.weekly-grid::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+.day-cards::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 2px;
 }
