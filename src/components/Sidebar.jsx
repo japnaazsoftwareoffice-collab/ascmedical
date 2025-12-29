@@ -13,6 +13,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
                 { id: 'or-schedule', icon: '🗓️', label: 'OR Block Schedule' },
                 { id: 'surgery-schedule-sidebar', icon: '🗓️', label: 'Surgery Schedule' },
                 { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management' },
+                { id: 'staff', icon: '👩‍⚕️', label: 'Nurses & Staff' },
                 { id: 'users', icon: '🔐', label: 'User Management' },
                 { id: 'analysis', icon: '🏥', label: 'OR Utilization' },
                 { id: 'scorecard', icon: '🎯', label: 'Surgeon Scorecard' },

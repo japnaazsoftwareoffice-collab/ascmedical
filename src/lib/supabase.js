@@ -521,6 +521,67 @@ export const db = {
             .subscribe();
     },
 
+    // ==================== STAFF ====================
+    async getStaff() {
+        const { data, error } = await supabase
+            .from('staff')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getStaffById(id) {
+        const { data, error } = await supabase
+            .from('staff')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async addStaff(staffMember) {
+        const { data, error } = await supabase
+            .from('staff')
+            .insert([staffMember])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateStaff(id, updates) {
+        const { data, error } = await supabase
+            .from('staff')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteStaff(id) {
+        const { error } = await supabase
+            .from('staff')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    subscribeToStaff(callback) {
+        return supabase
+            .channel('staff-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'staff' }, callback)
+            .subscribe();
+    },
+
     // ==================== SETTINGS ====================
     async getSettings() {
         const { data, error } = await supabase

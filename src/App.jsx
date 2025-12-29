@@ -19,6 +19,7 @@ import ClaimsManagement from './components/ClaimsManagement';
 import Settings from './components/Settings';
 import CPTAutoUpdate from './components/CPTAutoUpdate';
 import SurgeonScorecard from './components/SurgeonScorecard';
+import StaffManagement from './components/StaffManagement';
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
 import { calculateORCost, calculateMedicareRevenue, calculateLaborCost } from './utils/hospitalUtils';
@@ -40,6 +41,7 @@ function App() {
   const [billing, setBilling] = useState([]);
   const [claims, setClaims] = useState([]);
   const [orBlockSchedule, setOrBlockSchedule] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -101,7 +103,7 @@ function App() {
       }
 
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData] = await Promise.all([
+      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData, staffData] = await Promise.all([
         db.getPatients(),
         db.getSurgeons(),
         db.getCPTCodes(),
@@ -110,7 +112,8 @@ function App() {
         user.role === 'admin' ? db.getUsers() : Promise.resolve([]),
         db.getClaims ? db.getClaims() : Promise.resolve([]),
         db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([]),
-        db.getSettings ? db.getSettings() : Promise.resolve(null)
+        db.getSettings ? db.getSettings() : Promise.resolve(null),
+        db.getStaff ? db.getStaff() : Promise.resolve([])
       ]);
 
       // Transform surgeons to add 'name' property
@@ -127,6 +130,7 @@ function App() {
       setUsers(usersData);
       setClaims(claimsData || []);
       setOrBlockSchedule(orBlockScheduleData || []);
+      setStaff(staffData || []);
       setSettings(settingsData);
     } catch (err) {
       console.error('Error loading data:', err);
@@ -625,6 +629,41 @@ function App() {
     }
   };
 
+  // Staff Management Handlers
+  const handleAddStaff = async (newStaffMember) => {
+    try {
+      const addedStaff = await db.addStaff(newStaffMember);
+      setStaff([addedStaff, ...staff]);
+      return addedStaff;
+    } catch (err) {
+      console.error('Error adding staff:', err);
+      // Fallback
+      const staffWithId = { ...newStaffMember, id: Date.now() };
+      setStaff([staffWithId, ...staff]);
+      return staffWithId;
+    }
+  };
+
+  const handleUpdateStaff = async (updatedStaff) => {
+    try {
+      await db.updateStaff(updatedStaff.id, updatedStaff);
+      setStaff(staff.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+    } catch (err) {
+      console.error('Error updating staff:', err);
+      setStaff(staff.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+    }
+  };
+
+  const handleDeleteStaff = async (id) => {
+    try {
+      await db.deleteStaff(id);
+      setStaff(staff.filter(s => s.id !== id));
+    } catch (err) {
+      console.error('Error deleting staff:', err);
+      setStaff(staff.filter(s => s.id !== id));
+    }
+  };
+
   // Complete Surgery with Financial Snapshot
   const handleCompleteSurgery = async (surgeryId) => {
     let surgery = surgeries.find(s => s.id === surgeryId);
@@ -878,6 +917,14 @@ function App() {
           onAdd={handleAddSurgeon}
           onUpdate={handleUpdateSurgeon}
           onDelete={handleDeleteSurgeon}
+        />
+      );
+      if (view === 'staff') return (
+        <StaffManagement
+          staff={staff}
+          onAdd={handleAddStaff}
+          onUpdate={handleUpdateStaff}
+          onDelete={handleDeleteStaff}
         />
       );
       if (view === 'analysis') return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} />;
