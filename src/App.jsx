@@ -25,6 +25,7 @@ import { db } from './lib/supabase';
 import { calculateORCost, calculateMedicareRevenue, calculateLaborCost } from './utils/hospitalUtils';
 import './App.css';
 import Chatbot from './components/Chatbot';
+import ManagerDashboard from './components/ManagerDashboard';
 
 function App() {
   const [user, setUser] = useState(() => {
@@ -167,6 +168,7 @@ function App() {
         // Mock login logic
         const mockUsers = {
           'admin@hospital.com': { email, role: 'admin', full_name: 'Admin User', id: 1 },
+          'manager@hospital.com': { email, role: 'manager', full_name: 'Case Manager', id: 4 },
           'surgeon@hospital.com': { email, role: 'surgeon', full_name: 'Dr. Sarah Williams', id: 2, surgeon_id: 1 },
           'patient@hospital.com': { email, role: 'patient', full_name: 'John Doe', id: 3, patient_id: 1 }
         };
@@ -989,6 +991,26 @@ function App() {
 
     return <div className="placeholder-view">Page Not Found</div>;
   };
+
+  if (user.role === 'manager') {
+    return (
+      <div className="app">
+        <ManagerDashboard
+          user={user}
+          onLogout={handleLogout}
+          surgeries={surgeries}
+          patients={patients}
+        />
+        <Chatbot
+          surgeons={surgeons}
+          cptCodes={cptCodes}
+          surgeries={surgeries}
+          patients={patients}
+          orBlockSchedule={orBlockSchedule}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app">

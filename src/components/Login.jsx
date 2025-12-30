@@ -12,6 +12,7 @@ const Login = ({ onLogin }) => {
     // Demo credentials for testing
     const demoUsers = {
         admin: { email: 'admin@hospital.com', password: 'admin123', name: 'Admin User' },
+        manager: { email: 'manager@hospital.com', password: 'manager123', name: 'Case Manager' },
         surgeon: { email: 'surgeon@hospital.com', password: 'surgeon123', name: 'Dr. Sarah Williams' },
         patient: { email: 'patient@hospital.com', password: 'patient123', name: 'John Doe', mrn: 'MRN001' }
     };
@@ -53,6 +54,7 @@ const Login = ({ onLogin }) => {
                             onChange={(e) => setCredentials({ ...credentials, role: e.target.value })}
                         >
                             <option value="admin">Administrator</option>
+                            <option value="manager">Manager</option>
                             <option value="surgeon">Surgeon</option>
                             <option value="patient">Patient</option>
                         </select>
@@ -96,6 +98,10 @@ const Login = ({ onLogin }) => {
                             <span className="demo-icon">👨‍💼</span>
                             <span className="demo-label">Admin</span>
                         </button>
+                        <button onClick={() => handleDemoLogin('manager')} className="demo-btn manager" style={{ backgroundColor: '#e0e7ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>
+                            <span className="demo-icon">📋</span>
+                            <span className="demo-label">Manager</span>
+                        </button>
                         <button onClick={() => handleDemoLogin('surgeon')} className="demo-btn surgeon">
                             <span className="demo-icon">👨‍⚕️</span>
                             <span className="demo-label">Surgeon</span>
@@ -107,6 +113,7 @@ const Login = ({ onLogin }) => {
                     </div>
                     <div className="demo-credentials">
                         <p><strong>Admin:</strong> admin@hospital.com / admin123</p>
+                        <p><strong>Manager:</strong> manager@hospital.com / manager123</p>
                         <p><strong>Surgeon:</strong> surgeon@hospital.com / surgeon123</p>
                         <p><strong>Patient:</strong> patient@hospital.com / patient123</p>
                     </div>
