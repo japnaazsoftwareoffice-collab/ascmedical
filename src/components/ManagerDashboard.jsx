@@ -4,8 +4,13 @@ import './ManagerDashboard.css';
 const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => {
     const [currentView, setCurrentView] = useState('schedule');
     const [selectedCase, setSelectedCase] = useState(null);
-    const [sidebarMode, setSidebarMode] = useState('work-queues'); // 'work-queues' or 'case-navigation'
-    const [viewDate, setViewDate] = useState(new Date());
+    const [sidebarMode, setSidebarMode] = useState('schedule'); // Default to 'schedule' to match currentView
+
+    // Filter States
+    const [viewDate, setViewDate] = useState(new Date()); // Calendar Month View
+    const [activeDate, setActiveDate] = useState(new Date()); // Selected Specific Day
+    const [viewMode, setViewMode] = useState('month'); // Default to 'month' to show all data initially
+    const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'complete', 'incomplete', 'alert', 'cancelled'
 
     // Helper to format date
     const formatDate = (dateString) => {
@@ -13,12 +18,16 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         return new Date(dateString).toLocaleDateString();
     };
 
-    // 1. Process Data for Schedule View (All Surgeries)
-    const scheduleData = surgeries.map(s => {
-        // Robust patient lookup - handle string vs number IDs
-        const patient = patients.find(p => String(p.id) === String(s.patient_id || s.patientId)) || {};
+    // Helper to normalize date for comparison (YYYY-MM-DD)
+    const getNormalizedDate = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
 
-        // Extract surgeon name from either linked object or doctor_name field
+    // 1. Process ALL Data for Schedule View first
+    const allScheduleData = surgeries.map(s => {
+        const patient = patients.find(p => String(p.id) === String(s.patient_id || s.patientId)) || {};
         let surgeonName = s.doctor_name || 'Unknown';
         if (s.surgeons && s.surgeons.name) {
             surgeonName = s.surgeons.name;
@@ -32,7 +41,6 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         // Robust Name Formatting
         let patientName = 'Unknown';
         if (patient.id) {
-            // Check for various name fields
             const last = patient.last_name || patient.lastname || '';
             const first = patient.first_name || patient.firstname || '';
             if (last || first) {
@@ -41,7 +49,6 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                 patientName = patient.name;
             }
         }
-        // Clean up cases where only a comma might appear if one name part is missing
         if (patientName.trim() === ',') patientName = 'Unknown';
 
         return {
@@ -54,26 +61,39 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
             location: 'MEDTEL Surgery Center',
             status: statusStyle,
             originalStatus: s.status,
-            rawDate: s.date
+            rawDate: new Date(s.date)
         };
     });
 
-    // KPI Calculations
+    // 2. Filter Data based on Time (Day vs Month)
+    const timeFilteredData = allScheduleData.filter(item => {
+        if (viewMode === 'day') {
+            return getNormalizedDate(item.rawDate) === getNormalizedDate(activeDate);
+        } else {
+            // Month View
+            return item.rawDate.getMonth() === viewDate.getMonth() &&
+                item.rawDate.getFullYear() === viewDate.getFullYear();
+        }
+    });
+
+    // 3. KPI Calculations (Based on Time-Filtered Data, BEFORE status filter)
     const kpiCounts = {
-        all: scheduleData.length,
-        complete: scheduleData.filter(d => d.originalStatus === 'completed').length,
-        incomplete: scheduleData.filter(d => d.originalStatus === 'scheduled' || d.originalStatus === 'pending').length,
-        alert: scheduleData.filter(d => d.status === 'alert').length,
-        cancelled: scheduleData.filter(d => d.originalStatus === 'cancelled').length
+        all: timeFilteredData.length,
+        complete: timeFilteredData.filter(d => d.status === 'complete').length,
+        incomplete: timeFilteredData.filter(d => d.status === 'incomplete').length,
+        alert: timeFilteredData.filter(d => d.status === 'alert').length,
+        cancelled: timeFilteredData.filter(d => d.status === 'cancelled').length
     };
 
-    // 2. Process Data for Work Queues (CMS Inpatient Only - Mock Logic for "Inpatient")
-    // For demo: Filter surgeries that might look like inpatient or show all if none
-    // Real implementation would check admission_type column if it exists
-    const workQueueData = surgeries.map(s => {
-        // Robust patient lookup
-        const patient = patients.find(p => String(p.id) === String(s.patient_id || s.patientId)) || {};
+    // 4. Final Display Data (Filtered by Status)
+    const finalDisplayData = timeFilteredData.filter(item => {
+        if (statusFilter === 'all') return true;
+        return item.status === statusFilter;
+    });
 
+    // Sub-Logic: Work Queues (unchanged logic, just re-declared)
+    const workQueueData = surgeries.map(s => {
+        const patient = patients.find(p => String(p.id) === String(s.patient_id || s.patientId)) || {};
         let surgeonName = s.doctor_name || 'Unknown';
         if (s.surgeons && s.surgeons.name) surgeonName = s.surgeons.name;
 
@@ -82,11 +102,8 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         if (patient.id) {
             const last = patient.last_name || patient.lastname || '';
             const first = patient.first_name || patient.firstname || '';
-            if (last || first) {
-                patientName = `${last}, ${first}`;
-            } else if (patient.name) {
-                patientName = patient.name;
-            }
+            if (last) patientName = `${last}, ${first}`;
+            else if (patient.name) patientName = patient.name;
         }
         if (patientName.trim() === ',') patientName = 'Unknown';
 
@@ -98,13 +115,12 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
             unit: 'OR',
             caseId: s.id,
             date: formatDate(s.date),
-            type: 'Inpatient', // comprehensive mapping not available, defaulting
+            type: 'Inpatient',
             cpt: s.cpt_codes ? (Array.isArray(s.cpt_codes) ? s.cpt_codes.join(', ') : s.cpt_codes) : 'N/A',
-            status: s.status === 'completed' ? 'Compliant' : 'Non Compliant' // Mock compliance logic
+            status: s.status === 'completed' ? 'Compliant' : 'Non Compliant'
         };
     });
 
-    // Mock data for work queues sidebar counts
     const workQueues = [
         { id: 'insurance', label: 'Insurance Authorization', count: 5, icon: '5' },
         { id: 'presurgical', label: 'Presurgical Testing at Facility', count: 4, icon: '4' },
@@ -115,7 +131,6 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
     ];
 
     const handleCaseClick = (caseItem) => {
-        // Find full surgery object
         const surgery = surgeries.find(s => s.id === caseItem.id);
         const patient = patients.find(p => p.id === surgery?.patient_id);
         setSelectedCase({ ...caseItem, fullSurgery: surgery, fullPatient: patient });
@@ -129,28 +144,45 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         setCurrentView('work-queues');
     };
 
-    // Calendar Logic
+    const handleDateClick = (day) => {
+        const newDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+        setActiveDate(newDate);
+        setViewMode('day'); // Switch to day view when a date is clicked
+        setStatusFilter('all'); // Reset status filter on date change? Or keep it? Let's keep it usually, but maybe reset is safer to see data. Let's keep 'all' default.
+    };
+
+    const handleStatusClick = (status) => {
+        setStatusFilter(prev => prev === status ? 'all' : status);
+    };
+
     const monthNames = ["January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
     ];
 
-    // Basic mock calendar generator for current month
     const renderCalendarDays = () => {
         const year = viewDate.getFullYear();
         const month = viewDate.getMonth();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const firstDay = new Date(year, month, 1).getDay(); // 0 = Sunday
+        const firstDay = new Date(year, month, 1).getDay();
 
         const days = [];
-        // Empty slots for days before first of month
         for (let i = 0; i < firstDay; i++) {
             days.push(<span key={`empty-${i}`} className="cal-day"></span>);
         }
 
         for (let i = 1; i <= daysInMonth; i++) {
-            const isToday = i === new Date().getDate() && month === new Date().getMonth();
+            // Check if this specific day is the Active Date
+            const currentDayDate = new Date(year, month, i);
+            const isActive = getNormalizedDate(currentDayDate) === getNormalizedDate(activeDate);
+
             days.push(
-                <span key={i} className={`cal-day ${isToday ? 'active' : ''}`}>{i}</span>
+                <span
+                    key={i}
+                    className={`cal-day ${isActive ? 'active' : ''}`}
+                    onClick={() => handleDateClick(i)}
+                >
+                    {i}
+                </span>
             );
         }
         return days;
@@ -203,19 +235,18 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                 </div>
             );
         } else {
-            // Default Schedule Sidebar (Calendar)
             return (
                 <div className="manager-sidebar">
                     <div className="sidebar-header">
                         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                             <strong>{monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}</strong>
                             <div>
-                                <button style={{ border: 'none', background: 'transparent', cursor: 'pointer' }} onClick={() => {
+                                <button style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }} onClick={() => {
                                     const d = new Date(viewDate);
                                     d.setMonth(d.getMonth() - 1);
                                     setViewDate(d);
                                 }}>&#8249;</button>
-                                <button style={{ border: 'none', background: 'transparent', cursor: 'pointer' }} onClick={() => {
+                                <button style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }} onClick={() => {
                                     const d = new Date(viewDate);
                                     d.setMonth(d.getMonth() + 1);
                                     setViewDate(d);
@@ -279,32 +310,60 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                 {currentView === 'schedule' && (
                     <div className="content-panel schedule-container">
                         <div className="kpi-cards">
-                            <div className="kpi-card">
+                            <div
+                                className={`kpi-card ${statusFilter === 'all' ? 'active-filter' : ''}`}
+                                onClick={() => handleStatusClick('all')}
+                                style={{ cursor: 'pointer', border: statusFilter === 'all' ? '2px solid #3b82f6' : '' }}
+                            >
                                 <span className="kpi-number">{kpiCounts.all}</span>
                                 <span className="kpi-label">All Cases</span>
                             </div>
-                            <div className="kpi-card complete">
+                            <div
+                                className={`kpi-card complete ${statusFilter === 'complete' ? 'active-filter' : ''}`}
+                                onClick={() => handleStatusClick('complete')}
+                                style={{ cursor: 'pointer', border: statusFilter === 'complete' ? '2px solid #22c55e' : '' }}
+                            >
                                 <span className="kpi-number">{kpiCounts.complete}</span>
                                 <span className="kpi-label"><span className="status-icon complete"></span> Complete</span>
                             </div>
-                            <div className="kpi-card incomplete">
+                            <div
+                                className={`kpi-card incomplete ${statusFilter === 'incomplete' ? 'active-filter' : ''}`}
+                                onClick={() => handleStatusClick('incomplete')}
+                                style={{ cursor: 'pointer', border: statusFilter === 'incomplete' ? '2px solid #3b82f6' : '' }}
+                            >
                                 <span className="kpi-number">{kpiCounts.incomplete}</span>
                                 <span className="kpi-label"><span className="status-icon incomplete"></span> Incomplete</span>
                             </div>
-                            <div className="kpi-card alert">
+                            <div
+                                className={`kpi-card alert ${statusFilter === 'alert' ? 'active-filter' : ''}`}
+                                onClick={() => handleStatusClick('alert')}
+                                style={{ cursor: 'pointer', border: statusFilter === 'alert' ? '2px solid #ef4444' : '' }}
+                            >
                                 <span className="kpi-number">{kpiCounts.alert}</span>
                                 <span className="kpi-label"><span className="status-icon alert"></span> Alert</span>
                             </div>
-                            <div className="kpi-card cancelled">
+                            <div
+                                className={`kpi-card cancelled ${statusFilter === 'cancelled' ? 'active-filter' : ''}`}
+                                onClick={() => handleStatusClick('cancelled')}
+                                style={{ cursor: 'pointer', border: statusFilter === 'cancelled' ? '2px solid #94a3b8' : '' }}
+                            >
                                 <span className="kpi-number">{kpiCounts.cancelled}</span>
                                 <span className="kpi-label"><span className="status-icon cancelled"></span> Cancelled</span>
                             </div>
                         </div>
 
                         <div className="table-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                            <span style={{ color: '#3b82f6', fontWeight: '600' }}>Day View</span>
-                            <input type="checkbox" checked readOnly style={{ accentColor: '#3b82f6' }} />
-                            <span style={{ color: '#64748b' }}>Month View</span>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={viewMode === 'month'}
+                                    onChange={(e) => setViewMode(e.target.checked ? 'month' : 'day')}
+                                    style={{ accentColor: '#3b82f6' }}
+                                />
+                                <span style={{ color: '#64748b' }}>Month View</span>
+                            </label>
+                            {/* Explicit Day View indicator if needed, or just rely on the toggle state */}
+                            {viewMode === 'day' && <span style={{ fontSize: '0.9rem', color: '#3b82f6', fontWeight: '600' }}>Day View Active ({activeDate.toLocaleDateString()})</span>}
                         </div>
 
                         <div className="table-responsive">
@@ -320,7 +379,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {scheduleData.length > 0 ? scheduleData.map((row, idx) => (
+                                    {finalDisplayData.length > 0 ? finalDisplayData.map((row, idx) => (
                                         <tr key={idx} className="clickable-row">
                                             <td style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                                 <span className={`status-icon ${row.status}`}></span>
@@ -334,7 +393,9 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                                         </tr>
                                     )) : (
                                         <tr>
-                                            <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>No surgeries scheduled.</td>
+                                            <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                                                No surgeries found for this filter.
+                                            </td>
                                         </tr>
                                     )}
                                 </tbody>
