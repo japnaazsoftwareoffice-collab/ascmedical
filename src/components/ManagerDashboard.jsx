@@ -12,6 +12,32 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
     const [viewMode, setViewMode] = useState('month'); // Default to 'month' to show all data initially
     const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'complete', 'incomplete', 'alert', 'cancelled'
 
+    // Case Navigation Tab State
+    const [activeCaseTab, setActiveCaseTab] = useState('patient-info'); // Default to first tab
+
+    // Detail View Sub-States (Implants vs Products)
+    const [detailTab, setDetailTab] = useState('implants'); // 'implants', 'products'
+    const [selectedImplants, setSelectedImplants] = useState([]);
+    const [selectedProducts, setSelectedProducts] = useState([]);
+    const [currentImplantSelection, setCurrentImplantSelection] = useState('');
+    const [currentProductSelection, setCurrentProductSelection] = useState('');
+
+    const availableImplants = [
+        "Persona The Personalized Knee - Zimmer Biomet - Kendall R. (SBOX-MEDTEL)",
+        "Small Fragment System - Depuy Synthes - Billy M. (SBOX-MEDTEL)",
+        "SpeedBridge Implant System - Arthrex Inc. - Jim H. (SBOX-MEDTEL)",
+        "Vanguard Knee System - Biomet",
+        "Triathlon Total Knee System - Stryker"
+    ];
+
+    const availableProducts = [
+        "Robaxin 500mg PO 1 hour prior to surgery",
+        "Tylenol 1000mg IV",
+        "Ancef 2g IV",
+        "Decadron 10mg IV",
+        "Tranexamic Acid 1g IV"
+    ];
+
     // Helper to format date
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
@@ -136,6 +162,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         setSelectedCase({ ...caseItem, fullSurgery: surgery, fullPatient: patient });
         setSidebarMode('case-navigation');
         setCurrentView('case-navigation');
+        setActiveCaseTab('patient-info'); // Reset to first tab on new case selection
     };
 
     const handleBackToQueues = () => {
@@ -153,6 +180,28 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
 
     const handleStatusClick = (status) => {
         setStatusFilter(prev => prev === status ? 'all' : status);
+    };
+
+    const handleAddImplant = () => {
+        if (currentImplantSelection && !selectedImplants.includes(currentImplantSelection)) {
+            setSelectedImplants([...selectedImplants, currentImplantSelection]);
+            setCurrentImplantSelection('');
+        }
+    };
+
+    const handleRemoveImplant = (item) => {
+        setSelectedImplants(selectedImplants.filter(i => i !== item));
+    };
+
+    const handleAddProduct = () => {
+        if (currentProductSelection && !selectedProducts.includes(currentProductSelection)) {
+            setSelectedProducts([...selectedProducts, currentProductSelection]);
+            setCurrentProductSelection('');
+        }
+    };
+
+    const handleRemoveProduct = (item) => {
+        setSelectedProducts(selectedProducts.filter(p => p !== item));
     };
 
     const monthNames = ["January", "February", "March", "April", "May", "June",
@@ -206,34 +255,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                 </div>
             );
         } else if (sidebarMode === 'case-navigation') {
-            return (
-                <div className="manager-sidebar case-nav">
-                    <div className="sidebar-header">
-                        <button className="back-btn" onClick={handleBackToQueues}>← Back</button>
-                        <h3>Case Navigation</h3>
-                    </div>
-                    <nav className="case-menu">
-                        <div className="menu-group">
-                            <div className="menu-item status-green">Patient Information</div>
-                            <div className="menu-item status-green">Financial</div>
-                            <div className="menu-item status-green">Procedure Details</div>
-                            <div className="menu-item status-green">Scheduling</div>
-                            <div className="menu-item status-blue active">Implants and Products</div>
-                            <div className="menu-item status-green">Clinical</div>
-                        </div>
-                        <div className="menu-divider"></div>
-                        <div className="menu-group">
-                            <div className="menu-item">Case Summary</div>
-                            <div className="menu-item">Doc Management</div>
-                            <div className="menu-item">Comments</div>
-                            <div className="menu-item">Activity Logs</div>
-                        </div>
-                        <div className="menu-footer">
-                            <button className="cancel-case-btn">Cancel Case</button>
-                        </div>
-                    </nav>
-                </div>
-            );
+            return null; // Sidebar hidden in case navigation view
         } else {
             return (
                 <div className="manager-sidebar">
@@ -280,9 +302,10 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                 <header className="manager-header">
                     <div className="breadcrumbs">
                         {sidebarMode === 'case-navigation' ? (
-                            <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <button className="back-btn" onClick={handleBackToQueues} style={{ marginBottom: 0 }}>← Back</button>
                                 <span>Work Queues</span> &gt; <span>CMS Inpatient Only</span> &gt; <span className="current">{selectedCase?.patient}</span>
-                            </>
+                            </div>
                         ) : (
                             <div className="view-switcher">
                                 <button
@@ -465,28 +488,293 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                 {/* Case Navigation View (Image 2) */}
                 {currentView === 'case-navigation' && (
                     <div className="content-panel detail-view">
-                        <h2>Implants and Products</h2>
 
-                        <div className="form-section">
-                            <label className="section-label">Product Selection</label>
-                            <div className="custom-select-container">
-                                <label className="input-label-floating">Product Name</label>
-                                <select className="full-width-select">
-                                    <option>Persona The Personalized Knee - Zimmer Biomet - Kendall R. (SBOX-MEDTEL)</option>
-                                    <option>Robaxin 500mg PO 1 hour prior to surgery</option>
-                                    <option>Small Fragment System - Depuy Synthes - Billy M. (SBOX-MEDTEL)</option>
-                                    <option>SpeedBridge Implant System - Arthrex Inc. - Jim H. (SBOX-MEDTEL)</option>
-                                </select>
+                        {/* Top Navigation Tabs */}
+                        <div className="top-nav-tabs-container">
+                            <div className="nav-tabs-scroll">
+                                {['patient-info', 'financial', 'procedure-details', 'scheduling', 'implants', 'clinical'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        className={`nav-tab-item ${activeCaseTab === tab ? 'active' : ''}`}
+                                        onClick={() => setActiveCaseTab(tab)}
+                                    >
+                                        {tab.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()).replace('Implants', 'Implants & Products')}
+                                    </button>
+                                ))}
+                                <span className="nav-divider">|</span>
+                                {['case-summary', 'doc-management', 'comments', 'activity-logs'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        className={`nav-tab-item ${activeCaseTab === tab ? 'active' : ''}`}
+                                        onClick={() => setActiveCaseTab(tab)}
+                                    >
+                                        {tab.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
-                        {/* Optional: Display real case info below for confirmation */}
-                        <div style={{ marginTop: '2rem', color: '#64748b', fontSize: '0.9rem' }}>
-                            <p><strong>Case ID:</strong> {selectedCase?.caseId}</p>
-                            <p><strong>Patient:</strong> {selectedCase?.patient}</p>
-                        </div>
+                        <div className="case-content-wrapper">
+
+                            {/* 1. Patient Information Tab */}
+                            {activeCaseTab === 'patient-info' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Patient Information</h2>
+                                    <div className="form-section">
+                                        <div className="info-grid">
+                                            <div className="info-item">
+                                                <label>Full Name</label>
+                                                <div className="info-value">{selectedCase?.patient || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Date of Birth</label>
+                                                <div className="info-value">{selectedCase?.fullPatient?.date_of_birth || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>MRN</label>
+                                                <div className="info-value">{selectedCase?.fullPatient?.mrn || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Gender</label>
+                                                <div className="info-value">{selectedCase?.fullPatient?.gender || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Phone</label>
+                                                <div className="info-value">{selectedCase?.fullPatient?.phone || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Address</label>
+                                                <div className="info-value">{selectedCase?.fullPatient?.address || 'N/A'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 2. Financial Tab */}
+                            {activeCaseTab === 'financial' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Financial Overview</h2>
+                                    <div className="kpi-cards" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                                        <div className="kpi-card">
+                                            <span className="kpi-label">Estimated Cost</span>
+                                            <span className="kpi-number">$12,450</span>
+                                        </div>
+                                        <div className="kpi-card">
+                                            <span className="kpi-label">Insurance Status</span>
+                                            <span className="kpi-number" style={{ color: '#22c55e', fontSize: '1.5rem' }}>Verified</span>
+                                        </div>
+                                        <div className="kpi-card">
+                                            <span className="kpi-label">Patient Liability</span>
+                                            <span className="kpi-number">$500</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 3. Procedure Details Tab */}
+                            {activeCaseTab === 'procedure-details' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Procedure Details</h2>
+                                    <div className="form-section">
+                                        <div className="info-grid">
+                                            <div className="info-item">
+                                                <label>Primary Procedure</label>
+                                                <div className="info-value">{selectedCase?.cpt || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Surgeon</label>
+                                                <div className="info-value">{selectedCase?.provider || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Location</label>
+                                                <div className="info-value">{selectedCase?.location || 'N/A'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 4. Scheduling Tab */}
+                            {activeCaseTab === 'scheduling' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Scheduling</h2>
+                                    <div className="form-section">
+                                        <div className="info-grid">
+                                            <div className="info-item">
+                                                <label>Date</label>
+                                                <div className="info-value">{selectedCase?.date || 'N/A'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Time</label>
+                                                <div className="info-value">{selectedCase?.fullSurgery?.start_time || '07:30 AM'}</div>
+                                            </div>
+                                            <div className="info-item">
+                                                <label>Duration</label>
+                                                <div className="info-value">{selectedCase?.fullSurgery?.duration || '90'} mins</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 5. Implants and Products Tab (Original Content) */}
+                            {activeCaseTab === 'implants' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Implants and Products</h2>
+
+                                    {/* Tabs */}
+                                    <div className="tabs-container">
+                                        <button
+                                            className={`tab-btn ${detailTab === 'implants' ? 'active' : ''}`}
+                                            onClick={() => setDetailTab('implants')}
+                                        >
+                                            Implants
+                                        </button>
+                                        <button
+                                            className={`tab-btn ${detailTab === 'products' ? 'active' : ''}`}
+                                            onClick={() => setDetailTab('products')}
+                                        >
+                                            Products
+                                        </button>
+                                    </div>
+
+                                    {/* Implants Sub-Tab */}
+                                    {detailTab === 'implants' && (
+                                        <div className="tab-content fade-in">
+                                            <div className="form-section">
+                                                <label className="section-label">Implant Selection</label>
+                                                <div className="selection-row">
+                                                    <div className="custom-select-container" style={{ flex: 1 }}>
+                                                        <label className="input-label-floating">Implant Name</label>
+                                                        <select
+                                                            className="full-width-select"
+                                                            value={currentImplantSelection}
+                                                            onChange={(e) => setCurrentImplantSelection(e.target.value)}
+                                                        >
+                                                            <option value="">Select an Implant...</option>
+                                                            {availableImplants.map((imp, idx) => (
+                                                                <option key={idx} value={imp}>{imp}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <button className="add-btn" onClick={handleAddImplant}>Add Implant</button>
+                                                </div>
+                                            </div>
+
+                                            {selectedImplants.length > 0 && (
+                                                <div className="selected-items-list">
+                                                    <h3>Selected Implants</h3>
+                                                    {selectedImplants.map((img, idx) => (
+                                                        <div key={idx} className="selected-item-card">
+                                                            <span>{img}</span>
+                                                            <button className="remove-btn" onClick={() => handleRemoveImplant(img)}>Remove</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Products Sub-Tab */}
+                                    {detailTab === 'products' && (
+                                        <div className="tab-content fade-in">
+                                            <div className="form-section">
+                                                <label className="section-label">Product Selection</label>
+                                                <div className="selection-row">
+                                                    <div className="custom-select-container" style={{ flex: 1 }}>
+                                                        <label className="input-label-floating">Product Name</label>
+                                                        <select
+                                                            className="full-width-select"
+                                                            value={currentProductSelection}
+                                                            onChange={(e) => setCurrentProductSelection(e.target.value)}
+                                                        >
+                                                            <option value="">Select a Product...</option>
+                                                            {availableProducts.map((prod, idx) => (
+                                                                <option key={idx} value={prod}>{prod}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <button className="add-btn" onClick={handleAddProduct}>Add Product</button>
+                                                </div>
+                                            </div>
+
+                                            {selectedProducts.length > 0 && (
+                                                <div className="selected-items-list">
+                                                    <h3>Selected Products</h3>
+                                                    {selectedProducts.map((prod, idx) => (
+                                                        <div key={idx} className="selected-item-card">
+                                                            <span>{prod}</span>
+                                                            <button className="remove-btn" onClick={() => handleRemoveProduct(prod)}>Remove</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* 6. Clinical Tab */}
+                            {activeCaseTab === 'clinical' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Clinical Documentation</h2>
+                                    <div className="form-section">
+                                        <p>No clinical documents available.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 7. Case Summary Tab */}
+                            {activeCaseTab === 'case-summary' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Case Summary</h2>
+                                    <div className="form-section">
+                                        <p>Summary of the case will appear here.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 8. Doc Management Placeholder */}
+                            {activeCaseTab === 'doc-management' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Document Management</h2>
+                                    <div className="form-section"><p>Document management tools here.</p></div>
+                                </div>
+                            )}
+
+                            {/* 9. Comments Placeholder */}
+                            {activeCaseTab === 'comments' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Comments</h2>
+                                    <div className="form-section"><p>Case comments here.</p></div>
+                                </div>
+                            )}
+
+                            {/* 10. Activity Logs Placeholder */}
+                            {activeCaseTab === 'activity-logs' && (
+                                <div className="tab-pane fade-in">
+                                    <h2>Activity Logs</h2>
+                                    <div className="form-section"><p>Audit logs here.</p></div>
+                                </div>
+                            )}
+
+                            {/* Footer (Always Visible in Detail View) */}
+                            <div style={{ marginTop: 'auto', paddingTop: '2rem', color: '#64748b', fontSize: '0.9rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <p><strong>Case ID:</strong> {selectedCase?.caseId || selectedCase?.id}</p>
+                                    <p><strong>Patient:</strong> {selectedCase?.patient}</p>
+                                </div>
+                                <div>
+                                    <button className="cancel-case-btn" style={{ width: 'auto', display: 'inline-block', marginRight: '1rem', background: '#e2e8f0' }}>Cancel Case</button>
+                                    <button className="save-btn-primary">Save Changes</button>
+                                </div>
+                            </div>
+
+                        </div> {/* End case-content-wrapper */}
                     </div>
-                )}
+                )
+                }
             </main>
         </div>
     );
