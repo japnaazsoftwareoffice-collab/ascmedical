@@ -311,9 +311,57 @@
 }
 
 .nav-tab-item.active {
+    font-weight: 600;
+}
+
+.nav-tab-item.active-patient-info {
     background: #e0f2fe;
     color: #0284c7;
-    font-weight: 600;
+}
+
+.nav-tab-item.active-financial {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.nav-tab-item.active-procedure-details {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+
+.nav-tab-item.active-scheduling {
+    background: #fff7ed;
+    color: #c2410c;
+}
+
+.nav-tab-item.active-implants {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.nav-tab-item.active-clinical {
+    background: #ccfbf1;
+    color: #0f766e;
+}
+
+.nav-tab-item.active-case-summary {
+    background: #ffe4e6;
+    color: #be123c;
+}
+
+.nav-tab-item.active-doc-management {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.nav-tab-item.active-comments {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.nav-tab-item.active-activity-logs {
+    background: #f1f5f9;
+    color: #334155;
 }
 
 /* KPI Cards */

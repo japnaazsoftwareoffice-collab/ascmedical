@@ -537,7 +537,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                                 {['patient-info', 'financial', 'procedure-details', 'scheduling', 'implants', 'clinical'].map(tab => (
                                     <button
                                         key={tab}
-                                        className={`nav-tab-item ${activeCaseTab === tab ? 'active' : ''}`}
+                                        className={`nav-tab-item ${activeCaseTab === tab ? `active active-${tab}` : ''}`}
                                         onClick={() => setActiveCaseTab(tab)}
                                     >
                                         {tab.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()).replace('Implants', 'Implants & Products')}
@@ -548,7 +548,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                                 {['case-summary', 'doc-management', 'comments', 'activity-logs'].map(tab => (
                                     <button
                                         key={tab}
-                                        className={`nav-tab-item ${activeCaseTab === tab ? 'active' : ''}`}
+                                        className={`nav-tab-item ${activeCaseTab === tab ? `active active-${tab}` : ''}`}
                                         onClick={() => setActiveCaseTab(tab)}
                                     >
                                         {tab.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
