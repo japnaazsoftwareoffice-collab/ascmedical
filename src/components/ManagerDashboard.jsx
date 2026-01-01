@@ -531,9 +531,9 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                 {currentView === 'case-navigation' && (
                     <div className="content-panel detail-view">
 
-                        {/* Top Navigation Tabs */}
+                        {/* Top Navigation Tabs - Two Rows */}
                         <div className="top-nav-tabs-container">
-                            <div className="nav-tabs-scroll">
+                            <div className="nav-row primary-row">
                                 {['patient-info', 'financial', 'procedure-details', 'scheduling', 'implants', 'clinical'].map(tab => (
                                     <button
                                         key={tab}
@@ -543,7 +543,8 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                                         {tab.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()).replace('Implants', 'Implants & Products')}
                                     </button>
                                 ))}
-                                <span className="nav-divider">|</span>
+                            </div>
+                            <div className="nav-row secondary-row">
                                 {['case-summary', 'doc-management', 'comments', 'activity-logs'].map(tab => (
                                     <button
                                         key={tab}
@@ -802,14 +803,14 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                             )}
 
                             {/* Footer (Always Visible in Detail View) */}
-                            <div style={{ marginTop: 'auto', paddingTop: '2rem', color: '#64748b', fontSize: '0.9rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div className="case-action-footer">
                                 <div>
-                                    <p><strong>Case ID:</strong> {selectedCase?.caseId || selectedCase?.id}</p>
-                                    <p><strong>Patient:</strong> {selectedCase?.patient}</p>
+                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}><strong>Case ID:</strong> {selectedCase?.caseId || selectedCase?.id}</p>
+                                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b' }}><strong>Patient:</strong> {selectedCase?.patient}</p>
                                 </div>
                                 <div>
-                                    <button className="cancel-case-btn" style={{ width: 'auto', display: 'inline-block', marginRight: '1rem', background: '#e2e8f0' }}>Cancel Case</button>
-                                    <button className="save-btn-primary">Save Changes</button>
+                                    <button className="cancel-case-btn" style={{ width: 'auto', display: 'inline-block', marginRight: '1rem', background: '#f1f5f9', padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: '500' }}>Cancel Case</button>
+                                    <button className="save-btn-primary" style={{ padding: '0.75rem 2rem', borderRadius: '8px' }}>Save Changes</button>
                                 </div>
                             </div>
 
