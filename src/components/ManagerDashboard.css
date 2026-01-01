@@ -5,6 +5,8 @@
     min-height: 100vh;
     background-color: #f8fafc;
     font-family: 'Inter', sans-serif;
+    color: #475569;
+    /* Dark slate base for all text */
 }
 
 /* Sidebar Styles */
@@ -326,30 +328,217 @@
 .kpi-card {
     background: white;
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1.25rem;
+    border-radius: 12px;
+    padding: 1.5rem;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.kpi-card.active-filter {
+    border-width: 2px !important;
+}
+
+/* All Cases Card Default */
+.kpi-card:not(.complete):not(.incomplete):not(.alert):not(.cancelled) {
+    background-color: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+/* Specific KPI Colors */
+.kpi-card.all.active-filter,
+.kpi-card:not(.complete):not(.incomplete):not(.alert):not(.cancelled).active-filter {
+    border-color: #3b82f6;
+    background-color: #eff6ff;
+}
+
+.kpi-card.complete {
+    background-color: #f0fdf4;
+    border-color: #dcfce7;
+}
+
+.kpi-card.complete.active-filter {
+    background-color: #f0fdf4;
+    border-color: #22c55e;
+}
+
+.kpi-card.complete .kpi-number {
+    color: #15803d;
+}
+
+.kpi-card.incomplete {
+    background-color: #eff6ff;
+    border-color: #dbeafe;
+}
+
+.kpi-card.incomplete.active-filter {
+    background-color: #eff6ff;
+    border-color: #3b82f6;
+}
+
+.kpi-card.incomplete .kpi-number {
+    color: #1e40af;
+}
+
+.kpi-card.alert {
+    background-color: #fef2f2;
+    border-color: #fee2e2;
+}
+
+.kpi-card.alert.active-filter {
+    background-color: #fef2f2;
+    border-color: #ef4444;
+}
+
+.kpi-card.alert .kpi-number {
+    color: #b91c1c;
+}
+
+.kpi-card.cancelled {
+    background-color: #f8fafc;
+    border-color: #f1f5f9;
+}
+
+.kpi-card.cancelled.active-filter {
+    background-color: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.kpi-card.cancelled .kpi-number {
+    color: #64748b;
 }
 
 .kpi-number {
-    font-size: 2rem;
+    font-size: 2.5rem;
     font-weight: 700;
     color: #334155;
+    line-height: 1;
 }
 
 .kpi-label {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.95rem;
+    font-weight: 600;
     color: #64748b;
+}
+
+.status-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-icon.complete {
+    background-color: #22c55e;
+}
+
+.status-icon.incomplete {
+    background-color: #3b82f6;
+}
+
+.status-icon.alert {
+    background-color: #ef4444;
+}
+
+.status-icon.cancelled {
+    background-color: #94a3b8;
+}
+
+
+
+/* Sidebar Header (Calendar Month/Year) */
+.sidebar-header {
+    padding-bottom: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    color: #0f172a !important;
+    font-size: 1.1rem !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.sidebar-header strong,
+.sidebar-header h3,
+.sidebar-header span {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+}
+
+.sidebar-header button {
+    color: #334155 !important;
+    font-weight: bold !important;
+}
+
+/* Sidebar Calendar Styles */
+.calendar-widget {
+    padding: 0 1rem;
+}
+
+.calendar-grid {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    grid-template-rows: auto;
+    gap: 4px;
+    width: 100%;
+    margin-top: 1rem;
+    align-items: center;
+    justify-items: center;
+}
+
+.cal-day-header {
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.75rem;
+    padding-bottom: 0.5rem;
+}
+
+.cal-day {
+    padding: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: #475569;
+    font-weight: 500;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    background: transparent;
+}
+
+.cal-day:hover {
+    background: #e2e8f0;
+}
+
+.cal-day.active {
+    background: #3b82f6;
+    color: white;
+    font-weight: 600;
+}
+
+.cal-day.empty {
+    cursor: default;
+}
+
+.cal-day.empty:hover {
+    background: transparent;
 }
 
 /* Table Styles */
