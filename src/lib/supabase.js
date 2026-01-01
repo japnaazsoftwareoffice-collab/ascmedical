@@ -582,6 +582,7 @@ export const db = {
             .subscribe();
     },
 
+
     // ==================== SETTINGS ====================
     async getSettings() {
         const { data, error } = await supabase
@@ -627,5 +628,52 @@ export const db = {
             if (error) throw error;
             return data;
         }
+    },
+
+    // ==================== ROLES & PERMISSIONS ====================
+    async getPermissions() {
+        const { data, error } = await supabase
+            .from('permissions')
+            .select('*')
+            .order('name', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getRolePermissions(role) {
+        const { data, error } = await supabase
+            .from('role_permissions')
+            .select('permission_id, permissions(name)')
+            .eq('role', role);
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async updateRolePermissions(role, permissionIds) {
+        // 1. Delete all existing permissions for this role
+        const { error: deleteError } = await supabase
+            .from('role_permissions')
+            .delete()
+            .eq('role', role);
+
+        if (deleteError) throw deleteError;
+
+        if (permissionIds.length === 0) return [];
+
+        // 2. Insert new permissions
+        const records = permissionIds.map(id => ({
+            role: role,
+            permission_id: id
+        }));
+
+        const { data, error: insertError } = await supabase
+            .from('role_permissions')
+            .insert(records)
+            .select();
+
+        if (insertError) throw insertError;
+        return data;
     }
 };

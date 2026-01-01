@@ -15,6 +15,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
                 { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management' },
                 { id: 'staff', icon: '👩‍⚕️', label: 'Nurses & Staff' },
                 { id: 'users', icon: '🔐', label: 'User Management' },
+                { id: 'roles-permissions', icon: '🛡️', label: 'Roles & Permissions' },
                 { id: 'analysis', icon: '🏥', label: 'OR Utilization' },
                 { id: 'scorecard', icon: '🎯', label: 'Surgeon Scorecard' },
                 { id: 'cpt', icon: '⚙️', label: 'CPT & Categories' },

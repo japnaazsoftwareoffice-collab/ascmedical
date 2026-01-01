@@ -20,6 +20,7 @@ import Settings from './components/Settings';
 import CPTAutoUpdate from './components/CPTAutoUpdate';
 import SurgeonScorecard from './components/SurgeonScorecard';
 import StaffManagement from './components/StaffManagement';
+import RolePermissionManagement from './components/RolePermissionManagement';
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
 import { calculateORCost, calculateMedicareRevenue, calculateLaborCost } from './utils/hospitalUtils';
@@ -43,6 +44,7 @@ function App() {
   const [orBlockSchedule, setOrBlockSchedule] = useState([]);
   const [staff, setStaff] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [userPermissions, setUserPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showAllCPTs, setShowAllCPTs] = useState(false); // Global toggle for CPT visibility
@@ -103,7 +105,7 @@ function App() {
       }
 
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData, staffData] = await Promise.all([
+      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData, staffData, permsData] = await Promise.all([
         db.getPatients(),
         db.getSurgeons(),
         db.getCPTCodes(),
@@ -113,7 +115,8 @@ function App() {
         db.getClaims ? db.getClaims() : Promise.resolve([]),
         db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([]),
         db.getSettings ? db.getSettings() : Promise.resolve(null),
-        db.getStaff ? db.getStaff() : Promise.resolve([])
+        db.getStaff ? db.getStaff() : Promise.resolve([]),
+        user ? db.getRolePermissions(user.role) : Promise.resolve([])
       ]);
 
       // Transform surgeons to add 'name' property
@@ -132,6 +135,13 @@ function App() {
       setOrBlockSchedule(orBlockScheduleData || []);
       setStaff(staffData || []);
       setSettings(settingsData);
+
+      if (user && user.role === 'admin') {
+        const allPerms = await db.getPermissions();
+        setUserPermissions(allPerms.map(p => p.name));
+      } else if (permsData) {
+        setUserPermissions(permsData.map(rp => rp.permissions?.name).filter(Boolean));
+      }
     } catch (err) {
       console.error('Error loading data:', err);
       // Fallback to mock data on error
@@ -952,6 +962,7 @@ function App() {
           onRefreshCPTCodes={loadAllData}
         />
       );
+      if (view === 'roles-permissions') return <RolePermissionManagement />;
       if (view === 'claims') return (
         <ClaimsManagement
           claims={claims}
