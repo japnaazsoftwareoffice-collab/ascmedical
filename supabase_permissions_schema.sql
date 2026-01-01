@@ -17,15 +17,23 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 
 -- Insert common permissions
 INSERT INTO permissions (name, description) VALUES
-('view_financial_analytics', 'View financial stats, revenue, and profit charts'),
+('view_financial_dashboard', 'View financial stats, revenue, and profit charts'),
 ('view_surgery_schedule', 'View the master surgery schedule calendar'),
-('view_work_queues', 'View administrative work queues (Insurance, CMS, etc.)'),
+('view_work_queues', 'View administrative work queues'),
 ('manage_users', 'Add, edit, or delete system users'),
 ('manage_surgeons', 'Add or edit surgeon profiles'),
 ('manage_patients', 'Access and edit master patient records'),
 ('manage_cpt_codes', 'View and edit CPT price list and categories'),
 ('edit_surgery_details', 'Modify surgery specific data like implants and products'),
-('view_claims', 'Access insurance claims management');
+('view_claims', 'Access insurance claims management'),
+('manage_surgeries', 'Access Surgery Log and OR scheduling'),
+('view_or_blocks', 'View and manage OR block schedule'),
+('manage_staff', 'Manage nurses and staff profiles'),
+('manage_permissions', 'Manage role-based permissions'),
+('view_analytics', 'View OR utilization and efficiency analytics'),
+('view_scorecards', 'View surgeon performance scorecards'),
+('use_auto_updater', 'Use CPT price auto-updater'),
+('manage_settings', 'Modify system-wide settings');
 
 -- Map permissions to roles
 -- ADMIN Permissions (Everything)

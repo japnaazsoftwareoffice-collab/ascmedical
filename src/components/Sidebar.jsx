@@ -1,27 +1,30 @@
 import React from 'react';
 import './Sidebar.css';
 
-const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
+const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }) => {
     // Define menu items based on user role
+    // Define all available menu items with their required permissions
+    const allMenuItems = [
+        { id: 'dashboard', icon: '📊', label: 'Financial Dashboard', permission: 'view_financial_dashboard' },
+        { id: 'register', icon: '👥', label: 'Patient Management', permission: 'manage_patients' },
+        { id: 'claims', icon: '📄', label: 'Claims Management', permission: 'view_claims' },
+        { id: 'scheduler', icon: '📅', label: 'Surgery Log & OR', permission: 'manage_surgeries' },
+        { id: 'or-schedule', icon: '🗓️', label: 'OR Block Schedule', permission: 'view_or_blocks' },
+        { id: 'surgery-schedule-sidebar', icon: '🗓️', label: 'Surgery Schedule', permission: 'view_surgery_schedule' },
+        { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management', permission: 'manage_surgeons' },
+        { id: 'staff', icon: '👩‍⚕️', label: 'Nurses & Staff', permission: 'manage_staff' },
+        { id: 'users', icon: '🔐', label: 'User Management', permission: 'manage_users' },
+        { id: 'roles-permissions', icon: '🛡️', label: 'Roles & Permissions', permission: 'manage_permissions' },
+        { id: 'analysis', icon: '🏥', label: 'OR Utilization', permission: 'view_analytics' },
+        { id: 'scorecard', icon: '🎯', label: 'Surgeon Scorecard', permission: 'view_scorecards' },
+        { id: 'cpt', icon: '⚙️', label: 'CPT & Categories', permission: 'manage_cpt_codes' },
+        { id: 'auto-cpt', icon: '🔄', label: 'CPT Auto-Updater', permission: 'use_auto_updater' },
+        { id: 'settings', icon: '🔧', label: 'Settings', permission: 'manage_settings' }
+    ];
+
     const getMenuItems = () => {
         if (user.role === 'admin') {
-            return [
-                { id: 'dashboard', icon: '📊', label: 'Financial Dashboard' },
-                { id: 'register', icon: '👥', label: 'Patient Management' },
-                { id: 'claims', icon: '📄', label: 'Claims Management' },
-                { id: 'scheduler', icon: '📅', label: 'Surgery Log & OR' },
-                { id: 'or-schedule', icon: '🗓️', label: 'OR Block Schedule' },
-                { id: 'surgery-schedule-sidebar', icon: '🗓️', label: 'Surgery Schedule' },
-                { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management' },
-                { id: 'staff', icon: '👩‍⚕️', label: 'Nurses & Staff' },
-                { id: 'users', icon: '🔐', label: 'User Management' },
-                { id: 'roles-permissions', icon: '🛡️', label: 'Roles & Permissions' },
-                { id: 'analysis', icon: '🏥', label: 'OR Utilization' },
-                { id: 'scorecard', icon: '🎯', label: 'Surgeon Scorecard' },
-                { id: 'cpt', icon: '⚙️', label: 'CPT & Categories' },
-                { id: 'auto-cpt', icon: '🔄', label: 'CPT Auto-Updater' },
-                { id: 'settings', icon: '🔧', label: 'Settings' }
-            ];
+            return allMenuItems;
         } else if (user.role === 'surgeon') {
             return [
                 { id: 'my-schedule', icon: '📅', label: 'My Schedule' },
@@ -34,6 +37,9 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
                 { id: 'my-surgeries', icon: '📋', label: 'My Surgeries' },
                 { id: 'my-bills', icon: '💰', label: 'Billing' }
             ];
+        } else if (user.role === 'manager') {
+            // Filter allMenuItems based on manager's permissions
+            return allMenuItems.filter(item => permissions.includes(item.permission));
         }
         return [];
     };
@@ -50,6 +56,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout }) => {
             <div className="user-profile">
                 <div className="user-avatar">
                     {user.role === 'admin' && '👨‍💼'}
+                    {user.role === 'manager' && '📋'}
                     {user.role === 'surgeon' && '👨‍⚕️'}
                     {user.role === 'patient' && '👤'}
                 </div>

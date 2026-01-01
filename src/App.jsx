@@ -21,6 +21,7 @@ import CPTAutoUpdate from './components/CPTAutoUpdate';
 import SurgeonScorecard from './components/SurgeonScorecard';
 import StaffManagement from './components/StaffManagement';
 import RolePermissionManagement from './components/RolePermissionManagement';
+
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
 import { calculateORCost, calculateMedicareRevenue, calculateLaborCost } from './utils/hospitalUtils';
@@ -907,12 +908,15 @@ function App() {
   const currentSurgeon = user.role === 'surgeon' ? surgeons.find(s => s.id === user.surgeon_id) : null;
   const patientSurgeries = user.role === 'patient' ? surgeries.filter(s => s.patient_id === user.patient_id) : surgeries;
 
-  // Render content based on user role
+  // Render content based on user role and permissions
   const renderContent = () => {
-    // Admin views
-    if (user.role === 'admin') {
-      if (view === 'dashboard') return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
-      if (view === 'register') return (
+    const hasPerm = (perm) => user.role === 'admin' || userPermissions.includes(perm);
+
+    // 1. Permission-based rendering (Unified for Admin & Manager)
+    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
+
+    if (view === 'register' && hasPerm('manage_patients')) {
+      return (
         <PatientManagement
           patients={patients}
           onAdd={handleAddPatient}
@@ -920,50 +924,10 @@ function App() {
           onDelete={handleDeletePatient}
         />
       );
-      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
-      if (view === 'surgeons') return (
-        <SurgeonManagement
-          surgeons={surgeons}
-          onAdd={handleAddSurgeon}
-          onUpdate={handleUpdateSurgeon}
-          onDelete={handleDeleteSurgeon}
-        />
-      );
-      if (view === 'staff') return (
-        <StaffManagement
-          staff={staff}
-          onAdd={handleAddStaff}
-          onUpdate={handleUpdateStaff}
-          onDelete={handleDeleteStaff}
-        />
-      );
-      if (view === 'analysis') return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} />;
-      if (view === 'scorecard') return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} />;
-      if (view === 'or-schedule') return <ORBlockSchedule surgeons={surgeons} />;
-      if (view === 'surgery-schedule-sidebar') return <SurgerySchedule surgeries={surgeries} />;
-      if (view === 'users') return (
-        <UserManagement
-          users={users}
-          patients={patients}
-          surgeons={surgeons}
-          onAdd={handleAddUser}
-          onUpdate={handleUpdateUser}
-          onDelete={handleDeleteUser}
-        />
-      );
-      if (view === 'cpt') return (
-        <CPTManager
-          cptCodes={cptCodes} // Pass ALL codes to manager so they can be edited back to active
-          showAllCPTs={showAllCPTs}
-          setShowAllCPTs={setShowAllCPTs}
-          onAddCPT={handleAddCPT}
-          onUpdateCPT={handleUpdateCPT}
-          onDeleteCPT={handleDeleteCPT}
-          onRefreshCPTCodes={loadAllData}
-        />
-      );
-      if (view === 'roles-permissions') return <RolePermissionManagement />;
-      if (view === 'claims') return (
+    }
+
+    if (view === 'claims' && hasPerm('view_claims')) {
+      return (
         <ClaimsManagement
           claims={claims}
           patients={patients}
@@ -980,22 +944,69 @@ function App() {
           }}
         />
       );
-      if (view === 'settings') return <Settings />;
-      if (view === 'auto-cpt') return <CPTAutoUpdate />;
     }
 
-    // Surgeon views
+    if (view === 'scheduler' && hasPerm('manage_surgeries')) {
+      return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
+    }
+
+    if (view === 'or-schedule' && hasPerm('view_or_blocks')) return <ORBlockSchedule surgeons={surgeons} />;
+
+    if (view === 'surgery-schedule-sidebar' && hasPerm('view_surgery_schedule')) {
+      return <SurgerySchedule surgeries={surgeries} />;
+    }
+
+    if (view === 'surgeons' && hasPerm('manage_surgeons')) {
+      return <SurgeonManagement surgeons={surgeons} onAdd={handleAddSurgeon} onUpdate={handleUpdateSurgeon} onDelete={handleDeleteSurgeon} />;
+    }
+
+    if (view === 'staff' && hasPerm('manage_staff')) {
+      return <StaffManagement staff={staff} onAdd={handleAddStaff} onUpdate={handleUpdateStaff} onDelete={handleDeleteStaff} />;
+    }
+
+    if (view === 'users' && hasPerm('manage_users')) {
+      return <UserManagement users={users} patients={patients} surgeons={surgeons} onAdd={handleAddUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} />;
+    }
+
+    if (view === 'roles-permissions' && hasPerm('manage_permissions')) return <RolePermissionManagement />;
+
+    if (view === 'analysis' && hasPerm('view_analytics')) return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} />;
+
+    if (view === 'scorecard' && hasPerm('view_scorecards')) return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} />;
+
+    if (view === 'cpt' && hasPerm('manage_cpt_codes')) {
+      return <CPTManager cptCodes={cptCodes} showAllCPTs={showAllCPTs} setShowAllCPTs={setShowAllCPTs} onAddCPT={handleAddCPT} onUpdateCPT={handleUpdateCPT} onDeleteCPT={handleDeleteCPT} onRefreshCPTCodes={loadAllData} />;
+    }
+
+    if (view === 'auto-cpt' && hasPerm('use_auto_updater')) return <CPTAutoUpdate />;
+
+    if (view === 'settings' && hasPerm('manage_settings')) return <Settings />;
+
+    // 2. Role-specific views (Surgeon/Patient)
+    // Surgeon
     if (user.role === 'surgeon') {
       if (view === 'my-schedule') return <SurgeonSchedule surgeries={surgeries} surgeon={currentSurgeon} patients={patients} cptCodes={filteredCptCodes} />;
       if (view === 'patients') return <SurgeonPatients patients={patients} surgeries={surgeries} surgeon={currentSurgeon} />;
       if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} onSchedule={handleScheduleSurgery} />;
     }
 
-    // Patient views
+    // Patient
     if (user.role === 'patient') {
       if (view === 'my-info') return <PatientInfo patient={currentPatient} />;
       if (view === 'my-surgeries') return <PatientSurgeries surgeries={patientSurgeries} cptCodes={filteredCptCodes} />;
       if (view === 'my-bills') return <PatientBilling billing={billing} surgeries={patientSurgeries} />;
+    }
+
+    // 3. Manager Landing View (Fallback if no permission matches or on default view)
+    if (user.role === 'manager' && (view === 'dashboard' || view === 'scheduler')) {
+      return (
+        <div className="placeholder-view" style={{ padding: '3rem', textAlign: 'center' }}>
+          <h2 style={{ color: '#1e293b', marginBottom: '1rem' }}>📋 Welcome to Case Manager Portal</h2>
+          <p style={{ color: '#64748b', fontSize: '1.1rem' }}>
+            Please select a module from the sidebar on the left to begin your workflow.
+          </p>
+        </div>
+      );
     }
 
     return <div className="placeholder-view">Page Not Found</div>;
@@ -1003,7 +1014,13 @@ function App() {
 
   return (
     <div className="app">
-      <Sidebar currentView={view} onViewChange={setView} user={user} onLogout={handleLogout} />
+      <Sidebar
+        currentView={view}
+        onViewChange={setView}
+        user={user}
+        onLogout={handleLogout}
+        permissions={userPermissions}
+      />
       <main className="main-content">
         {renderContent()}
       </main>
