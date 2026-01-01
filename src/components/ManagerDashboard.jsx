@@ -51,6 +51,19 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     };
 
+    // Helper to format patient name robustly
+    const formatPatientName = (patient) => {
+        if (!patient || !patient.id) return 'Unknown';
+        const last = patient.last_name || patient.lastname || '';
+        const first = patient.first_name || patient.firstname || '';
+        let name = 'Unknown';
+        if (last || first) name = `${last}, ${first}`;
+        else if (patient.name) name = patient.name;
+
+        if (name.trim() === ',') return 'Unknown';
+        return name;
+    };
+
     // 1. Process ALL Data for Schedule View first
     const allScheduleData = surgeries.map(s => {
         const patient = patients.find(p => String(p.id) === String(s.patient_id || s.patientId)) || {};
@@ -64,18 +77,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         else if (s.status === 'cancelled') statusStyle = 'cancelled';
         else if (!s.cpt_codes || s.cpt_codes.length === 0) statusStyle = 'alert';
 
-        // Robust Name Formatting
-        let patientName = 'Unknown';
-        if (patient.id) {
-            const last = patient.last_name || patient.lastname || '';
-            const first = patient.first_name || patient.firstname || '';
-            if (last || first) {
-                patientName = `${last}, ${first}`;
-            } else if (patient.name) {
-                patientName = patient.name;
-            }
-        }
-        if (patientName.trim() === ',') patientName = 'Unknown';
+        let patientName = formatPatientName(patient);
 
         return {
             id: s.id,
@@ -125,13 +127,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
         if (s.surgeons && s.surgeons.name) surgeonName = s.surgeons.name;
 
         // Robust Name Formatting
-        let patientName = 'Unknown';
-        if (patient.id) {
-            const last = patient.last_name || patient.lastname || '';
-            const first = patient.first_name || patient.firstname || '';
-            if (last) patientName = `${last}, ${first}`;
-            else if (patient.name) patientName = patient.name;
-        }
+        let patientName = formatPatientName(patient);
         if (patientName.trim() === ',') patientName = 'Unknown';
 
         return {
@@ -444,8 +440,8 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {finalDisplayData.length > 0 ? finalDisplayData.map((row, idx) => (
-                                        <tr key={idx} className="clickable-row">
+                                    {finalDisplayData.length > 0 ? finalDisplayData.map((row) => (
+                                        <tr key={row.id} className="clickable-row">
                                             <td style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                                 <span className={`status-icon ${row.status}`}></span>
                                                 {row.time}
