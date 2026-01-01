@@ -86,7 +86,7 @@ function App() {
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
         // No database configured - use mock data
         console.log('No database configured. Using mock data.');
-        const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES } = await import('./data/mockData');
+        const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES, INITIAL_SURGERIES } = await import('./data/mockData');
 
         // Transform surgeons to add 'name' property
         const surgeonsWithNames = (INITIAL_SURGEONS || []).map(surgeon => ({
@@ -97,7 +97,7 @@ function App() {
         setPatients(INITIAL_PATIENTS || []);
         setSurgeons(surgeonsWithNames);
         setCptCodes(CPT_CODES || []);
-        setSurgeries([]);
+        setSurgeries(INITIAL_SURGERIES || []);
         setBilling([]);
         setLoading(false);
         return;
@@ -123,10 +123,22 @@ function App() {
         name: surgeon.name || `${surgeon.firstname || surgeon.first_name || ''} ${surgeon.lastname || surgeon.last_name || ''}`.trim()
       }));
 
-      setPatients(patientsData);
+      // Import Mock Data for "Demo/Mixed" Mode to ensure current month has data
+      const { INITIAL_PATIENTS, INITIAL_SURGERIES } = await import('./data/mockData');
+
+      const mockPatients = INITIAL_PATIENTS.map(p => ({ ...p, id: `mock-p-${p.id}` }));
+      const mockSurgeries = INITIAL_SURGERIES.map(s => ({
+        ...s,
+        id: `mock-s-${s.id}`,
+        patientId: `mock-p-${s.patientId}`,
+        patient_id: `mock-p-${s.patientId}`, // Ensure compatibility
+        status: 'scheduled' // Ensure they show up as scheduled/incomplete
+      }));
+
+      setPatients([...patientsData, ...mockPatients]);
       setSurgeons(surgeonsWithNames);
       setCptCodes(cptCodesData);
-      setSurgeries(surgeriesData);
+      setSurgeries([...surgeriesData, ...mockSurgeries]);
       setBilling(billingData);
       setUsers(usersData);
       setClaims(claimsData || []);
@@ -137,7 +149,7 @@ function App() {
       console.error('Error loading data:', err);
       // Fallback to mock data on error
       console.log('Database error. Falling back to mock data.');
-      const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES } = await import('./data/mockData');
+      const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES, INITIAL_SURGERIES } = await import('./data/mockData');
 
       // Transform surgeons to add 'name' property
       const surgeonsWithNames = (INITIAL_SURGEONS || []).map(surgeon => ({
@@ -148,7 +160,7 @@ function App() {
       setPatients(INITIAL_PATIENTS || []);
       setSurgeons(surgeonsWithNames);
       setCptCodes(CPT_CODES || []);
-      setSurgeries([]);
+      setSurgeries(INITIAL_SURGERIES || []);
       setBilling([]);
       setError(null); // Clear error since we're using fallback
     } finally {

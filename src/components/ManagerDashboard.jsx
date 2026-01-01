@@ -9,7 +9,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
     // Filter States
     const [viewDate, setViewDate] = useState(new Date()); // Calendar Month View
     const [activeDate, setActiveDate] = useState(new Date()); // Selected Specific Day
-    const [viewMode, setViewMode] = useState('month'); // Default to 'month' to show all data initially
+    const [viewMode, setViewMode] = useState('all'); // Default to 'all' to show all data initially
     const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'complete', 'incomplete', 'alert', 'cancelled'
 
     // Case Navigation Tab State
@@ -93,6 +93,7 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
 
     // 2. Filter Data based on Time (Day vs Month)
     const timeFilteredData = allScheduleData.filter(item => {
+        if (viewMode === 'all') return true;
         if (viewMode === 'day') {
             return getNormalizedDate(item.rawDate) === getNormalizedDate(activeDate);
         } else {
@@ -376,15 +377,56 @@ const ManagerDashboard = ({ surgeries = [], patients = [], onLogout, user }) => 
                         </div>
 
                         <div className="table-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={viewMode === 'month'}
-                                    onChange={(e) => setViewMode(e.target.checked ? 'month' : 'day')}
-                                    style={{ accentColor: '#3b82f6' }}
-                                />
-                                <span style={{ color: '#64748b' }}>Month View</span>
-                            </label>
+                            <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px', gap: '4px' }}>
+                                <button
+                                    onClick={() => setViewMode('all')}
+                                    style={{
+                                        border: 'none',
+                                        background: viewMode === 'all' ? 'white' : 'transparent',
+                                        color: viewMode === 'all' ? '#3b82f6' : '#64748b',
+                                        padding: '4px 12px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.9rem',
+                                        fontWeight: '500',
+                                        cursor: 'pointer',
+                                        boxShadow: viewMode === 'all' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >
+                                    All
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('month')}
+                                    style={{
+                                        border: 'none',
+                                        background: viewMode === 'month' ? 'white' : 'transparent',
+                                        color: viewMode === 'month' ? '#3b82f6' : '#64748b',
+                                        padding: '4px 12px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.9rem',
+                                        fontWeight: '500',
+                                        cursor: 'pointer',
+                                        boxShadow: viewMode === 'month' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >
+                                    Month
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('day')}
+                                    style={{
+                                        border: 'none',
+                                        background: viewMode === 'day' ? 'white' : 'transparent',
+                                        color: viewMode === 'day' ? '#3b82f6' : '#64748b',
+                                        padding: '4px 12px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.9rem',
+                                        fontWeight: '500',
+                                        cursor: 'pointer',
+                                        boxShadow: viewMode === 'day' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                                    }}
+                                >
+                                    Day
+                                </button>
+                            </div>
                             {/* Explicit Day View indicator if needed, or just rely on the toggle state */}
                             {viewMode === 'day' && <span style={{ fontSize: '0.9rem', color: '#3b82f6', fontWeight: '600' }}>Day View Active ({activeDate.toLocaleDateString()})</span>}
                         </div>
