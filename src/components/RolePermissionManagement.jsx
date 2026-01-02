@@ -46,7 +46,7 @@ const RolePermissionManagement = () => {
     };
 
     const handleTogglePermission = (permissionId) => {
-        if (selectedRole === 'admin') return; // Admin always has all permissions
+        // Allow editing all roles, including admin
 
         setRolePermissions(prev =>
             prev.includes(permissionId)
@@ -56,11 +56,6 @@ const RolePermissionManagement = () => {
     };
 
     const handleSave = async () => {
-        if (selectedRole === 'admin') {
-            Swal.fire('Notice', 'Admin role permissions are managed automatically.', 'info');
-            return;
-        }
-
         try {
             setSaving(true);
             await db.updateRolePermissions(selectedRole, rolePermissions);
@@ -101,26 +96,22 @@ const RolePermissionManagement = () => {
                 <div className="permissions-card">
                     <div className="card-header">
                         <h3>{selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)} Permissions</h3>
-                        {selectedRole === 'admin' ? (
-                            <span className="info-badge">Admins have full access by default</span>
-                        ) : (
-                            <button
-                                className="save-btn"
-                                onClick={handleSave}
-                                disabled={saving}
-                            >
-                                {saving ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        )}
+                        <button
+                            className="save-btn"
+                            onClick={handleSave}
+                            disabled={saving}
+                        >
+                            {saving ? 'Saving...' : 'Save Changes'}
+                        </button>
                     </div>
 
                     <div className="permissions-grid">
                         {permissions.map(perm => {
-                            const isChecked = selectedRole === 'admin' || rolePermissions.includes(perm.id);
+                            const isChecked = rolePermissions.includes(perm.id);
                             return (
                                 <div
                                     key={perm.id}
-                                    className={`permission-item ${isChecked ? 'checked' : ''} ${selectedRole === 'admin' ? 'disabled' : ''}`}
+                                    className={`permission-item ${isChecked ? 'checked' : ''}`}
                                     onClick={() => handleTogglePermission(perm.id)}
                                 >
                                     <div className="checkbox-wrapper">

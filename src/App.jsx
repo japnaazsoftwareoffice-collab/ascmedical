@@ -21,6 +21,7 @@ import CPTAutoUpdate from './components/CPTAutoUpdate';
 import SurgeonScorecard from './components/SurgeonScorecard';
 import StaffManagement from './components/StaffManagement';
 import RolePermissionManagement from './components/RolePermissionManagement';
+import ManagerDashboard from './components/ManagerDashboard';
 
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
@@ -71,6 +72,8 @@ function App() {
         setView('dashboard');
       } else if (user.role === 'surgeon') {
         setView('my-schedule');
+      } else if (user.role === 'manager') {
+        setView('manager-dashboard');
       } else if (user.role === 'patient') {
         setView('my-info');
       }
@@ -137,10 +140,8 @@ function App() {
       setStaff(staffData || []);
       setSettings(settingsData);
 
-      if (user && user.role === 'admin') {
-        const allPerms = await db.getPermissions();
-        setUserPermissions(allPerms.map(p => p.name));
-      } else if (permsData) {
+      if (user) {
+        // Use permissions from role_permissions table for all roles
         setUserPermissions(permsData.map(rp => rp.permissions?.name).filter(Boolean));
       }
     } catch (err) {
@@ -914,6 +915,11 @@ function App() {
 
     // 1. Permission-based rendering (Unified for Admin & Manager)
     if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
+
+    // Manager Dashboard - Check permission
+    if (view === 'manager-dashboard' && (user.role === 'manager' || hasPerm('view_manager_dashboard'))) {
+      return <ManagerDashboard surgeries={surgeries} patients={patients} surgeons={surgeons} orBlockSchedule={orBlockSchedule} />;
+    }
 
     if (view === 'register' && hasPerm('manage_patients')) {
       return (

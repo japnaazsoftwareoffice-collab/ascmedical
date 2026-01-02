@@ -6,6 +6,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
     // Define all available menu items with their required permissions
     const allMenuItems = [
         { id: 'dashboard', icon: '📊', label: 'Financial Dashboard', permission: 'view_financial_dashboard' },
+        { id: 'manager-dashboard', icon: '📋', label: 'Manager Dashboard', permission: 'view_manager_dashboard' },
         { id: 'register', icon: '👥', label: 'Patient Management', permission: 'manage_patients' },
         { id: 'claims', icon: '📄', label: 'Claims Management', permission: 'view_claims' },
         { id: 'scheduler', icon: '📅', label: 'Surgery Log & OR', permission: 'manage_surgeries' },
@@ -24,7 +25,8 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
 
     const getMenuItems = () => {
         if (user.role === 'admin') {
-            return allMenuItems;
+            // Admins see everything that they have permissions for
+            return allMenuItems.filter(item => !item.permission || permissions.includes(item.permission));
         } else if (user.role === 'surgeon') {
             return [
                 { id: 'my-schedule', icon: '📅', label: 'My Schedule' },
@@ -39,7 +41,13 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
             ];
         } else if (user.role === 'manager') {
             // Filter allMenuItems based on manager's permissions
-            return allMenuItems.filter(item => permissions.includes(item.permission));
+            const items = allMenuItems.filter(item => permissions.includes(item.permission));
+            // Ensure Manager Dashboard is always visible for managers
+            if (!items.find(i => i.id === 'manager-dashboard')) {
+                const managerDashboardItem = allMenuItems.find(i => i.id === 'manager-dashboard');
+                if (managerDashboardItem) items.unshift(managerDashboardItem);
+            }
+            return items;
         }
         return [];
     };
