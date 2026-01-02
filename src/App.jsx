@@ -918,7 +918,7 @@ function App() {
 
     // Manager Dashboard - Check permission
     if (view === 'manager-dashboard' && (user.role === 'manager' || hasPerm('view_manager_dashboard'))) {
-      return <ManagerDashboard surgeries={surgeries} patients={patients} surgeons={surgeons} orBlockSchedule={orBlockSchedule} />;
+      return <ManagerDashboard surgeries={surgeries} patients={patients} surgeons={surgeons} orBlockSchedule={orBlockSchedule} billing={billing} claims={claims} />;
     }
 
     if (view === 'register' && hasPerm('manage_patients')) {
