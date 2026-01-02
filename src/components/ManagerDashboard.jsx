@@ -329,6 +329,7 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
                         min-height: calc(100vh - 40px);
                         display: flex;
                         flex-direction: column;
+                        font-family: 'Inter', sans-serif;
                     }
                     .case-detail-header {
                         background: white;
@@ -336,114 +337,148 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
                         border-bottom: 1px solid #e2e8f0;
                         display: flex;
                         flex-direction: column;
-                        gap: 1rem;
+                        gap: 1.25rem;
+                        position: sticky;
+                        top: 0;
+                        z-index: 100;
+                        box-shadow: 0 4px 6px -4px rgba(0,0,0,0.05);
                     }
                     .btn-back {
-                        background: none;
-                        border: none;
-                        color: #3b82f6;
+                        background: #f1f5f9;
+                        border: 1px solid #e2e8f0;
+                        color: #64748b;
                         font-weight: 600;
                         cursor: pointer;
-                        font-size: 0.9rem;
+                        font-size: 0.85rem;
+                        padding: 0.5rem 1rem;
+                        border-radius: 50px;
                         width: fit-content;
+                        transition: all 0.2s;
+                    }
+                    .btn-back:hover {
+                        background: #e2e8f0;
+                        color: #1e293b;
                     }
                     .case-tabs {
                         display: flex;
                         gap: 0.5rem;
-                        flex-wrap: wrap;
+                        overflow-x: auto;
+                        padding: 0.4rem;
+                        background: #f8fafc;
+                        border-radius: 12px;
+                        border: 1px solid #e2e8f0;
+                        scrollbar-width: none; /* Firefox */
+                    }
+                    .case-tabs::-webkit-scrollbar {
+                        display: none; /* Chrome/Safari */
                     }
                     .case-tab-btn {
-                        padding: 0.5rem 1rem;
+                        padding: 0.6rem 1.25rem;
                         border: none;
-                        background: none;
+                        background: transparent;
                         color: #64748b;
-                        font-size: 0.9rem;
-                        font-weight: 500;
+                        font-size: 0.85rem;
+                        font-weight: 600;
                         cursor: pointer;
-                        border-radius: 6px;
-                        transition: all 0.2s;
+                        border-radius: 8px;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        white-space: nowrap;
                     }
                     .case-tab-btn:hover {
-                        background: #f1f5f9;
+                        background: rgba(255,255,255,0.8);
                         color: #1e293b;
+                        transform: translateY(-1px);
                     }
                     .case-tab-btn.active {
-                        background: #dbeafe;
-                        color: #1e40af;
+                        background: white;
+                        color: #059669;
+                        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15);
+                        transform: translateY(-1px);
                     }
                     .case-detail-content {
                         flex: 1;
-                        padding: 2rem;
+                        padding: 1.5rem;
                         overflow-y: auto;
                     }
                     .tab-pane {
                         background: white;
-                        border-radius: 12px;
-                        padding: 2.5rem;
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                        border-radius: 16px;
+                        padding: 1.5rem 2rem;
+                        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
                         max-width: 1000px;
                         margin: 0 auto;
+                        border: 1px solid #e2e8f0;
                     }
                     .section-title {
-                        font-size: 1.5rem;
+                        font-size: 1.25rem;
                         color: #1e293b;
-                        margin-bottom: 2.5rem;
-                        border-left: 4px solid #3b82f6;
+                        margin-bottom: 1.5rem;
+                        border-left: 4px solid #059669;
                         padding-left: 1rem;
+                        display: flex;
+                        align-items: center;
+                        font-weight: 700;
                     }
                     .detail-grid {
                         display: grid;
                         grid-template-columns: 1fr 1fr;
-                        gap: 2.5rem;
+                        gap: 1.25rem 2rem;
                     }
                     .detail-item {
                         display: flex;
                         flex-direction: column;
-                        gap: 0.75rem;
+                        gap: 0.4rem;
                     }
                     .detail-item label {
-                        font-size: 0.7rem;
+                        font-size: 0.65rem;
                         font-weight: 700;
                         color: #94a3b8;
-                        letter-spacing: 0.05em;
+                        letter-spacing: 0.075em;
                         text-transform: uppercase;
                     }
                     .detail-value-box {
                         background: #f8fafc;
                         border: 1px solid #e2e8f0;
                         border-radius: 8px;
-                        padding: 1.25rem;
-                        color: #1e293b;
-                        font-weight: 600;
-                        min-height: 56px;
+                        padding: 0.6rem 1rem;
+                        color: #334155;
+                        font-weight: 500;
+                        min-height: 42px;
                         display: flex;
                         align-items: center;
-                        font-size: 1.1rem;
+                        font-size: 0.95rem;
+                        transition: border-color 0.2s;
+                    }
+                    .detail-value-box:hover {
+                        border-color: #cbd5e1;
                     }
                     .highlight-value {
-                        color: #10b981;
-                        font-size: 1.5rem;
+                        color: #059669;
+                        font-size: 1.25rem;
+                        font-weight: 800;
                     }
                     .status-box {
                         justify-content: center;
                         text-transform: uppercase;
-                        font-size: 0.9rem;
-                        letter-spacing: 1px;
+                        font-size: 0.75rem;
+                        letter-spacing: 0.5px;
+                        font-weight: 700;
                     }
                     .status-box.pending { background: #fff7ed; color: #c2410c; border-color: #ffedd5; }
                     .status-box.completed, .status-box.confirmed { background: #f0fdf4; color: #15803d; border-color: #dcfce7; }
                     .cpt-tag {
-                        padding: 0.4rem 0.8rem;
-                        background: #eff6ff;
-                        color: #2563eb;
-                        border-radius: 4px;
-                        font-size: 0.85rem;
+                        padding: 0.25rem 0.6rem;
+                        background: #ecfdf5;
+                        color: #059669;
+                        border-radius: 6px;
+                        font-size: 0.75rem;
                         font-weight: 700;
+                        border: 1px solid #d1fae5;
                     }
                     .case-detail-footer {
                         background: white;
                         border-top: 1px solid #e2e8f0;
-                        padding: 1.5rem 3rem;
+                        padding: 1rem 3rem;
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
@@ -453,46 +488,48 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
                         gap: 1.5rem;
                         align-items: center;
                         color: #1e293b;
-                        font-size: 1.1rem;
+                        font-size: 0.95rem;
                     }
                     .footer-actions {
                         display: flex;
-                        gap: 1.2rem;
+                        gap: 1rem;
                     }
                     .btn-cancel-case {
-                        padding: 0.75rem 2rem;
-                        background: #f1f5f9;
+                        padding: 0.6rem 1.5rem;
+                        background: #fff;
                         border: 1px solid #e2e8f0;
                         border-radius: 8px;
-                        color: #475569;
+                        color: #64748b;
                         font-weight: 600;
                         cursor: pointer;
                         transition: all 0.2s;
+                        font-size: 0.85rem;
                     }
                     .btn-cancel-case:hover {
-                        background: #fee2e2;
+                        background: #fef2f2;
                         color: #ef4444;
                         border-color: #fecaca;
                     }
                     .btn-save-changes {
-                        padding: 0.75rem 2.5rem;
-                        background: #10b981;
+                        padding: 0.6rem 2rem;
+                        background: #059669;
                         border: none;
                         border-radius: 8px;
                         color: white;
                         font-weight: 600;
                         cursor: pointer;
-                        box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
+                        box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.4);
                         transition: all 0.2s;
+                        font-size: 0.85rem;
                     }
                     .btn-save-changes:hover {
-                        background: #059669;
+                        background: #047857;
                         transform: translateY(-2px);
-                        box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.4);
+                        box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.4);
                     }
                     .empty-pane {
                         text-align: center;
-                        padding: 8rem 2rem !important;
+                        padding: 4rem 2rem !important;
                         color: #64748b;
                     }
                 `}} />
