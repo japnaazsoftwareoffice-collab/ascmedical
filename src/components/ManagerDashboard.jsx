@@ -1,7 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import './Dashboard.css'; // Reuse some dashboard styles
 
 const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const [filter, setFilter] = useState('all'); // all, today, pending, completed, alerts
+    const recordsPerPage = 10;
+
     // Calculate Manager-specific KPIs
     const kpis = useMemo(() => {
         const today = new Date().toISOString().split('T')[0];
@@ -11,26 +15,66 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
         const completedSurgeries = surgeries.filter(s => s.status === 'completed');
 
         // Find cases with missing info (e.g., no CPT codes or empty notes)
-        const alerts = surgeries.filter(s =>
+        const alertCases = surgeries.filter(s =>
             s.status === 'scheduled' &&
             (!s.cpt_codes || s.cpt_codes.length === 0 || !s.doctor_name)
-        ).length;
+        );
 
         return {
             todayCount: todaySurgeries.length,
             pendingCount: pendingSurgeries.length,
             completedCount: completedSurgeries.length,
-            alerts
+            alertsCount: alertCases.length
         };
     }, [surgeries]);
 
-    // Get today's schedule
-    const todaySchedule = useMemo(() => {
+    // Apply Filter and Sort
+    const filteredSurgeries = useMemo(() => {
+        let result = [...surgeries];
         const today = new Date().toISOString().split('T')[0];
-        return surgeries
-            .filter(s => s.date === today)
-            .sort((a, b) => a.start_time.localeCompare(b.start_time));
-    }, [surgeries]);
+
+        if (filter === 'today') {
+            result = result.filter(s => s.date === today);
+        } else if (filter === 'pending') {
+            result = result.filter(s => s.status === 'scheduled');
+        } else if (filter === 'completed') {
+            result = result.filter(s => s.status === 'completed');
+        } else if (filter === 'alerts') {
+            result = result.filter(s =>
+                s.status === 'scheduled' &&
+                (!s.cpt_codes || s.cpt_codes.length === 0 || !s.doctor_name)
+            );
+        }
+
+        return result.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            if (dateA - dateB !== 0) return dateB - dateA; // Most recent first
+            return a.start_time.localeCompare(b.start_time);
+        });
+    }, [surgeries, filter]);
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredSurgeries.length / recordsPerPage);
+    const paginatedSurgeries = useMemo(() => {
+        const startIndex = (currentPage - 1) * recordsPerPage;
+        return filteredSurgeries.slice(startIndex, startIndex + recordsPerPage);
+    }, [filteredSurgeries, currentPage]);
+
+    const handlePageChange = (newPage) => {
+        if (newPage >= 1 && newPage <= totalPages) {
+            setCurrentPage(newPage);
+        }
+    };
+
+    const handleFilterToggle = (newFilter) => {
+        if (filter === newFilter) {
+            setFilter('all');
+        } else {
+            setFilter(newFilter);
+        }
+        setCurrentPage(1); // Reset to first page when filter changes
+    };
 
     return (
         <div className="dashboard fade-in">
@@ -39,12 +83,22 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                     <h2 className="page-title">Manager Dashboard</h2>
                     <p className="subtitle">Operational Overview & Case Management</p>
                 </div>
+                {filter !== 'all' && (
+                    <div className="header-actions">
+                        <button className="btn-action" onClick={() => setFilter('all')}>
+                            Clear Filter: {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="dashboard-content">
                 {/* KPI Row */}
                 <div className="stats-hero">
-                    <div className="hero-card revenue-hero">
+                    <div
+                        className={`hero-card revenue-hero clickable ${filter === 'today' ? 'active-filter' : ''}`}
+                        onClick={() => handleFilterToggle('today')}
+                    >
                         <div className="hero-icon-wrapper">
                             <span className="hero-icon">📅</span>
                         </div>
@@ -56,7 +110,10 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                         <div className="hero-bg-pattern"></div>
                     </div>
 
-                    <div className="hero-card profit-hero">
+                    <div
+                        className={`hero-card profit-hero clickable ${filter === 'pending' ? 'active-filter' : ''}`}
+                        onClick={() => handleFilterToggle('pending')}
+                    >
                         <div className="hero-icon-wrapper">
                             <span className="hero-icon">⏳</span>
                         </div>
@@ -69,93 +126,131 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                     </div>
 
                     <div className="mini-stats-column">
-                        <div className="mini-stat-card">
+                        <div
+                            className={`mini-stat-card clickable ${filter === 'completed' ? 'active-filter' : ''}`}
+                            onClick={() => handleFilterToggle('completed')}
+                        >
                             <div className="mini-stat-icon cases">✅</div>
                             <div className="mini-stat-info">
                                 <span className="mini-stat-label">Completed</span>
                                 <span className="mini-stat-value">{kpis.completedCount}</span>
                             </div>
                         </div>
-                        <div className="mini-stat-card">
+                        <div
+                            className={`mini-stat-card clickable ${filter === 'alerts' ? 'active-filter' : ''}`}
+                            onClick={() => handleFilterToggle('alerts')}
+                        >
                             <div className="mini-stat-icon cost">⚠️</div>
                             <div className="mini-stat-info">
                                 <span className="mini-stat-label">Alerts</span>
-                                <span className="mini-stat-value">{kpis.alerts}</span>
+                                <span className="mini-stat-value">{kpis.alertsCount}</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="dashboard-grid">
-                    {/* Today's Schedule Card */}
-                    <div className="chart-card wide-chart">
+                <div className="dashboard-grid full-width-grid">
+                    {/* Surgery Schedule Card - Full Width */}
+                    <div className="chart-card full-width-card">
                         <div className="chart-header">
-                            <h3>Today's Surgery Schedule</h3>
-                        </div>
-                        <div className="table-responsive" style={{ padding: '1rem' }}>
-                            {todaySchedule.length === 0 ? (
-                                <div className="empty-state" style={{ textAlign: 'center', padding: '2rem' }}>
-                                    <p>No surgeries scheduled for today.</p>
-                                </div>
-                            ) : (
-                                <table className="management-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead>
-                                        <tr style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={{ padding: '0.75rem' }}>Time</th>
-                                            <th style={{ padding: '0.75rem' }}>Patient</th>
-                                            <th style={{ padding: '0.75rem' }}>Surgeon</th>
-                                            <th style={{ padding: '0.75rem' }}>Procedure</th>
-                                            <th style={{ padding: '0.75rem' }}>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {todaySchedule.map(s => (
-                                            <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '0.75rem' }}>{s.start_time}</td>
-                                                <td style={{ padding: '0.75rem' }}>{s.patients?.name || 'Unknown'}</td>
-                                                <td style={{ padding: '0.75rem' }}>{s.doctor_name}</td>
-                                                <td style={{ padding: '0.75rem' }}>
-                                                    {s.cpt_codes?.slice(0, 2).join(', ') || 'General'}
-                                                    {s.cpt_codes?.length > 2 ? '...' : ''}
-                                                </td>
-                                                <td style={{ padding: '0.75rem' }}>
-                                                    <span className={`status-badge ${s.status}`}>
-                                                        {s.status}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Quick Stats / Info */}
-                    <div className="chart-card">
-                        <div className="chart-header">
-                            <h3>Manager Alerts</h3>
-                        </div>
-                        <div className="alerts-list" style={{ padding: '1rem' }}>
-                            {kpis.alerts > 0 ? (
-                                <div className="alert-item" style={{ background: '#fef2f2', borderLeft: '4px solid #ef4444', padding: '1rem', borderRadius: '4px', marginBottom: '1rem' }}>
-                                    <strong style={{ color: '#991b1b' }}>Information Missing</strong>
-                                    <p style={{ margin: '0.25rem 0 0', color: '#b91c1c', fontSize: '0.9rem' }}>
-                                        {kpis.alerts} scheduled cases are missing CPT codes or details.
-                                    </p>
-                                </div>
-                            ) : (
-                                <p style={{ color: '#64748b', fontSize: '0.9rem' }}>No urgent alerts found.</p>
-                            )}
-
-                            <div className="quick-info" style={{ marginTop: '1.5rem' }}>
-                                <h4 style={{ fontSize: '0.9rem', color: '#1e293b', marginBottom: '0.5rem' }}>Recent Summary</h4>
-                                <ul style={{ listStyle: 'none', padding: 0, fontSize: '0.9rem', color: '#64748b' }}>
-                                    <li style={{ marginBottom: '0.5rem' }}>• Total Patients: {patients.length}</li>
-                                    <li style={{ marginBottom: '0.5rem' }}>• Active Surgeons: {surgeons.length}</li>
-                                    <li style={{ marginBottom: '0.5rem' }}>• Block Schedule Active</li>
-                                </ul>
+                            <h3>
+                                {filter === 'all' ? 'Surgery Schedule' : `${filter.charAt(0).toUpperCase() + filter.slice(1)} Cases`}
+                            </h3>
+                            <div className="pagination-info">
+                                Showing {filteredSurgeries.length > 0 ? ((currentPage - 1) * recordsPerPage) + 1 : 0} - {Math.min(currentPage * recordsPerPage, filteredSurgeries.length)} of {filteredSurgeries.length}
                             </div>
+                        </div>
+                        <div className="table-container" style={{ padding: '1rem' }}>
+                            {filteredSurgeries.length === 0 ? (
+                                <div className="empty-state" style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '5rem 2rem',
+                                    minHeight: '200px'
+                                }}>
+                                    <p style={{ color: '#64748b', fontSize: '1.1rem', marginBottom: '1.5rem' }}>No surgeries found for the selected filter.</p>
+                                    <button className="btn-action" style={{ padding: '0.75rem 2rem', background: '#3b82f6', color: 'white', border: 'none' }} onClick={() => setFilter('all')}>
+                                        Show All Surgeries
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="table-responsive">
+                                        <table className="management-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr style={{ textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>
+                                                    <th style={{ padding: '0.75rem' }}>Date</th>
+                                                    <th style={{ padding: '0.75rem' }}>Time</th>
+                                                    <th style={{ padding: '0.75rem' }}>Patient</th>
+                                                    <th style={{ padding: '0.75rem' }}>Surgeon</th>
+                                                    <th style={{ padding: '0.75rem' }}>Procedure</th>
+                                                    <th style={{ padding: '0.75rem' }}>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paginatedSurgeries.map(s => (
+                                                    <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                        <td style={{ padding: '0.75rem' }}>{s.date}</td>
+                                                        <td style={{ padding: '0.75rem' }}>{s.start_time}</td>
+                                                        <td style={{ padding: '0.75rem' }}>{s.patients?.name || 'Unknown'}</td>
+                                                        <td style={{ padding: '0.75rem' }}>{s.doctor_name}</td>
+                                                        <td style={{ padding: '0.75rem' }}>
+                                                            {s.cpt_codes?.slice(0, 2).join(', ') || 'General'}
+                                                            {s.cpt_codes?.length > 2 ? '...' : ''}
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem' }}>
+                                                            <span className={`status-badge ${s.status}`}>
+                                                                {s.status}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Pagination Controls */}
+                                    {totalPages > 1 && (
+                                        <div className="pagination-controls">
+                                            <button
+                                                className="pagination-btn"
+                                                onClick={() => handlePageChange(currentPage - 1)}
+                                                disabled={currentPage === 1}
+                                            >
+                                                Previous
+                                            </button>
+                                            <div className="page-numbers">
+                                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                                    let pageNum;
+                                                    if (totalPages <= 5) pageNum = i + 1;
+                                                    else if (currentPage <= 3) pageNum = i + 1;
+                                                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                                                    else pageNum = currentPage - 2 + i;
+
+                                                    return (
+                                                        <button
+                                                            key={pageNum}
+                                                            className={`page-num ${currentPage === pageNum ? 'active' : ''}`}
+                                                            onClick={() => handlePageChange(pageNum)}
+                                                        >
+                                                            {pageNum}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <button
+                                                className="pagination-btn"
+                                                onClick={() => handlePageChange(currentPage + 1)}
+                                                disabled={currentPage === totalPages}
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -163,6 +258,13 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
 
             <style dangerouslySetInnerHTML={{
                 __html: `
+                .full-width-grid {
+                    display: block !important;
+                }
+                .full-width-card {
+                    width: 100% !important;
+                    margin-bottom: 2rem;
+                }
                 .status-badge {
                     padding: 4px 8px;
                     border-radius: 4px;
@@ -174,6 +276,101 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                 .status-badge.completed { background: #d1fae5; color: #065f46; }
                 .status-badge.cancelled { background: #fee2e2; color: #991b1b; }
                 .status-badge.in-progress { background: #fef3c7; color: #92400e; }
+                
+                .clickable {
+                    cursor: pointer;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                }
+                .clickable:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                }
+                .active-filter {
+                    border: 2px solid #3b82f6 !important;
+                    transform: translateY(-4px);
+                    box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2);
+                }
+                
+                .pagination-controls {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 1rem;
+                    margin-top: 1.5rem;
+                    padding-top: 1rem;
+                    border-top: 1px solid #f1f5f9;
+                }
+                .pagination-btn {
+                    padding: 0.5rem 1rem;
+                    border: 1px solid #e2e8f0;
+                    background: white;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                    color: #64748b;
+                    transition: all 0.2s;
+                }
+                .pagination-btn:hover:not(:disabled) {
+                    background: #f8fafc;
+                    border-color: #cbd5e1;
+                    color: #1e293b;
+                }
+                .pagination-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+                .page-numbers {
+                    display: flex;
+                    gap: 0.5rem;
+                }
+                .page-num {
+                    width: 32px;
+                    height: 32px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid #e2e8f0;
+                    background: white;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                    color: #64748b;
+                    transition: all 0.2s;
+                }
+                .page-num:hover {
+                    background: #f8fafc;
+                    border-color: #cbd5e1;
+                }
+                .page-num.active {
+                    background: #3b82f6;
+                    color: white;
+                    border-color: #3b82f6;
+                }
+                .pagination-info {
+                    font-size: 0.85rem;
+                    color: #64748b;
+                    font-weight: normal;
+                }
+                .chart-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .btn-action {
+                    padding: 0.5rem 1rem;
+                    background: #f1f5f9;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 6px;
+                    color: #475569;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .btn-action:hover {
+                    background: #e2e8f0;
+                    color: #1e293b;
+                }
             `}} />
         </div>
     );
