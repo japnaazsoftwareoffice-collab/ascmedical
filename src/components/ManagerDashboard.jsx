@@ -1,12 +1,30 @@
 import React, { useMemo, useState } from 'react';
+import SurgeonManagement from './SurgeonManagement';
+import StaffManagement from './StaffManagement';
 import './Dashboard.css'; // Reuse some dashboard styles
 
-const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, billing = [], claims = [] }) => {
+const ManagerDashboard = ({
+    surgeries,
+    patients,
+    surgeons,
+    staff = [],
+    orBlockSchedule,
+    billing = [],
+    claims = [],
+    onAddSurgeon,
+    onUpdateSurgeon,
+    onDeleteSurgeon,
+    onAddStaff,
+    onUpdateStaff,
+    onDeleteStaff
+}) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [filter, setFilter] = useState('all'); // all, today, pending, completed, alerts, date
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedCase, setSelectedCase] = useState(null);
+    const [showPersonnelView, setShowPersonnelView] = useState(false);
     const [activeTab, setActiveTab] = useState('patient-info');
+    const [personnelTab, setPersonnelTab] = useState('surgeons');
     const recordsPerPage = 10;
 
     // Calculate Manager-specific KPIs
@@ -27,9 +45,10 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
             todayCount: todaySurgeries.length,
             pendingCount: pendingSurgeries.length,
             completedCount: completedSurgeries.length,
-            alertsCount: alertCases.length
+            alertsCount: alertCases.length,
+            surgeonsCount: surgeons.length
         };
-    }, [surgeries]);
+    }, [surgeries, surgeons]);
 
     // Apply Filter and Sort
     const filteredSurgeries = useMemo(() => {
@@ -108,16 +127,17 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
 
         return (
             <div className="case-detail-view fade-in">
-                <div className="case-detail-header">
+                <div className="case-detail-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: '100%', gap: '1rem', marginBottom: '2rem' }}>
                     <button className="btn-back" onClick={() => setSelectedCase(null)}>
                         ← Back to Queues
                     </button>
-                    <div className="case-tabs">
+                    <div className="case-tabs" style={{ width: '100%', overflowX: 'auto', display: 'flex', gap: '0.5rem', paddingBottom: '4px' }}>
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
                                 className={`case-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
                                 onClick={() => setActiveTab(tab.id)}
+                                style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
                             >
                                 {tab.label}
                             </button>
@@ -151,6 +171,10 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
                                     <div className="detail-value-box">{patient.phone || 'N/A'}</div>
                                 </div>
                                 <div className="detail-item">
+                                    <label>EMAIL</label>
+                                    <div className="detail-value-box">{patient.email || 'N/A'}</div>
+                                </div>
+                                <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                                     <label>ADDRESS</label>
                                     <div className="detail-value-box">{patient.address || 'N/A'}</div>
                                 </div>
@@ -160,8 +184,10 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
 
                     {activeTab === 'financial' && (
                         <div className="tab-pane">
-                            <h2 className="section-title">Financial Information</h2>
-                            <div className="detail-grid">
+                            <h2 className="section-title">Financial & Insurance</h2>
+
+                            <h3 style={{ fontSize: '1rem', color: '#3b82f6', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.25rem' }}>Primary Insurance</h3>
+                            <div className="detail-grid" style={{ marginBottom: '2rem' }}>
                                 <div className="detail-item">
                                     <label>INSURANCE PROVIDER</label>
                                     <div className="detail-value-box">{patient.insurance_provider || 'N/A'}</div>
@@ -170,6 +196,62 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
                                     <label>POLICY NUMBER</label>
                                     <div className="detail-value-box">{patient.insurance_policy_number || 'N/A'}</div>
                                 </div>
+                                <div className="detail-item">
+                                    <label>GROUP NUMBER</label>
+                                    <div className="detail-value-box">{patient.insurance_group_number || 'N/A'}</div>
+                                </div>
+                                <div className="detail-item">
+                                    <label>INSURANCE TYPE</label>
+                                    <div className="detail-value-box">{patient.insurance_type || 'Primary'}</div>
+                                </div>
+                                <div className="detail-item">
+                                    <label>SUBSCRIBER NAME</label>
+                                    <div className="detail-value-box">{patient.subscriber_name || 'N/A'}</div>
+                                </div>
+                                <div className="detail-item">
+                                    <label>RELATIONSHIP</label>
+                                    <div className="detail-value-box">{patient.subscriber_relationship || 'Self'}</div>
+                                </div>
+                                <div className="detail-item">
+                                    <label>EFFECTIVE DATE</label>
+                                    <div className="detail-value-box">{patient.insurance_effective_date || 'N/A'}</div>
+                                </div>
+                                <div className="detail-item">
+                                    <label>EXPIRATION DATE</label>
+                                    <div className="detail-value-box">{patient.insurance_expiration_date || 'N/A'}</div>
+                                </div>
+                                <div className="detail-item">
+                                    <label>COPAY AMOUNT</label>
+                                    <div className="detail-value-box">{patient.copay_amount ? `$${patient.copay_amount}` : 'N/A'}</div>
+                                </div>
+                                <div className="detail-item">
+                                    <label>DEDUCTIBLE</label>
+                                    <div className="detail-value-box">{patient.deductible_amount ? `$${patient.deductible_amount}` : 'N/A'}</div>
+                                </div>
+                            </div>
+
+                            {patient.secondary_insurance_provider && (
+                                <>
+                                    <h3 style={{ fontSize: '1rem', color: '#64748b', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.25rem' }}>Secondary Insurance</h3>
+                                    <div className="detail-grid" style={{ marginBottom: '2rem' }}>
+                                        <div className="detail-item">
+                                            <label>INSURANCE PROVIDER</label>
+                                            <div className="detail-value-box">{patient.secondary_insurance_provider || 'N/A'}</div>
+                                        </div>
+                                        <div className="detail-item">
+                                            <label>POLICY NUMBER</label>
+                                            <div className="detail-value-box">{patient.secondary_insurance_policy_number || 'N/A'}</div>
+                                        </div>
+                                        <div className="detail-item">
+                                            <label>GROUP NUMBER</label>
+                                            <div className="detail-value-box">{patient.secondary_insurance_group_number || 'N/A'}</div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            <h3 style={{ fontSize: '1rem', color: '#059669', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.25rem' }}>Case Billing Status</h3>
+                            <div className="detail-grid">
                                 <div className="detail-item">
                                     <label>TOTAL AMOUNT</label>
                                     <div className="detail-value-box highlight-value">${caseBilling?.total_amount?.toLocaleString() || '0.00'}</div>
@@ -317,6 +399,177 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
             </div>
         );
     };
+
+    const renderPersonnelOverview = () => {
+        return (
+            <div className="case-detail-view fade-in">
+                <div className="case-detail-header" style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <button className="btn-back" onClick={() => setShowPersonnelView(false)}>
+                        ← Back to Dashboard
+                    </button>
+                    <div className="case-tabs">
+                        <button
+                            className={`case-tab-btn ${personnelTab === 'surgeons' ? 'active' : ''}`}
+                            onClick={() => setPersonnelTab('surgeons')}
+                        >
+                            👨‍⚕️ Surgeons
+                        </button>
+                        <button
+                            className={`case-tab-btn ${personnelTab === 'staff' ? 'active' : ''}`}
+                            onClick={() => setPersonnelTab('staff')}
+                        >
+                            👩‍⚕️ Nurses & Staff
+                        </button>
+                    </div>
+                </div>
+
+                <div className="case-detail-content" style={{ padding: '0' }}>
+                    {personnelTab === 'surgeons' && (
+                        <SurgeonManagement
+                            surgeons={surgeons}
+                            onAdd={onAddSurgeon}
+                            onUpdate={onUpdateSurgeon}
+                            onDelete={onDeleteSurgeon}
+                        />
+                    )}
+
+                    {personnelTab === 'staff' && (
+                        <StaffManagement
+                            staff={staff}
+                            onAdd={onAddStaff}
+                            onUpdate={onUpdateStaff}
+                            onDelete={onDeleteStaff}
+                        />
+                    )}
+                </div>
+
+                <div className="case-detail-footer">
+                    <div className="footer-info">
+                        <strong>Total Personnel: {personnelTab === 'surgeons' ? surgeons.length : staff.length} Active</strong>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    if (showPersonnelView) {
+        return (
+            <div className="dashboard-container">
+                {renderPersonnelOverview()}
+                <style dangerouslySetInnerHTML={{
+                    __html: `
+                    .case-detail-view {
+                        background: #f8fafc;
+                        min-height: calc(100vh - 40px);
+                        display: flex;
+                        flex-direction: column;
+                        font-family: 'Inter', sans-serif;
+                    }
+                    .case-detail-header {
+                        background: white;
+                        padding: 1rem 2rem;
+                        border-bottom: 1px solid #e2e8f0;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 1.25rem;
+                        position: sticky;
+                        top: 0;
+                        z-index: 100;
+                        box-shadow: 0 4px 6px -4px rgba(0,0,0,0.05);
+                    }
+                    .btn-back {
+                        background: #f1f5f9;
+                        border: 1px solid #e2e8f0;
+                        color: #64748b;
+                        font-weight: 600;
+                        cursor: pointer;
+                        font-size: 0.85rem;
+                        padding: 0.5rem 1rem;
+                        border-radius: 50px;
+                        width: fit-content;
+                        transition: all 0.2s;
+                    }
+                    .btn-back:hover {
+                        background: #e2e8f0;
+                        color: #1e293b;
+                    }
+                    .case-tabs {
+                        display: flex;
+                        gap: 0.5rem;
+                        overflow-x: auto;
+                        padding: 0.4rem;
+                        background: #f8fafc;
+                        border-radius: 12px;
+                        border: 1px solid #e2e8f0;
+                        scrollbar-width: none;
+                    }
+                    .case-tab-btn {
+                        padding: 0.6rem 1.25rem;
+                        border: none;
+                        background: transparent;
+                        color: #64748b;
+                        font-size: 0.85rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        border-radius: 8px;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        white-space: nowrap;
+                    }
+                    .case-tab-btn:hover {
+                        background: rgba(255,255,255,0.8);
+                        color: #1e293b;
+                    }
+                    .case-tab-btn.active {
+                        background: white;
+                        color: #059669;
+                        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15);
+                    }
+                    .case-detail-content {
+                        flex: 1;
+                        padding: 1.5rem;
+                        overflow-y: auto;
+                    }
+                    .tab-pane {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 2rem;
+                        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        border: 1px solid #e2e8f0;
+                    }
+                    .section-title {
+                        font-size: 1.25rem;
+                        color: #1e293b;
+                        margin-bottom: 2rem;
+                        border-left: 4px solid #059669;
+                        padding-left: 1rem;
+                        font-weight: 700;
+                    }
+                    .case-detail-footer {
+                        background: white;
+                        border-top: 1px solid #e2e8f0;
+                        padding: 1rem 3rem;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    }
+                    .btn-save-changes {
+                        padding: 0.6rem 2rem;
+                        background: #059669;
+                        border: none;
+                        border-radius: 8px;
+                        color: white;
+                        font-weight: 600;
+                        cursor: pointer;
+                        box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.4);
+                        font-size: 0.85rem;
+                    }
+                    .empty-pane { text-align: center; color: #64748b; }
+                `}} />
+            </div>
+        )
+    }
 
     if (selectedCase) {
         return (
@@ -580,6 +833,21 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
                         <div className="hero-bg-pattern"></div>
                     </div>
 
+                    <div
+                        className="hero-card surgeons-hero clickable"
+                        onClick={() => setShowPersonnelView(true)}
+                    >
+                        <div className="hero-icon-wrapper">
+                            <span className="hero-icon">👨‍⚕️</span>
+                        </div>
+                        <div className="hero-content">
+                            <span className="hero-label">Total Surgeons</span>
+                            <span className="hero-value">{kpis.surgeonsCount}</span>
+                            <span className="hero-trend positive">Active Staff</span>
+                        </div>
+                        <div className="hero-bg-pattern"></div>
+                    </div>
+
                     <div className="mini-stats-column">
                         <div
                             className={`mini-stat-card clickable ${filter === 'completed' ? 'active-filter' : ''}`}
@@ -775,9 +1043,15 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule, bill
             <style dangerouslySetInnerHTML={{
                 __html: `
                 .stats-hero {
+                    display: grid !important;
+                    grid-template-columns: 1fr 1fr 1fr 0.8fr !important;
                     gap: 1rem !important;
                     margin-bottom: 1.5rem !important;
                     height: auto !important;
+                }
+                .surgeons-hero {
+                    background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%) !important;
+                    border: 1px solid #f3e8ff !important;
                 }
                 .hero-card {
                     padding: 1.2rem !important;

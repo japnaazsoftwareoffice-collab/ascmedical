@@ -11,6 +11,7 @@ const PatientManagement = ({ patients, onUpdate, onDelete, onAdd }) => {
         mrn: '',
         phone: '',
         email: '',
+        gender: '',
         address: '',
         // Primary Insurance
         insurance_provider: '',
@@ -37,6 +38,7 @@ const PatientManagement = ({ patients, onUpdate, onDelete, onAdd }) => {
             mrn: '',
             phone: '',
             email: '',
+            gender: '',
             address: '',
             insurance_provider: '',
             insurance_policy_number: '',
@@ -63,6 +65,7 @@ const PatientManagement = ({ patients, onUpdate, onDelete, onAdd }) => {
             mrn: patient.mrn,
             phone: patient.phone,
             email: patient.email || '',
+            gender: patient.gender || '',
             address: patient.address || '',
             insurance_provider: patient.insurance_provider || '',
             insurance_policy_number: patient.insurance_policy_number || '',
@@ -296,6 +299,21 @@ const PatientManagement = ({ patients, onUpdate, onDelete, onAdd }) => {
                                             title="Please enter a valid phone number"
                                             required
                                         />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Gender</label>
+                                        <select
+                                            name="gender"
+                                            value={formData.gender}
+                                            onChange={handleChange}
+                                            className="form-input"
+                                        >
+                                            <option value="">Select Gender</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Non-Binary">Non-Binary</option>
+                                            <option value="Prefer not to say">Prefer not to say</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
