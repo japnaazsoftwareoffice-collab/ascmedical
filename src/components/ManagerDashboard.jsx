@@ -3,7 +3,8 @@ import './Dashboard.css'; // Reuse some dashboard styles
 
 const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) => {
     const [currentPage, setCurrentPage] = useState(1);
-    const [filter, setFilter] = useState('all'); // all, today, pending, completed, alerts
+    const [filter, setFilter] = useState('all'); // all, today, pending, completed, alerts, date
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const recordsPerPage = 10;
 
     // Calculate Manager-specific KPIs
@@ -44,15 +45,17 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                 s.status === 'scheduled' &&
                 (!s.cpt_codes || s.cpt_codes.length === 0 || !s.doctor_name)
             );
+        } else if (filter === 'date') {
+            result = result.filter(s => s.date === selectedDate);
         }
 
         return result.sort((a, b) => {
             const dateA = new Date(a.date);
             const dateB = new Date(b.date);
-            if (dateA - dateB !== 0) return dateB - dateA; // Most recent first
+            if (dateB - dateA !== 0) return dateB - dateA; // Most recent first
             return a.start_time.localeCompare(b.start_time);
         });
-    }, [surgeries, filter]);
+    }, [surgeries, filter, selectedDate]);
 
     // Calculate pagination
     const totalPages = Math.ceil(filteredSurgeries.length / recordsPerPage);
@@ -76,20 +79,34 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
         setCurrentPage(1); // Reset to first page when filter changes
     };
 
+    const handleDateChange = (e) => {
+        setSelectedDate(e.target.value);
+        setFilter('date');
+        setCurrentPage(1);
+    };
+
     return (
         <div className="dashboard fade-in">
             <div className="dashboard-header">
                 <div className="header-left">
                     <h2 className="page-title">Manager Dashboard</h2>
-                    <p className="subtitle">Operational Overview & Case Management</p>
                 </div>
-                {filter !== 'all' && (
-                    <div className="header-actions">
-                        <button className="btn-action" onClick={() => setFilter('all')}>
-                            Clear Filter: {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                        </button>
+                <div className="header-actions" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div className="date-filter-group" style={{ display: 'flex', alignItems: 'center', background: 'white', padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <span style={{ fontSize: '0.85rem', color: '#64748b', marginRight: '0.5rem', fontWeight: '500' }}>📅 Schedule For:</span>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={handleDateChange}
+                            style={{ border: 'none', color: '#1e293b', fontWeight: '600', fontSize: '0.85rem', outline: 'none', cursor: 'pointer' }}
+                        />
                     </div>
-                )}
+                    {filter !== 'all' && (
+                        <button className="btn-action" style={{ background: '#fef2f2', color: '#ef4444', borderColor: '#fee2e2' }} onClick={() => setFilter('all')}>
+                            Clear Filter
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="dashboard-content">
@@ -154,7 +171,9 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                     <div className="chart-card full-width-card">
                         <div className="chart-header">
                             <h3>
-                                {filter === 'all' ? 'Surgery Schedule' : `${filter.charAt(0).toUpperCase() + filter.slice(1)} Cases`}
+                                {filter === 'all' ? 'Surgery Schedule' :
+                                    filter === 'date' ? `Schedule for ${selectedDate}` :
+                                        `${filter.charAt(0).toUpperCase() + filter.slice(1)} Cases`}
                             </h3>
                             <div className="pagination-info">
                                 Showing {filteredSurgeries.length > 0 ? ((currentPage - 1) * recordsPerPage) + 1 : 0} - {Math.min(currentPage * recordsPerPage, filteredSurgeries.length)} of {filteredSurgeries.length}
@@ -191,7 +210,7 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                                             </thead>
                                             <tbody>
                                                 {paginatedSurgeries.map(s => (
-                                                    <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                    <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} className="row-hover">
                                                         <td style={{ padding: '0.75rem' }}>{s.date}</td>
                                                         <td style={{ padding: '0.75rem' }}>{s.start_time}</td>
                                                         <td style={{ padding: '0.75rem' }}>{s.patients?.name || 'Unknown'}</td>
@@ -258,6 +277,54 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
 
             <style dangerouslySetInnerHTML={{
                 __html: `
+                .stats-hero {
+                    gap: 1rem !important;
+                    margin-bottom: 1.5rem !important;
+                    height: auto !important;
+                }
+                .hero-card {
+                    padding: 1.2rem !important;
+                    min-height: auto !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 1.2rem !important;
+                }
+                .hero-icon-wrapper {
+                    width: 48px !important;
+                    height: 48px !important;
+                    margin-bottom: 0 !important;
+                }
+                .hero-icon {
+                    font-size: 1.5rem !important;
+                }
+                .hero-content {
+                    text-align: left !important;
+                }
+                .hero-value {
+                    font-size: 2rem !important;
+                    margin: 2px 0 !important;
+                }
+                .hero-label {
+                    font-size: 0.85rem !important;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .mini-stat-card {
+                    padding: 0.8rem 1.2rem !important;
+                    margin-bottom: 0.75rem !important;
+                }
+                .mini-stat-card:last-child {
+                    margin-bottom: 0 !important;
+                }
+                .mini-stat-icon {
+                    width: 36px !important;
+                    height: 36px !important;
+                    font-size: 1.1rem !important;
+                }
+                .mini-stat-value {
+                    font-size: 1.2rem !important;
+                }
+                
                 .full-width-grid {
                     display: block !important;
                 }
@@ -291,6 +358,10 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                     box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2);
                 }
                 
+                .row-hover:hover {
+                    background-color: #f8fafc;
+                }
+                
                 .pagination-controls {
                     display: flex;
                     justify-content: center;
@@ -320,41 +391,16 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                     cursor: not-allowed;
                 }
                 .page-numbers {
-                    display: flex;
-                    gap: 0.5rem;
+                    display: flex; gap: 0.5rem;
                 }
                 .page-num {
-                    width: 32px;
-                    height: 32px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 1px solid #e2e8f0;
-                    background: white;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 0.85rem;
-                    color: #64748b;
-                    transition: all 0.2s;
-                }
-                .page-num:hover {
-                    background: #f8fafc;
-                    border-color: #cbd5e1;
+                    width: 32px; height: 32px;
+                    display: flex; align-items: center; justify-content: center;
+                    border: 1px solid #e2e8f0; background: white; border-radius: 6px;
+                    cursor: pointer; font-size: 0.85rem; color: #64748b;
                 }
                 .page-num.active {
-                    background: #3b82f6;
-                    color: white;
-                    border-color: #3b82f6;
-                }
-                .pagination-info {
-                    font-size: 0.85rem;
-                    color: #64748b;
-                    font-weight: normal;
-                }
-                .chart-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
+                    background: #3b82f6; color: white; border-color: #3b82f6;
                 }
                 .btn-action {
                     padding: 0.5rem 1rem;
@@ -365,11 +411,6 @@ const ManagerDashboard = ({ surgeries, patients, surgeons, orBlockSchedule }) =>
                     font-size: 0.85rem;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: all 0.2s;
-                }
-                .btn-action:hover {
-                    background: #e2e8f0;
-                    color: #1e293b;
                 }
             `}} />
         </div>
