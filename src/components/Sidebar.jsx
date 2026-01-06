@@ -5,8 +5,8 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
     // Define menu items based on user role
     // Define all available menu items with their required permissions
     const allMenuItems = [
-        { id: 'dashboard', icon: '📊', label: 'Financial Dashboard', permission: 'view_financial_dashboard' },
         { id: 'manager-dashboard', icon: '📋', label: 'Manager Dashboard', permission: 'view_manager_dashboard' },
+        { id: 'dashboard', icon: '📊', label: 'Financial Dashboard', permission: 'view_financial_dashboard' },
         { id: 'register', icon: '👥', label: 'Patient Management', permission: 'manage_patients' },
         { id: 'claims', icon: '📄', label: 'Claims Management', permission: 'view_claims' },
         { id: 'scheduler', icon: '📅', label: 'Surgery Log & OR', permission: 'manage_surgeries' },

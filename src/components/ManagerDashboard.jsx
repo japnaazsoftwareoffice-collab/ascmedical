@@ -813,7 +813,7 @@ const ManagerDashboard = ({
                         <div className="hero-content">
                             <span className="hero-label">Cases Today</span>
                             <span className="hero-value">{kpis.todayCount}</span>
-                            <span className="hero-trend positive">Active Today</span>
+                            {/* <span className="hero-trend positive">Active Today</span> */}
                         </div>
                         <div className="hero-bg-pattern"></div>
                     </div>
@@ -828,7 +828,7 @@ const ManagerDashboard = ({
                         <div className="hero-content">
                             <span className="hero-label">Pending Cases</span>
                             <span className="hero-value">{kpis.pendingCount}</span>
-                            <span className="hero-trend">Needs Attn</span>
+                            {/* <span className="hero-trend">Needs Attn</span> */}
                         </div>
                         <div className="hero-bg-pattern"></div>
                     </div>
@@ -843,7 +843,7 @@ const ManagerDashboard = ({
                         <div className="hero-content">
                             <span className="hero-label">Total Surgeons</span>
                             <span className="hero-value">{kpis.surgeonsCount}</span>
-                            <span className="hero-trend positive">Active Staff</span>
+                            {/* <span className="hero-trend positive">Active Staff</span> */}
                         </div>
                         <div className="hero-bg-pattern"></div>
                     </div>
