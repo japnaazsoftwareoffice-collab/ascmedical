@@ -12,7 +12,9 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         description: '',
         reimbursement: '',
         procedure_indicator: '',
-        body_part: ''
+        body_part: '',
+        average_duration: '',
+        is_active: true
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +56,9 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             reimbursement: parseFloat(formData.reimbursement),
             category: formData.category,
             procedure_indicator: formData.procedure_indicator,
-            body_part: formData.body_part
+            body_part: formData.body_part,
+            average_duration: parseInt(formData.average_duration) || 0,
+            is_active: formData.is_active
         };
 
         if (editingId) {
@@ -78,7 +82,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', is_active: true });
         setIsNewCategory(false);
     };
 
@@ -89,7 +93,9 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             description: cpt.description,
             reimbursement: cpt.reimbursement,
             procedure_indicator: cpt.procedure_indicator || '',
-            body_part: cpt.body_part || ''
+            body_part: cpt.body_part || '',
+            average_duration: cpt.average_duration || '',
+            is_active: cpt.is_active !== false
         });
         setEditingId(cpt.id);
 
@@ -116,7 +122,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     const handleCancelEdit = () => {
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', is_active: true });
         setEditingId(null);
         setIsNewCategory(false);
     };
@@ -362,6 +368,29 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                 onChange={(e) => setFormData({ ...formData, reimbursement: e.target.value })}
                                 required
                             />
+                        </div>
+
+                        <div className="form-group">
+                            <label>Average Duration (minutes)</label>
+                            <input
+                                type="number"
+                                className="form-input"
+                                placeholder="e.g. 60"
+                                min="0"
+                                value={formData.average_duration}
+                                onChange={(e) => setFormData({ ...formData, average_duration: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                                type="checkbox"
+                                id="is_active"
+                                checked={formData.is_active}
+                                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                                style={{ width: 'auto', margin: 0 }}
+                            />
+                            <label htmlFor="is_active" style={{ margin: 0, cursor: 'pointer' }}>Active Status</label>
                         </div>
 
                         <div className="form-actions" style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
