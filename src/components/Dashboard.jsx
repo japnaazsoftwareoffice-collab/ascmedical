@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { db } from '../lib/supabase';
 import { calculateORCost, calculateMedicareRevenue, formatCurrency } from '../utils/hospitalUtils';
 import AIAnalystModal from './AIAnalystModal';
 import './Dashboard.css';
@@ -33,7 +34,16 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
         monthly: null
     });
     const [utilizationData, setUtilizationData] = useState([]);
+
     const [isExporting, setIsExporting] = useState(false);
+
+    // Block Schedule State
+    const [blockSchedule, setBlockSchedule] = useState([]);
+    const [blockStats, setBlockStats] = useState([]); // [{name, value, percentage, color}]
+    const [selectedRoom, setSelectedRoom] = useState('All'); // 'All' or specific room name
+    const ROOMS = ['OR 1', 'OR 2', 'OR 3', 'OR 4', 'Procedure Room'];
+    const DAILY_CAPACITY_PER_ROOM = 480; // 8 hours (07:00 - 15:00)
+
 
     // Email Modal State
     const [showEmailModal, setShowEmailModal] = useState(false);
@@ -43,6 +53,17 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
     useEffect(() => {
         // Initialize EmailJS
         emailjs.init(EMAILJS_PUBLIC_KEY);
+
+        // Fetch Block Schedule
+        const fetchBlockSchedule = async () => {
+            try {
+                const data = await db.getORBlockSchedule();
+                setBlockSchedule(data || []);
+            } catch (err) {
+                console.error('Failed to load block schedule', err);
+            }
+        };
+        fetchBlockSchedule();
     }, []);
 
     useEffect(() => {
@@ -339,7 +360,89 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
 
         setUtilizationData(calculateUtilization(currentSurgeries));
 
-    }, [surgeries, selectedDate, cptCodes, timeframe]);
+        // --- Calculate Block Schedule Stats (Surgeons vs Gap) ---
+        const calcDuration = (start, end) => {
+            if (!start || !end) return 0;
+            const sH = parseInt(start.substring(0, 2));
+            const sM = parseInt(start.substring(2, 4));
+            const eH = parseInt(end.substring(0, 2));
+            const eM = parseInt(end.substring(2, 4));
+            return (eH * 60 + eM) - (sH * 60 + sM);
+        };
+
+        const calculateBlockStats = () => {
+            // 1. Filter Blocks by Timeframe AND Selected Room
+            const relevantBlocks = blockSchedule.filter(b => {
+                const d = new Date(b.date);
+                d.setHours(0, 0, 0, 0);
+
+                const start = new Date(currentStart); start.setHours(0, 0, 0, 0);
+                const end = new Date(currentEnd); end.setHours(23, 59, 59, 999);
+
+                const timeMatch = d >= start && d <= end;
+                const roomMatch = selectedRoom === 'All' ? true : b.room_name === selectedRoom;
+
+                return timeMatch && roomMatch;
+            });
+
+            // 2. Aggregate Allocated Time per Surgeon
+            const surgeonAllocations = {};
+            let totalAllocatedMinutes = 0;
+
+            relevantBlocks.forEach(block => {
+                const duration = calcDuration(block.start_time, block.end_time);
+                const name = block.provider_name || 'Unknown';
+                surgeonAllocations[name] = (surgeonAllocations[name] || 0) + duration;
+                totalAllocatedMinutes += duration;
+            });
+
+            // 3. Calculate Total Capacity & Gap
+            let businessDays = 0;
+            let loopDate = new Date(currentStart);
+            while (loopDate <= currentEnd) {
+                const day = loopDate.getDay();
+                if (day !== 0 && day !== 6) businessDays++; // Exclude Sun, Sat
+                loopDate.setDate(loopDate.getDate() + 1);
+            }
+            if (businessDays === 0 && timeframe === 'daily') {
+                const d = currentStart.getDay();
+                if (d === 0 || d === 6) businessDays = 0;
+            }
+
+            const multiplier = selectedRoom === 'All' ? ROOMS.length : 1;
+            const totalCapacity = businessDays * multiplier * DAILY_CAPACITY_PER_ROOM;
+            const gapMinutes = Math.max(0, totalCapacity - totalAllocatedMinutes);
+
+            // 4. Transform to Chart Data
+            const stats = Object.entries(surgeonAllocations).map(([name, mins]) => ({
+                name,
+                value: mins,
+                percentage: 0,
+                color: generateColor(name)
+            }));
+
+            if (gapMinutes > 0) {
+                stats.push({
+                    name: 'Gap / Unused',
+                    value: gapMinutes,
+                    percentage: 0,
+                    color: '#e2e8f0' // Grey for gap
+                });
+            }
+
+            const grandTotal = totalAllocatedMinutes + gapMinutes;
+            stats.forEach(s => {
+                s.percentage = grandTotal > 0 ? (s.value / grandTotal) * 100 : 0;
+            });
+
+            return stats.sort((a, b) => b.value - a.value);
+        };
+
+        if (blockSchedule.length > 0 || selectedRoom) {
+            setBlockStats(calculateBlockStats());
+        }
+
+    }, [surgeries, selectedDate, cptCodes, timeframe, blockSchedule, selectedRoom]);
 
     // Helper for consistent colors
     const generateColor = (str) => {
@@ -784,6 +887,60 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    {/* OR Block Schedule Allocation Chart */}
+                    <div className="chart-card utilization-chart-card" style={{ marginTop: '1.5rem' }}>
+                        <div className="chart-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                <h3>OR Block Schedule Allocation ({timeframe})</h3>
+                                {/* Room Selector */}
+                                <select
+                                    className="filter-select"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                                    value={selectedRoom}
+                                    onChange={(e) => setSelectedRoom(e.target.value)}
+                                >
+                                    <option value="All">All Rooms</option>
+                                    {ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
+                            </div>
+                            <span className="subtitle-sm" style={{ fontSize: '0.85rem', color: '#64748b', marginLeft: 'auto' }}>
+                                (Surgeons vs Gap Time)
+                            </span>
+                        </div>
+                        <div className="utilization-chart-container">
+                            {blockStats.length === 0 ? (
+                                <div className="empty-chart-state">No block data for this period</div>
+                            ) : (
+                                <div className="pie-chart-wrapper">
+                                    <div
+                                        className="pie-chart"
+                                        style={{
+                                            background: `conic-gradient(${blockStats.reduce((acc, item, index) => {
+                                                const prevPerc = index === 0 ? 0 : blockStats.slice(0, index).reduce((p, i) => p + i.percentage, 0);
+                                                return `${acc}${index > 0 ? ',' : ''} ${item.color} ${prevPerc}% ${prevPerc + item.percentage}%`;
+                                            }, '')
+                                                })`
+                                        }}
+                                    >
+                                        {/* Optional Center Text for Donut effect */}
+                                        <div className="donut-hole" style={{ width: '50%', height: '50%', background: '#fff', borderRadius: '50%', position: 'absolute', top: '50%', left: '50%' }}></div>
+                                    </div>
+                                    <div className="chart-legend-grid">
+                                        {blockStats.map((item, index) => (
+                                            <div key={index} className="legend-item">
+                                                <span className="legend-dot" style={{ background: item.color }}></span>
+                                                <div className="legend-info">
+                                                    <span className="legend-name">{item.name}</span>
+                                                    <span className="legend-val">{Math.round(item.percentage)}% ({Math.round(item.value / 60)} hrs)</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
