@@ -13,7 +13,8 @@ const Settings = () => {
         facility_phone: '',
         tax_id: '',
         npi: '',
-        apply_medicare_mppr: false
+        apply_medicare_mppr: false,
+        ai_allowed_email: '' // Restrict usage to this email
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -336,6 +337,26 @@ const Settings = () => {
                             </div>
                             <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
                                 Provide your Google Gemini API Key to enable the ASC Assistant chatbot. this key will be stored securely in your database.
+                            </p>
+                            <div style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.8rem', color: '#475569' }}>
+                                <span style={{ fontSize: '1rem' }}>🛡️</span>
+                                <strong>Rate Limit Active:</strong> 5 requests / minute
+                            </div>
+                        </div>
+
+                        <div className="form-group" style={{ marginTop: '1.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1.5rem' }}>
+                            <label style={{ fontWeight: 600, color: '#475569', marginBottom: '0.5rem', display: 'block' }}>Restricted Access (Optional)</label>
+                            <input
+                                className="form-input"
+                                type="email"
+                                name="ai_allowed_email"
+                                value={settings.ai_allowed_email || ''}
+                                onChange={handleChange}
+                                placeholder="Enter specific user email (e.g., admin@hospital.com)"
+                                style={{ height: '48px' }}
+                            />
+                            <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#64748b' }}>
+                                If entered, <strong>ONLY</strong> this user will be able to use the AI features. Leave empty to allow all registered users.
                             </p>
                         </div>
                     </div>
