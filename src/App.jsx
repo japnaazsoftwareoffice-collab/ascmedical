@@ -21,7 +21,9 @@ import CPTAutoUpdate from './components/CPTAutoUpdate';
 import SurgeonScorecard from './components/SurgeonScorecard';
 import StaffManagement from './components/StaffManagement';
 import RolePermissionManagement from './components/RolePermissionManagement';
+
 import ManagerDashboard from './components/ManagerDashboard';
+import CancellationRescheduling from './components/CancellationRescheduling';
 
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
@@ -970,6 +972,10 @@ function App() {
 
     if (view === 'scheduler' && hasPerm('manage_surgeries')) {
       return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
+    }
+
+    if (view === 'cancellation-rescheduling' && hasPerm('manage_surgeries')) {
+      return <CancellationRescheduling surgeries={surgeries} surgeons={surgeons} patients={patients} />;
     }
 
     if (view === 'or-schedule' && hasPerm('view_or_blocks')) return <ORBlockSchedule surgeons={surgeons} />;

@@ -62,6 +62,16 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         medicationsCost: 0
     });
 
+    // Rescheduling Modal State
+    const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
+    const [rescheduleData, setRescheduleData] = useState({
+        surgeryId: null,
+        originalDate: '',
+        newDate: '',
+        newStartTime: '',
+        reason: 'Patient request'
+    });
+
     const [selectedCategory, setSelectedCategory] = useState('');
     const [selectedBodyPart, setSelectedBodyPart] = useState(''); // New state for body part filter
     const [editingSurgery, setEditingSurgery] = useState(null);
@@ -433,6 +443,132 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         }
     };
 
+    // Cancellation Handler
+    const handleCancelSurgery = async (id) => {
+        const { value: reason } = await Swal.fire({
+            title: 'Cancel Surgery?',
+            input: 'text',
+            inputLabel: 'Reason for cancellation',
+            inputPlaceholder: 'e.g., Patient sick, Surgeon unavailable...',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'Yes, Cancel it',
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'You need to write a reason!';
+                }
+            }
+        });
+
+        if (reason) {
+            await onUpdate(id, {
+                status: 'cancelled',
+                notes: `Cancelled: ${reason}`
+            });
+
+            await Swal.fire({
+                title: 'Cancelled!',
+                text: 'Surgery has been cancelled.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+    };
+
+    // Rescheduling Handlers
+    const openRescheduleModal = (surgery) => {
+        setRescheduleData({
+            surgeryId: surgery.id,
+            originalDate: surgery.date,
+            newDate: '',
+            newStartTime: '',
+            reason: ''
+        });
+        setIsRescheduleOpen(true);
+    };
+
+    const closeRescheduleModal = () => {
+        setIsRescheduleOpen(false);
+        setRescheduleData({
+            surgeryId: null,
+            originalDate: '',
+            newDate: '',
+            newStartTime: '',
+            reason: ''
+        });
+    };
+
+    const handleRescheduleSubmit = async () => {
+        if (!rescheduleData.newDate || !rescheduleData.newStartTime) {
+            Swal.fire({
+                title: 'Missing Info',
+                text: 'Please select a new date and time.',
+                icon: 'warning'
+            });
+            return;
+        }
+
+        const originalSurgery = surgeries.find(s => s.id === rescheduleData.surgeryId);
+        if (!originalSurgery) return;
+
+        try {
+            // 1. Mark original as rescheduled
+            await onUpdate(originalSurgery.id, {
+                status: 'rescheduled',
+                notes: `Rescheduled to ${rescheduleData.newDate}. Reason: ${rescheduleData.reason || 'None provided'}`
+            });
+
+            // 2. Create new surgery entry
+            const newSurgery = {
+                ...originalSurgery,
+                id: Date.now(), // New ID
+                date: rescheduleData.newDate,
+                start_time: rescheduleData.newStartTime,
+                status: 'scheduled',
+                notes: `Rescheduled from ${originalSurgery.date}`
+            };
+
+            // Remove ID to force creation of new record if passed to DB add function appropriately, 
+            // but onSchedule likely handles ID generation or we pass a temp one.
+            // Based on App.jsx handleScheduleSurgery logic:
+
+            // We need to map back to the format handleScheduleSurgery expects
+            // It expects a flat object with doctor_name, patient_id etc.
+
+            await onSchedule({
+                patientId: originalSurgery.patient_id,
+                doctorName: originalSurgery.doctor_name,
+                date: rescheduleData.newDate,
+                startTime: rescheduleData.newStartTime,
+                durationMinutes: originalSurgery.duration_minutes,
+                selectedCptCodes: originalSurgery.cpt_codes,
+                notes: `Rescheduled from ${originalSurgery.date}`,
+                suppliesCost: originalSurgery.supplies_cost || 0,
+                implantsCost: originalSurgery.implants_cost || 0,
+                medicationsCost: originalSurgery.medications_cost || 0
+            });
+
+            await Swal.fire({
+                title: 'Rescheduled!',
+                text: 'Surgery has been rescheduled successfully.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+
+            closeRescheduleModal();
+
+        } catch (error) {
+            console.error('Reschedule error:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to reschedule surgery.',
+                icon: 'error'
+            });
+        }
+    };
+
     const estimatedCost = calculateORCost(formData.durationMinutes);
 
     // Calculate projected revenue with MPPR
@@ -487,6 +623,73 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
             {/* Wrapper with flex ordering */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
+
+                {/* Reschedule Modal */}
+                {isRescheduleOpen && (
+                    <div className="modal-overlay">
+                        <div className="modal-content" style={{ maxWidth: '500px' }}>
+                            <div className="modal-header">
+                                <h3>Reschedule Surgery</h3>
+                                <button className="btn-close" onClick={closeRescheduleModal}>&times;</button>
+                            </div>
+
+                            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                                <label>Original Date</label>
+                                <input
+                                    type="text"
+                                    value={rescheduleData.originalDate}
+                                    disabled
+                                    className="form-input"
+                                    style={{ background: '#f1f5f9', color: '#64748b' }}
+                                />
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>New Date</label>
+                                    <input
+                                        type="date"
+                                        className="form-input"
+                                        value={rescheduleData.newDate}
+                                        onChange={e => setRescheduleData({ ...rescheduleData, newDate: e.target.value })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>New Start Time</label>
+                                    <input
+                                        type="time"
+                                        className="form-input"
+                                        value={rescheduleData.newStartTime}
+                                        onChange={e => setRescheduleData({ ...rescheduleData, newStartTime: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Reason (Optional)</label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="e.g., Patient sick, Surgeon unavailable..."
+                                    value={rescheduleData.reason}
+                                    onChange={e => setRescheduleData({ ...rescheduleData, reason: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="modal-actions">
+                                <button className="btn-cancel" onClick={closeRescheduleModal}>Cancel</button>
+                                <button
+                                    className="btn-save"
+                                    onClick={handleRescheduleSubmit}
+                                    style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)' }}
+                                >
+                                    Confirm Reschedule
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Surgery Log Table - will appear second with order: 2 */}
                 <div style={{ order: isFormOpen ? 2 : 1 }}>
                     <div className="content-card" style={{ marginBottom: '2rem' }}>
@@ -768,6 +971,36 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                                                 </svg>
                                                                             </button>
+                                                                            {surgery.status !== 'completed' && surgery.status !== 'cancelled' && (
+                                                                                <>
+                                                                                    <button
+                                                                                        className="btn-icon"
+                                                                                        title="Reschedule"
+                                                                                        style={{ color: '#f59e0b' }}
+                                                                                        onClick={() => openRescheduleModal(surgery)}
+                                                                                    >
+                                                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                                                                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                                                                                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                                                                                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                                                                                            <path d="M16.24 7.76l-2.12 2.12"></path> <path d="M12 12h4"></path>
+                                                                                        </svg>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        className="btn-icon"
+                                                                                        title="Cancel"
+                                                                                        style={{ color: '#ef4444' }}
+                                                                                        onClick={() => handleCancelSurgery(surgery.id)}
+                                                                                    >
+                                                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                                            <circle cx="12" cy="12" r="10"></circle>
+                                                                                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                                                                                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                                                                                        </svg>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                             {surgery.status !== 'completed' && onComplete && (
                                                                                 <button
                                                                                     className="btn-icon"

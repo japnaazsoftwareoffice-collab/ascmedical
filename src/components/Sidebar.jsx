@@ -10,6 +10,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
         { id: 'register', icon: '👥', label: 'Patient Management', permission: 'manage_patients' },
         { id: 'claims', icon: '📄', label: 'Claims Management', permission: 'view_claims' },
         { id: 'scheduler', icon: '📅', label: 'Surgery Log & OR', permission: 'manage_surgeries' },
+        { id: 'cancellation-rescheduling', icon: '🚫', label: 'Cancellation & Rescheduling', permission: 'manage_surgeries' },
         { id: 'or-schedule', icon: '🗓️', label: 'OR Block Schedule', permission: 'view_or_blocks' },
         { id: 'surgery-schedule-sidebar', icon: '🗓️', label: 'Surgery Schedule', permission: 'view_surgery_schedule' },
         { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management', permission: 'manage_surgeons' },
