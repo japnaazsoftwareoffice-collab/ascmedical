@@ -874,45 +874,48 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                 </div>
 
                 {/* OR Utilization Chart */}
-                <div className="chart-card utilization-chart-card" style={{ marginTop: '1.5rem' }}>
-                    <div className="chart-header">
-                        <h3>OR Utilization by Surgeon ({timeframe})</h3>
-                    </div>
-                    <div className="utilization-chart-container">
-                        {utilizationData.length === 0 ? (
-                            <div className="empty-chart-state">No surgeries for this period</div>
-                        ) : (
-                            <div className="pie-chart-wrapper">
-                                <div
-                                    className="pie-chart"
-                                    style={{
-                                        background: `conic-gradient(${utilizationData.reduce((acc, item, index) => {
-                                            const prevPerc = index === 0 ? 0 : utilizationData.slice(0, index).reduce((p, i) => p + i.percentage, 0);
-                                            return `${acc}${index > 0 ? ',' : ''} ${item.color} ${prevPerc}% ${prevPerc + item.percentage}%`;
-                                        }, '')
-                                            })`
-                                    }}
-                                ></div>
-                                <div className="chart-legend-grid">
-                                    {utilizationData.map((item, index) => (
-                                        <div key={index} className="legend-item">
-                                            <span className="legend-dot" style={{ background: item.color }}></span>
-                                            <div className="legend-info">
-                                                <span className="legend-name">{item.name}</span>
-                                                <span className="legend-val">{Math.round(item.percentage)}% ({item.value} mins)</span>
+                <div className="pie-charts-grid">
+                    {/* OR Utilization Chart */}
+                    <div className="chart-card utilization-chart-card">
+                        <div className="chart-header">
+                            <h3>OR Utilization by Surgeon ({timeframe})</h3>
+                        </div>
+                        <div className="utilization-chart-container">
+                            {utilizationData.length === 0 ? (
+                                <div className="empty-chart-state">No surgeries for this period</div>
+                            ) : (
+                                <div className="pie-chart-wrapper">
+                                    <div
+                                        className="pie-chart"
+                                        style={{
+                                            background: `conic-gradient(${utilizationData.reduce((acc, item, index) => {
+                                                const prevPerc = index === 0 ? 0 : utilizationData.slice(0, index).reduce((p, i) => p + i.percentage, 0);
+                                                return `${acc}${index > 0 ? ',' : ''} ${item.color} ${prevPerc}% ${prevPerc + item.percentage}%`;
+                                            }, '')
+                                                })`
+                                        }}
+                                    ></div>
+                                    <div className="chart-legend-grid">
+                                        {utilizationData.map((item, index) => (
+                                            <div key={index} className="legend-item">
+                                                <span className="legend-dot" style={{ background: item.color }}></span>
+                                                <div className="legend-info">
+                                                    <span className="legend-name">{item.name}</span>
+                                                    <span className="legend-val">{Math.round(item.percentage)}% ({item.value} mins)</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
 
                     {/* OR Block Schedule Allocation Chart */}
-                    <div className="chart-card utilization-chart-card" style={{ marginTop: '1.5rem' }}>
+                    <div className="chart-card utilization-chart-card">
                         <div className="chart-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                                <h3>OR Block Schedule Allocation ({timeframe})</h3>
+                                <h3>OR Block Schedule ({timeframe})</h3>
                                 {/* Room Selector */}
                                 <select
                                     className="filter-select"
@@ -924,9 +927,6 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                                     {ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
                                 </select>
                             </div>
-                            <span className="subtitle-sm" style={{ fontSize: '0.85rem', color: '#64748b', marginLeft: 'auto' }}>
-                                (Surgeons vs Gap Time)
-                            </span>
                         </div>
                         <div className="utilization-chart-container">
                             {blockStats.length === 0 ? (
@@ -963,9 +963,9 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                     </div>
 
                     {/* Surgery Outcome Analysis Chart (New) */}
-                    <div className="chart-card utilization-chart-card" style={{ marginTop: '1.5rem' }}>
+                    <div className="chart-card utilization-chart-card">
                         <div className="chart-header">
-                            <h3>Surgery Outcome Analysis (All Time)</h3>
+                            <h3>Outcome Analysis (All Time)</h3>
                         </div>
                         <div className="utilization-chart-container">
                             {outcomeData.total === 0 ? (
@@ -995,28 +995,28 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                                             <span className="legend-dot" style={{ background: '#10b981' }}></span>
                                             <div className="legend-info">
                                                 <span className="legend-name">Completed</span>
-                                                <span className="legend-val">{outcomeData.completed} ({((outcomeData.completed / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                                <span className="legend-val">{outcomeData.completed}</span>
                                             </div>
                                         </div>
                                         <div className="legend-item">
                                             <span className="legend-dot" style={{ background: '#3b82f6' }}></span>
                                             <div className="legend-info">
                                                 <span className="legend-name">Scheduled</span>
-                                                <span className="legend-val">{outcomeData.scheduled} ({((outcomeData.scheduled / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                                <span className="legend-val">{outcomeData.scheduled}</span>
                                             </div>
                                         </div>
                                         <div className="legend-item">
                                             <span className="legend-dot" style={{ background: '#f59e0b' }}></span>
                                             <div className="legend-info">
                                                 <span className="legend-name">Rescheduled</span>
-                                                <span className="legend-val">{outcomeData.rescheduled} ({((outcomeData.rescheduled / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                                <span className="legend-val">{outcomeData.rescheduled}</span>
                                             </div>
                                         </div>
                                         <div className="legend-item">
                                             <span className="legend-dot" style={{ background: '#dc2626' }}></span>
                                             <div className="legend-info">
                                                 <span className="legend-name">Cancelled</span>
-                                                <span className="legend-val">{outcomeData.cancelled} ({((outcomeData.cancelled / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                                <span className="legend-val">{outcomeData.cancelled}</span>
                                             </div>
                                         </div>
                                     </div>
