@@ -37,6 +37,15 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
 
     const [isExporting, setIsExporting] = useState(false);
 
+    // Outcome Analysis State
+    const [outcomeData, setOutcomeData] = useState({
+        completed: 0,
+        scheduled: 0,
+        rescheduled: 0,
+        cancelled: 0,
+        total: 0
+    });
+
     // Block Schedule State
     const [blockSchedule, setBlockSchedule] = useState([]);
     const [blockStats, setBlockStats] = useState([]); // [{name, value, percentage, color}]
@@ -246,6 +255,16 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
             cptUsage: currentStats.usage,
             revenueChange: calculateChange(currentStats.revenue, prevStats.revenue),
             profitChange: calculateChange(currentStats.profit, prevStats.profit)
+        });
+
+        // Update Outcome Stats
+        // Update Outcome Stats (Using ALL surgeries, not filtered)
+        setOutcomeData({
+            completed: surgeries.filter(s => s.status === 'completed').length,
+            scheduled: surgeries.filter(s => s.status === 'scheduled').length,
+            rescheduled: surgeries.filter(s => s.status === 'rescheduled').length,
+            cancelled: surgeries.filter(s => s.status === 'cancelled').length,
+            total: surgeries.length
         });
 
         setChartData(currentStats.perCaseData);
@@ -937,6 +956,69 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Surgery Outcome Analysis Chart (New) */}
+                    <div className="chart-card utilization-chart-card" style={{ marginTop: '1.5rem' }}>
+                        <div className="chart-header">
+                            <h3>Surgery Outcome Analysis (All Time)</h3>
+                        </div>
+                        <div className="utilization-chart-container">
+                            {outcomeData.total === 0 ? (
+                                <div className="empty-chart-state">No surgeries for this period</div>
+                            ) : (
+                                <div className="pie-chart-wrapper">
+                                    <div
+                                        className="pie-chart"
+                                        style={{
+                                            background: `conic-gradient(
+                                                #10b981 0% ${(outcomeData.completed / outcomeData.total) * 100}%, 
+                                                #3b82f6 ${(outcomeData.completed / outcomeData.total) * 100}% ${((outcomeData.completed + outcomeData.scheduled) / outcomeData.total) * 100}%, 
+                                                #f59e0b ${((outcomeData.completed + outcomeData.scheduled) / outcomeData.total) * 100}% ${((outcomeData.completed + outcomeData.scheduled + outcomeData.rescheduled) / outcomeData.total) * 100}%, 
+                                                #dc2626 ${((outcomeData.completed + outcomeData.scheduled + outcomeData.rescheduled) / outcomeData.total) * 100}% 100%
+                                            )`
+                                        }}
+                                    >
+                                        {/* Donut Hole */}
+                                        <div className="donut-hole" style={{ width: '50%', height: '50%', background: '#fff', borderRadius: '50%', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                            <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#1e293b', lineHeight: '1' }}>{outcomeData.total}</span>
+                                            <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Cases</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="chart-legend-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                                        <div className="legend-item">
+                                            <span className="legend-dot" style={{ background: '#10b981' }}></span>
+                                            <div className="legend-info">
+                                                <span className="legend-name">Completed</span>
+                                                <span className="legend-val">{outcomeData.completed} ({((outcomeData.completed / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                            </div>
+                                        </div>
+                                        <div className="legend-item">
+                                            <span className="legend-dot" style={{ background: '#3b82f6' }}></span>
+                                            <div className="legend-info">
+                                                <span className="legend-name">Scheduled</span>
+                                                <span className="legend-val">{outcomeData.scheduled} ({((outcomeData.scheduled / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                            </div>
+                                        </div>
+                                        <div className="legend-item">
+                                            <span className="legend-dot" style={{ background: '#f59e0b' }}></span>
+                                            <div className="legend-info">
+                                                <span className="legend-name">Rescheduled</span>
+                                                <span className="legend-val">{outcomeData.rescheduled} ({((outcomeData.rescheduled / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                            </div>
+                                        </div>
+                                        <div className="legend-item">
+                                            <span className="legend-dot" style={{ background: '#dc2626' }}></span>
+                                            <div className="legend-info">
+                                                <span className="legend-name">Cancelled</span>
+                                                <span className="legend-val">{outcomeData.cancelled} ({((outcomeData.cancelled / outcomeData.total) * 100).toFixed(1)}%)</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}
