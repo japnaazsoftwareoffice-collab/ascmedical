@@ -38,13 +38,35 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
         return surgeon ? `Dr. ${surgeon.name}` : 'Unknown';
     };
 
+    const [showChart, setShowChart] = useState(false);
+
+    // Calculate chart data for all statuses
+    const completedSurgeries = surgeries.filter(s => s.status === 'completed').length;
+    const scheduledSurgeries = surgeries.filter(s => s.status === 'scheduled').length;
+    const cancelledCount = cancelledSurgeries.length;
+    const rescheduledCount = rescheduledSurgeries.length;
+
+    // Total should be the sum relative to the data we have, or just surgeries.length if that's accurate
+    const total = surgeries.length;
+
+    const completedPercentage = total > 0 ? (completedSurgeries / total) * 100 : 0;
+    const scheduledPercentage = total > 0 ? (scheduledSurgeries / total) * 100 : 0;
+    const cancelledPercentage = total > 0 ? (cancelledCount / total) * 100 : 0;
+    const rescheduledPercentage = total > 0 ? (rescheduledCount / total) * 100 : 0;
+
+    // Calculate gradient stops
+    const p1 = completedPercentage;
+    const p2 = p1 + scheduledPercentage;
+    const p3 = p2 + cancelledPercentage;
+    const p4 = p3 + rescheduledPercentage;
+
     return (
         <div className="management-container fade-in">
             <div className="management-header">
                 <h2 className="management-title">Cancellation & Rescheduling</h2>
             </div>
 
-            <div className="tabs-container" style={{ marginBottom: '2rem' }}>
+            <div className="tabs-container" style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center' }}>
                 <button
                     className={`tab-btn ${activeTab === 'cancelled' ? 'active' : ''}`}
                     onClick={() => setActiveTab('cancelled')}
@@ -67,6 +89,7 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
                     style={{
                         padding: '0.75rem 1.5rem',
                         borderRadius: '8px',
+                        marginRight: '1rem',
                         background: activeTab === 'rescheduled' ? '#f59e0b' : 'white',
                         color: activeTab === 'rescheduled' ? 'white' : '#64748b',
                         border: '1px solid #e2e8f0',
@@ -75,6 +98,25 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
                     }}
                 >
                     Rescheduled ({rescheduledSurgeries.length})
+                </button>
+
+                <button
+                    onClick={() => setShowChart(true)}
+                    style={{
+                        padding: '0.75rem 1.5rem',
+                        borderRadius: '8px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        marginLeft: 'auto'
+                    }}
+                >
+                    <span>📊</span> Analysis
                 </button>
             </div>
 
@@ -141,6 +183,146 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
                     </table>
                 </div>
             </div>
+
+            {/* Detailed Pie Chart Modal */}
+            {showChart && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    backdropFilter: 'blur(4px)'
+                }} onClick={() => setShowChart(false)}>
+                    <div style={{
+                        background: 'white',
+                        padding: '2rem',
+                        borderRadius: '24px',
+                        width: '90%',
+                        maxWidth: '600px',
+                        position: 'relative',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                    }} onClick={e => e.stopPropagation()}>
+                        <button
+                            onClick={() => setShowChart(false)}
+                            style={{
+                                position: 'absolute',
+                                top: '1.5rem',
+                                right: '1.5rem',
+                                background: '#f1f5f9',
+                                border: 'none',
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                color: '#64748b',
+                                fontSize: '1.2rem',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            ×
+                        </button>
+
+                        <h3 style={{ marginTop: 0, marginBottom: '2rem', color: '#1e293b', textAlign: 'center', fontSize: '1.5rem' }}>Surgery Outcome Analysis</h3>
+
+                        {total > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                {/* Chart Container */}
+                                <div style={{
+                                    width: '260px',
+                                    height: '260px',
+                                    borderRadius: '50%',
+                                    background: `conic-gradient(
+                                        #10b981 0% ${p1}%, 
+                                        #3b82f6 ${p1}% ${p2}%, 
+                                        #dc2626 ${p2}% ${p3}%, 
+                                        #f59e0b ${p3}% ${p4}%
+                                    )`,
+                                    marginBottom: '2.5rem',
+                                    position: 'relative',
+                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                }}>
+                                    {/* Donut Hole */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: '50%',
+                                        transform: 'translate(-50%, -50%)',
+                                        background: 'white',
+                                        width: '180px',
+                                        height: '180px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexDirection: 'column',
+                                        boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)'
+                                    }}>
+                                        <span style={{ fontSize: '2.5rem', fontWeight: '800', color: '#1e293b', lineHeight: '1' }}>{total}</span>
+                                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.25rem' }}>Total Cases</span>
+                                    </div>
+                                </div>
+
+                                {/* Legend Grid */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(2, 1fr)',
+                                    gap: '1.5rem',
+                                    width: '100%',
+                                    maxWidth: '400px'
+                                }}>
+                                    {/* Completed */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f0fdf4', borderRadius: '12px' }}>
+                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 0 2px #bbf7d0' }}></div>
+                                        <div>
+                                            <div style={{ fontWeight: '700', color: '#166534', fontSize: '1.1rem' }}>{completedSurgeries}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: '500' }}>Completed ({completedPercentage.toFixed(1)}%)</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Scheduled */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#eff6ff', borderRadius: '12px' }}>
+                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 0 2px #bfdbfe' }}></div>
+                                        <div>
+                                            <div style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.1rem' }}>{scheduledSurgeries}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#1d4ed8', fontWeight: '500' }}>Scheduled ({scheduledPercentage.toFixed(1)}%)</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Rescheduled */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#fffbeb', borderRadius: '12px' }}>
+                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 0 2px #fde68a' }}></div>
+                                        <div>
+                                            <div style={{ fontWeight: '700', color: '#92400e', fontSize: '1.1rem' }}>{rescheduledCount}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: '500' }}>Rescheduled ({rescheduledPercentage.toFixed(1)}%)</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Cancelled */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#fef2f2', borderRadius: '12px' }}>
+                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#dc2626', boxShadow: '0 0 0 2px #fecaca' }}></div>
+                                        <div>
+                                            <div style={{ fontWeight: '700', color: '#991b1b', fontSize: '1.1rem' }}>{cancelledCount}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: '500' }}>Cancelled ({cancelledPercentage.toFixed(1)}%)</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        ) : (
+                            <p style={{ textAlign: 'center', color: '#64748b' }}>No surgery data available for analysis</p>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

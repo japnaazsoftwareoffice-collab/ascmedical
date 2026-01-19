@@ -974,9 +974,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                             {surgery.status !== 'completed' && surgery.status !== 'cancelled' && (
                                                                                 <>
                                                                                     <button
-                                                                                        className="btn-icon"
+                                                                                        className="btn-icon btn-reschedule"
                                                                                         title="Reschedule"
-                                                                                        style={{ color: '#f59e0b' }}
                                                                                         onClick={() => openRescheduleModal(surgery)}
                                                                                     >
                                                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -988,9 +987,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                                         </svg>
                                                                                     </button>
                                                                                     <button
-                                                                                        className="btn-icon"
+                                                                                        className="btn-icon btn-action-cancel"
                                                                                         title="Cancel"
-                                                                                        style={{ color: '#ef4444' }}
                                                                                         onClick={() => handleCancelSurgery(surgery.id)}
                                                                                     >
                                                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
