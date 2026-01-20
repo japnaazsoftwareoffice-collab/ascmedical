@@ -12,7 +12,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         description: '',
         reimbursement: '',
         procedure_indicator: '',
-        body_part: ''
+        body_part: '',
+        average_duration: ''
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +55,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             reimbursement: parseFloat(formData.reimbursement),
             category: formData.category,
             procedure_indicator: formData.procedure_indicator,
-            body_part: formData.body_part
+            body_part: formData.body_part,
+            average_duration: parseInt(formData.average_duration) || 0
         };
 
         if (editingId) {
@@ -78,7 +80,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '' });
         setIsNewCategory(false);
     };
 
@@ -89,7 +91,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             description: cpt.description,
             reimbursement: cpt.reimbursement,
             procedure_indicator: cpt.procedure_indicator || '',
-            body_part: cpt.body_part || ''
+            body_part: cpt.body_part || '',
+            average_duration: cpt.average_duration || ''
         });
         setEditingId(cpt.id);
 
@@ -116,7 +119,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     const handleCancelEdit = () => {
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '' });
         setEditingId(null);
         setIsNewCategory(false);
     };
@@ -351,6 +354,18 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                         </div>
 
                         <div className="form-group">
+                            <label>Average Duration (Minutes)</label>
+                            <input
+                                type="number"
+                                className="form-input"
+                                placeholder="e.g. 60"
+                                min="0"
+                                value={formData.average_duration}
+                                onChange={(e) => setFormData({ ...formData, average_duration: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="form-group">
                             <label>Reimbursement ($) <span style={{ color: 'red' }}>*</span></label>
                             <input
                                 type="number"
@@ -479,6 +494,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <th>Indicator</th>
                                     <th>Category</th>
                                     <th>Body Part</th>
+                                    <th>Duration</th>
                                     <th>Reimbursement</th>
                                     <th>Actions</th>
                                 </tr>
@@ -500,6 +516,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                             </td>
                                             <td><span className="category-tag">{cpt.category}</span></td>
                                             <td>{cpt.body_part || '-'}</td>
+                                            <td>{cpt.average_duration ? `${cpt.average_duration} min` : '-'}</td>
                                             <td style={{ fontWeight: 600, color: '#10b981' }}>{formatCurrency(cpt.reimbursement)}</td>
                                             <td>
                                                 <div className="actions-cell">
