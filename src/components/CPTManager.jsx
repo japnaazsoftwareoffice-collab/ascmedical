@@ -14,6 +14,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         procedure_indicator: '',
         body_part: '',
         average_duration: '',
+        turnover_time: '',
         is_active: true
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
@@ -58,6 +59,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             procedure_indicator: formData.procedure_indicator,
             body_part: formData.body_part,
             average_duration: parseInt(formData.average_duration) || 0,
+            turnover_time: parseInt(formData.turnover_time) || 0,
             is_active: formData.is_active
         };
 
@@ -82,7 +84,17 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', is_active: true });
+        setFormData({
+            category: '',
+            code: '',
+            description: '',
+            reimbursement: '',
+            procedure_indicator: '',
+            body_part: '',
+            average_duration: '',
+            turnover_time: '',
+            is_active: true
+        });
         setIsNewCategory(false);
     };
 
@@ -95,6 +107,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             procedure_indicator: cpt.procedure_indicator || '',
             body_part: cpt.body_part || '',
             average_duration: cpt.average_duration || '',
+            turnover_time: cpt.turnover_time || '',
             is_active: cpt.is_active !== false
         });
         setEditingId(cpt.id);
@@ -122,7 +135,17 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     const handleCancelEdit = () => {
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', is_active: true });
+        setFormData({
+            category: '',
+            code: '',
+            description: '',
+            reimbursement: '',
+            procedure_indicator: '',
+            body_part: '',
+            average_duration: '',
+            turnover_time: '',
+            is_active: true
+        });
         setEditingId(null);
         setIsNewCategory(false);
     };
@@ -251,163 +274,159 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                 </div>
             </div>
 
-            <div className="split-layout">
-                {/* Left Side: Add/Edit Form */}
-                <div className="content-card form-card">
-                    <div className="card-header">
-                        <h3>{editingId ? 'Edit CPT Code' : 'Add New CPT'}</h3>
-                        <p className="card-subtitle">Manage procedure codes and pricing</p>
+            <div className="vertical-layout">
+                {/* Top Section: Form Card */}
+                <div className="content-card form-card-wide">
+                    <div className="card-header-compact">
+                        <div className="header-info">
+                            <h3>{editingId ? 'Edit CPT Code' : 'Add New CPT'}</h3>
+                            <p className="card-subtitle">Complete the details below to update the master price list</p>
+                        </div>
                     </div>
-                    <form onSubmit={handleSubmit} className="cpt-form">
-                        <div className="form-group">
-                            <label>Category <span style={{ color: 'red' }}>*</span></label>
-                            {isNewCategory ? (
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        placeholder="Enter new category name"
+
+                    <form onSubmit={handleSubmit} className="cpt-form-grid">
+                        <div className="form-row-grid">
+                            <div className="form-group">
+                                <label>Category <span className="required-star">*</span></label>
+                                {isNewCategory ? (
+                                    <div className="input-with-action">
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder="New category..."
+                                            value={formData.category}
+                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                            required
+                                            autoFocus
+                                        />
+                                        <button type="button" className="btn-small-link" onClick={() => setIsNewCategory(false)}>Cancel</button>
+                                    </div>
+                                ) : (
+                                    <select
+                                        className="form-select"
                                         value={formData.category}
-                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                        onChange={(e) => e.target.value === 'NEW_CATEGORY_OPTION' ? setIsNewCategory(true) : setFormData({ ...formData, category: e.target.value })}
                                         required
-                                        autoFocus
-                                    />
-                                    <button
-                                        type="button"
-                                        className="btn-cancel"
-                                        onClick={() => {
-                                            setIsNewCategory(false);
-                                            setFormData({ ...formData, category: '' });
-                                        }}
-                                        style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}
                                     >
+                                        <option value="">Select Category...</option>
+                                        {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                        <option value="NEW_CATEGORY_OPTION" className="new-opt">+ Create New...</option>
+                                    </select>
+                                )}
+                            </div>
+
+                            <div className="form-group">
+                                <label>CPT Code <span className="required-star">*</span></label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="e.g. 99213"
+                                    value={formData.code}
+                                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Description <span className="required-star">*</span></label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="Procedure name"
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Indicator</label>
+                                <select
+                                    className="form-select"
+                                    value={formData.procedure_indicator}
+                                    onChange={(e) => setFormData({ ...formData, procedure_indicator: e.target.value })}
+                                >
+                                    <option value="">Select...</option>
+                                    <option value="S">S - Surgical</option>
+                                    <option value="A">A - Ancillary</option>
+                                    <option value="C">C - Carrier</option>
+                                </select>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Body Part</label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    placeholder="e.g. Hand, Knee"
+                                    value={formData.body_part}
+                                    onChange={(e) => setFormData({ ...formData, body_part: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Duration (Min)</label>
+                                <input
+                                    type="number"
+                                    className="form-input"
+                                    value={formData.average_duration}
+                                    onChange={(e) => setFormData({ ...formData, average_duration: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Turnover (Min)</label>
+                                <input
+                                    type="number"
+                                    className="form-input"
+                                    value={formData.turnover_time}
+                                    onChange={(e) => setFormData({ ...formData, turnover_time: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Reimbursement <span className="required-star">*</span></label>
+                                <div className="currency-input">
+                                    <span className="unit">$</span>
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        step="0.01"
+                                        value={formData.reimbursement}
+                                        onChange={(e) => setFormData({ ...formData, reimbursement: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="form-submit-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <input
+                                    type="checkbox"
+                                    id="is_active"
+                                    checked={formData.is_active}
+                                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="is_active" style={{ fontSize: '0.95rem', fontWeight: '600', color: '#475569', cursor: 'pointer', marginBottom: 0 }}>Active Code</label>
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                <button type="submit" className="btn-save-modern">
+                                    {editingId ? 'Update CPT Code' : 'Add to Price List'}
+                                </button>
+                                {editingId && (
+                                    <button type="button" className="btn-cancel-modern" onClick={handleCancelEdit}>
                                         Cancel
                                     </button>
-                                </div>
-                            ) : (
-                                <select
-                                    className="form-input"
-                                    value={formData.category}
-                                    onChange={(e) => {
-                                        if (e.target.value === 'NEW_CATEGORY_OPTION') {
-                                            setIsNewCategory(true);
-                                            setFormData({ ...formData, category: '' });
-                                        } else {
-                                            setFormData({ ...formData, category: e.target.value });
-                                        }
-                                    }}
-                                    required
-                                >
-                                    <option value="">Select Category...</option>
-                                    {uniqueCategories.map(cat => (
-                                        <option key={cat} value={cat}>{cat}</option>
-                                    ))}
-                                    <option value="NEW_CATEGORY_OPTION" style={{ fontWeight: 'bold', color: '#3b82f6' }}>+ Create New Category...</option>
-                                </select>
-                            )}
-                        </div>
-
-                        <div className="form-group">
-                            <label>CPT Code <span style={{ color: 'red' }}>*</span></label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                placeholder="e.g. 99213"
-                                value={formData.code}
-                                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                                required
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Description <span style={{ color: 'red' }}>*</span></label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                placeholder="Short procedure name"
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                required
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Procedure Indicator</label>
-                            <select
-                                className="form-input"
-                                value={formData.procedure_indicator}
-                                onChange={(e) => setFormData({ ...formData, procedure_indicator: e.target.value })}
-                            >
-                                <option value="">-- Select Indicator --</option>
-                                <option value="S">S - Surgical Procedure</option>
-                                <option value="A">A - Ancillary Service</option>
-                                <option value="C">C - Carrier Priced</option>
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label>Body Part</label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                placeholder="e.g. Hand, Shoulder, Knee"
-                                value={formData.body_part}
-                                onChange={(e) => setFormData({ ...formData, body_part: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Reimbursement ($) <span style={{ color: 'red' }}>*</span></label>
-                            <input
-                                type="number"
-                                className="form-input"
-                                placeholder="0.00"
-                                step="0.01"
-                                min="0"
-                                value={formData.reimbursement}
-                                onChange={(e) => setFormData({ ...formData, reimbursement: e.target.value })}
-                                required
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Average Duration (minutes)</label>
-                            <input
-                                type="number"
-                                className="form-input"
-                                placeholder="e.g. 60"
-                                min="0"
-                                value={formData.average_duration}
-                                onChange={(e) => setFormData({ ...formData, average_duration: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <input
-                                type="checkbox"
-                                id="is_active"
-                                checked={formData.is_active}
-                                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                                style={{ width: 'auto', margin: 0 }}
-                            />
-                            <label htmlFor="is_active" style={{ margin: 0, cursor: 'pointer' }}>Active Status</label>
-                        </div>
-
-                        <div className="form-actions" style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <button type="submit" className="btn-save full-width" style={{ width: '100%', justifyContent: 'center' }}>
-                                {editingId ? 'Update CPT Code' : 'Add to Price List'}
-                            </button>
-                            {editingId && (
-                                <button type="button" className="btn-cancel full-width" onClick={handleCancelEdit} style={{ width: '100%', justifyContent: 'center' }}>
-                                    Cancel Edit
-                                </button>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </form>
                 </div>
 
-                {/* Right Side: List */}
-                <div className="content-card list-card" style={{ display: 'flex', flexDirection: 'column', height: 'fit-content' }}>
+                {/* Bottom Section: List Card */}
+                <div className="content-card full-width list-card-modern">
                     <div className="card-header list-header" style={{
                         display: 'flex',
                         justifyContent: 'space-between',
@@ -508,6 +527,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <th>Indicator</th>
                                     <th>Category</th>
                                     <th>Body Part</th>
+                                    <th>Duration</th>
+                                    <th>Turnover</th>
                                     <th>Reimbursement</th>
                                     <th>Actions</th>
                                 </tr>
@@ -515,7 +536,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                             <tbody>
                                 {currentItems.length > 0 ? (
                                     currentItems.map((cpt, index) => (
-                                        <tr key={cpt.id || index}>
+                                        <tr key={cpt.id || index} style={{ opacity: cpt.is_active === false ? 0.6 : 1 }}>
                                             <td className="font-mono" style={{ fontWeight: 600 }}>{cpt.code}</td>
                                             <td>{cpt.description}</td>
                                             <td>
@@ -529,6 +550,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                             </td>
                                             <td><span className="category-tag">{cpt.category}</span></td>
                                             <td>{cpt.body_part || '-'}</td>
+                                            <td>{cpt.average_duration ? `${cpt.average_duration} min` : '-'}</td>
+                                            <td>{cpt.turnover_time ? `${cpt.turnover_time} min` : '-'}</td>
                                             <td style={{ fontWeight: 600, color: '#10b981' }}>{formatCurrency(cpt.reimbursement)}</td>
                                             <td>
                                                 <div className="actions-cell">
@@ -560,7 +583,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                                        <td colSpan="9" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
                                             No CPT codes found for this category
                                         </td>
                                     </tr>
