@@ -39,6 +39,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
             orNumber: i + 1,
             orName: `OR ${i + 1}`,
             minutesUsed: 0,
+            turnoverMinutes: 0,
             surgeries: [],
             utilizationPercent: 0
         }));
@@ -47,9 +48,20 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
         dateSurgeries.forEach((surgery, index) => {
             const orIndex = surgery.or_room ? surgery.or_room - 1 : index % OR_COUNT;
             const duration = surgery.duration_minutes || 0;
+            let turnover = surgery.turnover_time || surgery.turnoverTime || 0;
 
-            // Calculate OR Cost (Expense)
-            const surgeryORCost = calculateORCost(duration);
+            // Fallback: Calculate turnover from CPT codes if not stored on surgery
+            if (turnover === 0 && surgery.cpt_codes && surgery.cpt_codes.length > 0) {
+                surgery.cpt_codes.forEach(code => {
+                    const cpt = cptCodes.find(c => String(c.code) === String(code));
+                    if (cpt) {
+                        turnover += parseInt(cpt.turnover_time || cpt.turnoverTime || 0);
+                    }
+                });
+            }
+
+            // Calculate OR Cost (Expense) - Includes Turnover (Internal Cost)
+            const surgeryORCost = calculateORCost(duration + turnover);
             totalORCost += surgeryORCost;
 
             // Calculate Labor Cost from notes or use actual_labor_cost
@@ -85,8 +97,8 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
 
             if (isCosmetic) {
                 if (surgery.notes) {
-                    const facilityMatch = surgery.notes.match(/Facility Fee: \$([\d,]+)/);
-                    const anesthesiaMatch = surgery.notes.match(/Anesthesia: \$([\d,]+)/);
+                    const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,]+)/);
+                    const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,]+)/);
                     const facilityFee = facilityMatch ? parseInt(facilityMatch[1].replace(/,/g, '')) : 0;
                     const anesthesiaFee = anesthesiaMatch ? parseInt(anesthesiaMatch[1].replace(/,/g, '')) : 0;
                     surgeryRevenue = facilityFee + anesthesiaFee;
@@ -141,13 +153,15 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
             doctorName = doctorName || 'Unknown Surgeon';
 
             if (orIndex >= 0 && orIndex < OR_COUNT) {
-                orData[orIndex].minutesUsed += duration;
+                orData[orIndex].minutesUsed += (duration + turnover);
+                orData[orIndex].turnoverMinutes += turnover;
                 orData[orIndex].surgeries.push({
                     id: surgery.id,
                     patientName: patientName,
                     doctorName: doctorName,
                     startTime: surgery.start_time,
                     duration: duration,
+                    turnover: turnover,
                     revenue: surgeryRevenue,
                     cost: surgeryORCost,
                     laborCost: surgeryLaborCost,
@@ -162,6 +176,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
         });
 
         const totalMinutesUsed = orData.reduce((sum, or) => sum + or.minutesUsed, 0);
+        const totalTurnoverMinutes = orData.reduce((sum, or) => sum + or.turnoverMinutes, 0);
         const totalUtilization = (totalMinutesUsed / TOTAL_FACILITY_MINUTES) * 100;
 
         return {
@@ -169,6 +184,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
             totalUtilization,
             totalSurgeries: dateSurgeries.length,
             totalMinutesUsed,
+            totalTurnoverMinutes,
             totalOperationCost,
             totalORCost,
             totalLaborCost,
@@ -186,6 +202,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
                 suppliesCost: utilizationData.totalSuppliesCost,
                 surgeries: utilizationData.totalSurgeries,
                 minutesUsed: utilizationData.totalMinutesUsed,
+                turnoverMinutes: utilizationData.totalTurnoverMinutes,
                 utilization: utilizationData.totalUtilization,
                 totalCapacity: TOTAL_FACILITY_MINUTES
             };
@@ -203,6 +220,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
                 suppliesCost: 0,
                 surgeries: 0,
                 minutesUsed: 0,
+                turnoverMinutes: 0,
                 utilization: 0,
                 totalCapacity: TOTAL_MINUTES_PER_OR
             };
@@ -221,6 +239,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
             suppliesCost: orSuppliesCost,
             surgeries: orStats.surgeries.length,
             minutesUsed: orStats.minutesUsed,
+            turnoverMinutes: orStats.turnoverMinutes,
             utilization: orStats.utilizationPercent,
             totalCapacity: TOTAL_MINUTES_PER_OR
         };
@@ -406,7 +425,9 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
                     <div className="stat-content">
                         <div className="stat-label">Time Used</div>
                         <div className="stat-value">{formatDuration(filteredMetrics.minutesUsed)}</div>
-                        <div className="stat-sublabel">of {formatDuration(filteredMetrics.totalCapacity)}</div>
+                        <div className="stat-sublabel">
+                            {formatDuration(filteredMetrics.minutesUsed - filteredMetrics.turnoverMinutes)} surg + {formatDuration(filteredMetrics.turnoverMinutes)} turn
+                        </div>
                     </div>
                     <div className="stat-icon icon-blue">
                         ⏱️
@@ -508,7 +529,14 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
                                                 <div className="surgery-patient">{surgery.patientName}</div>
                                                 <div className="surgery-doctor">{surgery.doctorName}</div>
                                             </div>
-                                            <div className="surgery-duration">{formatDuration(surgery.duration)}</div>
+                                            <div className="surgery-duration" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                                                <span>{formatDuration(surgery.duration)}</span>
+                                                {surgery.turnover > 0 && (
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>
+                                                        + {surgery.turnover}m turn
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
