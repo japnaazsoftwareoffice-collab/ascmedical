@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { calculateORCost, formatCurrency, formatSurgeonName } from '../utils/hospitalUtils';
+import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue } from '../utils/hospitalUtils';
 import './ORUtilization.css';
 
-const ORUtilization = ({ surgeries, cptCodes }) => {
+const ORUtilization = ({ surgeries, cptCodes, settings }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedOR, setSelectedOR] = useState('all'); // 'all' or specific OR number
 
@@ -93,20 +93,25 @@ const ORUtilization = ({ surgeries, cptCodes }) => {
                 }
             } else {
                 // CPT Codes revenue
-                if (surgery.cpt_codes && cptCodes) {
-                    surgeryRevenue = surgery.cpt_codes.reduce((sum, code) => {
-                        const cpt = cptCodes.find(c => c.code === code);
-                        return sum + (cpt?.reimbursement || 0);
-                    }, 0);
-                }
+                const cptRevenue = calculateMedicareRevenue(
+                    surgery.cpt_codes || [],
+                    cptCodes,
+                    settings?.apply_medicare_mppr || false
+                );
+
+                // Add Billable Facility Fee (based on procedure duration only)
+                const billableFacilityFee = calculateORCost(duration);
 
                 // Add Self-Pay Anesthesia if applicable
+                let anesthesiaExtra = 0;
                 if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
                     const match = surgery.notes.match(/Self-Pay Anesthesia: \$([\d,]+)/);
                     if (match) {
-                        surgeryRevenue += parseFloat(match[1].replace(/,/g, ''));
+                        anesthesiaExtra = parseFloat(match[1].replace(/,/g, ''));
                     }
                 }
+
+                surgeryRevenue = cptRevenue + billableFacilityFee + anesthesiaExtra;
             }
 
             totalOperationCost += surgeryRevenue;
