@@ -364,9 +364,25 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
             let totalMinutes = 0;
             subset.forEach(s => {
                 const name = s.doctor_name || 'Unknown';
-                const duration = s.duration_minutes || s.durationMinutes || 0;
-                util[name] = (util[name] || 0) + duration;
-                totalMinutes += duration;
+                const duration = parseFloat(s.duration_minutes || s.durationMinutes || 0);
+
+                let turnover = parseFloat(s.turnover_time || s.turnoverTime || 0);
+                // Fallback: Calculate turnover from CPT codes if not stored on surgery
+                if (turnover === 0) {
+                    const codes = s.cpt_codes || s.cptCodes || [];
+                    if (codes.length > 0) {
+                        codes.forEach(code => {
+                            const cpt = cptCodes.find(c => String(c.code) === String(code));
+                            if (cpt) {
+                                turnover += parseFloat(cpt.turnover_time || cpt.turnoverTime || 0);
+                            }
+                        });
+                    }
+                }
+
+                const totalDuration = duration + turnover;
+                util[name] = (util[name] || 0) + totalDuration;
+                totalMinutes += totalDuration;
             });
 
             return Object.entries(util).map(([name, minutes]) => ({
