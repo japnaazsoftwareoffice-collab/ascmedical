@@ -21,6 +21,7 @@ import CPTAutoUpdate from './components/CPTAutoUpdate';
 import SurgeonScorecard from './components/SurgeonScorecard';
 import StaffManagement from './components/StaffManagement';
 import RolePermissionManagement from './components/RolePermissionManagement';
+import SupplyManager from './components/SupplyManager';
 
 import ManagerDashboard from './components/ManagerDashboard';
 import CancellationRescheduling from './components/CancellationRescheduling';
@@ -48,6 +49,7 @@ function App() {
   const [orBlockSchedule, setOrBlockSchedule] = useState([]);
   const [staff, setStaff] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [supplies, setSupplies] = useState([]);
   const [userPermissions, setUserPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -111,7 +113,7 @@ function App() {
       }
 
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData, staffData, permsData] = await Promise.all([
+      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData, staffData, permsData, suppliesData] = await Promise.all([
         db.getPatients(),
         db.getSurgeons(),
         db.getCPTCodes(),
@@ -122,7 +124,8 @@ function App() {
         db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([]),
         db.getSettings ? db.getSettings() : Promise.resolve(null),
         db.getStaff ? db.getStaff() : Promise.resolve([]),
-        user ? db.getRolePermissions(user.role) : Promise.resolve([])
+        user ? db.getRolePermissions(user.role) : Promise.resolve([]),
+        db.getSupplies ? db.getSupplies() : Promise.resolve([])
       ]);
 
       // Transform surgeons to add 'name' property
@@ -141,6 +144,7 @@ function App() {
       setOrBlockSchedule(orBlockScheduleData || []);
       setStaff(staffData || []);
       setSettings(settingsData);
+      setSupplies(suppliesData || []);
 
       if (user) {
         // Use permissions from role_permissions table for all roles
@@ -547,6 +551,88 @@ function App() {
       Swal.fire({
         title: 'Error!',
         text: 'Failed to delete CPT code',
+        icon: 'error',
+        confirmButtonColor: '#3b82f6'
+      });
+    }
+  };
+
+  // Supply Management Handlers
+  const handleAddSupply = async (newSupply) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        // No database - use local state only
+        const supplyWithId = { ...newSupply, id: Date.now() };
+        setSupplies([supplyWithId, ...supplies]);
+        return supplyWithId;
+      }
+
+      const addedSupply = await db.addSupply(newSupply);
+      setSupplies([addedSupply, ...supplies]);
+      return addedSupply;
+    } catch (err) {
+      console.error('Error adding supply:', err);
+      // Fallback to local state
+      const supplyWithId = { ...newSupply, id: Date.now() };
+      setSupplies([supplyWithId, ...supplies]);
+      return supplyWithId;
+    }
+  };
+
+  const handleUpdateSupply = async (id, updates) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setSupplies(supplies.map(s => s.id === id ? { ...s, ...updates } : s));
+        return;
+      }
+
+      await db.updateSupply(id, updates);
+      setSupplies(supplies.map(s => s.id === id ? { ...s, ...updates } : s));
+    } catch (error) {
+      console.error('Error updating supply:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to update supply',
+        icon: 'error',
+        confirmButtonColor: '#3b82f6'
+      });
+    }
+  };
+
+  const handleDeleteSupply = async (id) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setSupplies(supplies.filter(s => s.id !== id));
+        await Swal.fire({
+          title: 'Deleted!',
+          text: 'Supply item has been deleted',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false
+        });
+        return;
+      }
+
+      await db.deleteSupply(id);
+      setSupplies(supplies.filter(s => s.id !== id));
+      await Swal.fire({
+        title: 'Deleted!',
+        text: 'Supply item has been deleted',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } catch (error) {
+      console.error('Error deleting supply:', error);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to delete supply',
         icon: 'error',
         confirmButtonColor: '#3b82f6'
       });
@@ -1006,6 +1092,10 @@ function App() {
 
     if (view === 'cpt' && hasPerm('manage_cpt_codes')) {
       return <CPTManager cptCodes={cptCodes} showAllCPTs={showAllCPTs} setShowAllCPTs={setShowAllCPTs} onAddCPT={handleAddCPT} onUpdateCPT={handleUpdateCPT} onDeleteCPT={handleDeleteCPT} onRefreshCPTCodes={loadAllData} />;
+    }
+
+    if (view === 'supply-manager' && hasPerm('manage_supplies')) {
+      return <SupplyManager supplies={supplies} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onDeleteSupply={handleDeleteSupply} onRefreshSupplies={loadAllData} />;
     }
 
     if (view === 'auto-cpt' && hasPerm('use_auto_updater')) return <CPTAutoUpdate />;

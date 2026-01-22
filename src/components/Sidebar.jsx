@@ -21,6 +21,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
         { id: 'scorecard', icon: '🎯', label: 'Surgeon Scorecard', permission: 'view_scorecards' },
         { id: 'cpt', icon: '⚙️', label: 'CPT & Categories', permission: 'manage_cpt_codes' },
         { id: 'auto-cpt', icon: '🔄', label: 'CPT Auto-Updater', permission: 'use_auto_updater' },
+        { id: 'supply-manager', icon: '📦', label: 'Supply Manager', permission: 'manage_supplies' },
         { id: 'settings', icon: '🔧', label: 'Settings', permission: 'manage_settings' }
     ];
 

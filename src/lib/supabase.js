@@ -258,6 +258,30 @@ export const db = {
         return data;
     },
 
+    // ==================== PROCEDURE GROUPS (Virtual) ====================
+    async updateProcedureGroupName(oldName, newName) {
+        const { error } = await supabase
+            .from('cpt_codes')
+            .update({ procedure_group: newName })
+            .eq('procedure_group', oldName);
+
+        if (error) throw error;
+    },
+
+    async deleteProcedureGroup(groupName) {
+        if (!groupName) throw new Error('Group name is required');
+
+        // Move codes to 'Other' instead of deleting them
+        const { data, error } = await supabase
+            .from('cpt_codes')
+            .update({ procedure_group: 'Other' })
+            .eq('procedure_group', groupName)
+            .select();
+
+        if (error) throw error;
+        return data;
+    },
+
     // ==================== SURGERIES ====================
     async getSurgeries() {
         const { data, error } = await supabase

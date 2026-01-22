@@ -5,6 +5,30 @@ import { db } from '../lib/supabase';
 import CPTDurationUpdater from './CPTDurationUpdater';
 import './Management.css';
 
+const DEFAULT_PROCEDURE_GROUPS = [
+    'Anesthesiology Procedures',
+    'Breast Oncology Procedures',
+    'Cardiology Procedures',
+    'Dermatology Procedures',
+    'Emerging Technology (T-Code) Procedures',
+    'Evaluations / Medicine Procedures',
+    'Gastroenterology Procedures',
+    'General Procedures',
+    'Neurology Procedures',
+    'Ophthalmology Procedures',
+    'Orthopedics / Musculoskeletal Procedures',
+    'Orthopedics Procedures',
+    'Otolaryngology (ENT) Procedures',
+    'Pain Management Procedures',
+    'Plastic / Cosmetic Procedures',
+    'Podiatry Procedures',
+    'Radiology / Imaging Procedures',
+    'Radiology Procedures',
+    'Thoracic Surgery Procedures',
+    'Urology Procedures',
+    'Other'
+];
+
 const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPTCodes, showAllCPTs, setShowAllCPTs }) => {
     const [formData, setFormData] = useState({
         category: '',
@@ -14,13 +38,15 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         procedure_indicator: '',
         body_part: '',
         average_duration: '',
-        turnover_time: ''
+        turnover_time: '',
+        procedure_group: ''
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
     // showAllCPTs is now a prop
     const [editingId, setEditingId] = useState(null);
     const [isNewCategory, setIsNewCategory] = useState(false);
+    const [isNewProcedureGroup, setIsNewProcedureGroup] = useState(false);
     const [showDurationUpdater, setShowDurationUpdater] = useState(false);
 
     // Get unique categories from existing codes
@@ -29,6 +55,12 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         // Ensure 'General' always exists as a fallback
         cats.add('General');
         return [...cats].sort();
+    }, [cptCodes]);
+
+    // Get unique procedure groups (merged with defaults)
+    const uniqueProcedureGroups = React.useMemo(() => {
+        const groups = new Set([...DEFAULT_PROCEDURE_GROUPS, ...cptCodes.map(c => c.procedure_group).filter(Boolean)]);
+        return [...groups].sort();
     }, [cptCodes]);
 
     // Pagination State
@@ -82,7 +114,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', turnover_time: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', turnover_time: '', procedure_group: '' });
         setIsNewCategory(false);
     };
 
@@ -95,7 +127,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             procedure_indicator: cpt.procedure_indicator || '',
             body_part: cpt.body_part || '',
             average_duration: cpt.average_duration || '',
-            turnover_time: cpt.turnover_time || ''
+            turnover_time: cpt.turnover_time || '',
+            procedure_group: cpt.procedure_group || ''
         });
         setEditingId(cpt.id);
 
@@ -122,7 +155,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     const handleCancelEdit = () => {
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', turnover_time: '' });
+        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', turnover_time: '', procedure_group: '' });
         setEditingId(null);
         setIsNewCategory(false);
     };
@@ -155,6 +188,10 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [editingCategory, setEditingCategory] = useState(null); // { name: 'Old Name' }
     const [newCategoryName, setNewCategoryName] = useState('');
+
+    const [showGroupModal, setShowGroupModal] = useState(false);
+    const [editingGroup, setEditingGroup] = useState(null);
+    const [newGroupName, setNewGroupName] = useState('');
 
     const handleUpdateCategory = async (oldName) => {
         if (!newCategoryName.trim() || newCategoryName === oldName) {
@@ -207,6 +244,57 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         }
     };
 
+    const handleUpdateGroup = async (oldName) => {
+        if (!newGroupName.trim() || newGroupName === oldName) {
+            setEditingGroup(null);
+            return;
+        }
+
+        try {
+            await db.updateProcedureGroupName(oldName, newGroupName);
+            await Swal.fire({
+                title: 'Updated!',
+                text: 'Group name updated successfully',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+
+            if (onRefreshCPTCodes) {
+                onRefreshCPTCodes();
+            }
+        } catch (error) {
+            console.error('Error updating group:', error);
+            Swal.fire('Error', 'Failed to update group', 'error');
+        }
+        setEditingGroup(null);
+        setNewGroupName('');
+    };
+
+    const handleDeleteGroup = async (groupName) => {
+        const result = await Swal.fire({
+            title: 'Delete Group?',
+            text: `This will move all "${groupName}" codes to "Other".`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'Yes, delete it!'
+        });
+
+        if (result.isConfirmed) {
+            try {
+                await db.deleteProcedureGroup(groupName);
+                await Swal.fire('Deleted!', 'Group has been removed.', 'success');
+                if (onRefreshCPTCodes) {
+                    onRefreshCPTCodes();
+                }
+            } catch (error) {
+                console.error('Error deleting group:', error);
+                Swal.fire('Error', `Failed to delete group: ${error.message || JSON.stringify(error)}`, 'error');
+            }
+        }
+    };
+
     return (
         <div className="management-container fade-in">
             <div className="management-header">
@@ -247,6 +335,24 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                         }}
                     >
                         <span style={{ fontSize: '1.2rem' }}>🏷️</span> Manage Categories
+                    </button>
+                    <button
+                        className="btn-secondary"
+                        onClick={() => setShowGroupModal(true)}
+                        style={{
+                            padding: '0.5rem 1rem',
+                            background: 'white',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontWeight: '600',
+                            color: '#475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}
+                    >
+                        <span style={{ fontSize: '1.2rem' }}>📑</span> Manage Groups
                     </button>
                 </div>
             </div>
@@ -302,6 +408,36 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                                     required
                                 />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Procedure Group</label>
+                                {isNewProcedureGroup ? (
+                                    <div className="input-with-action">
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder="New procedure group..."
+                                            value={formData.procedure_group}
+                                            onChange={(e) => setFormData({ ...formData, procedure_group: e.target.value })}
+                                            required
+                                            autoFocus
+                                        />
+                                        <button type="button" className="btn-small-link" onClick={() => setIsNewProcedureGroup(false)}>Cancel</button>
+                                    </div>
+                                ) : (
+                                    <select
+                                        className="form-select"
+                                        value={formData.procedure_group}
+                                        onChange={(e) => e.target.value === 'NEW_GROUP_OPTION' ? setIsNewProcedureGroup(true) : setFormData({ ...formData, procedure_group: e.target.value })}
+                                    >
+                                        <option value="">Select Group...</option>
+                                        {uniqueProcedureGroups.map(group => (
+                                            <option key={group} value={group}>{group}</option>
+                                        ))}
+                                        <option value="NEW_GROUP_OPTION" className="new-opt">+ Create New...</option>
+                                    </select>
+                                )}
                             </div>
 
                             <div className="form-group">
@@ -491,6 +627,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <th>Description</th>
                                     <th>Indicator</th>
                                     <th>Category</th>
+                                    <th>Procedure Group</th>
                                     <th>Body Part</th>
                                     <th>Duration</th>
                                     <th>Turnover</th>
@@ -514,6 +651,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                                 )}
                                             </td>
                                             <td><span className="category-tag">{cpt.category}</span></td>
+                                            <td>{cpt.procedure_group || '-'}</td>
                                             <td>{cpt.body_part || '-'}</td>
                                             <td>{cpt.average_duration ? `${cpt.average_duration} min` : '-'}</td>
                                             <td>{cpt.turnover_time ? `${cpt.turnover_time} min` : '-'}</td>
@@ -629,6 +767,65 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                                     <button
                                                         className="btn-icon"
                                                         onClick={() => handleDeleteCategory(cat)}
+                                                        title="Delete"
+                                                        style={{ color: '#ef4444' }}
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Procedure Group Management Modal */}
+            {showGroupModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '500px' }}>
+                        <div className="modal-header">
+                            <h3>Manage Procedure Groups</h3>
+                            <button className="btn-close" onClick={() => setShowGroupModal(false)}>×</button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '1.5rem' }}>
+                            <div className="category-list-manage" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto' }}>
+                                {uniqueProcedureGroups.map(group => (
+                                    <div key={group} className="category-item-manage" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        {editingGroup === group ? (
+                                            <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
+                                                <input
+                                                    type="text"
+                                                    className="form-input"
+                                                    value={newGroupName}
+                                                    onChange={(e) => setNewGroupName(e.target.value)}
+                                                    autoFocus
+                                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.9rem' }}
+                                                />
+                                                <button className="btn-save" onClick={() => handleUpdateGroup(group)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Save</button>
+                                                <button className="btn-cancel" onClick={() => setEditingGroup(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Cancel</button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <span style={{ fontWeight: '500', color: '#334155' }}>{group}</span>
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    <button
+                                                        className="btn-icon"
+                                                        onClick={() => {
+                                                            setEditingGroup(group);
+                                                            setNewGroupName(group);
+                                                        }}
+                                                        title="Rename"
+                                                        style={{ color: '#3b82f6' }}
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                    </button>
+                                                    <button
+                                                        className="btn-icon"
+                                                        onClick={() => handleDeleteGroup(group)}
                                                         title="Delete"
                                                         style={{ color: '#ef4444' }}
                                                     >

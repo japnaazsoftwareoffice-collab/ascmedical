@@ -2,7 +2,7 @@ export const CPT_CODES = [
     // === HIGH-PAYING ORTHOPEDIC SURGERIES ===
 
     // Joint Replacements (Highest Revenue)
-    { code: '27130', description: 'Total Hip Replacement', reimbursement: 15000, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Hip' },
+    { code: '27130', description: 'Total Hip Replacement', reimbursement: 15000, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Hip', procedure_group: 'Orthopedics / Musculoskeletal Procedure' },
     { code: '27447', description: 'Total Knee Replacement', reimbursement: 14500, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Knee' },
     { code: '23472', description: 'Total Shoulder Replacement', reimbursement: 14200, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Shoulder' },
     { code: '27134', description: 'Revision Total Hip Replacement', reimbursement: 18000, turnover_time: 60, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Hip' },
@@ -60,13 +60,13 @@ export const CPT_CODES = [
     // === OTHER SPECIALTIES ===
 
     // Gastroenterology
-    { code: '43239', description: 'EGD with Biopsy', reimbursement: 3000, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
+    { code: '43239', description: 'EGD with Biopsy', reimbursement: 3000, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S', procedure_group: 'Gastroenterology Procedure' },
     { code: '45378', description: 'Colonoscopy, Flexible', reimbursement: 3200, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
     { code: '45380', description: 'Colonoscopy with Biopsy', reimbursement: 3800, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
     { code: '45385', description: 'Colonoscopy with Polypectomy', reimbursement: 4200, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
 
     // Ophthalmology
-    { code: '66984', description: 'Cataract Surgery with IOL', reimbursement: 4000, turnover_time: 15, category: 'Ophthalmology', procedure_indicator: 'S' },
+    { code: '66984', description: 'Cataract Surgery with IOL', reimbursement: 4000, turnover_time: 15, category: 'Ophthalmology', procedure_indicator: 'S', procedure_group: 'Ophthalmology Procedure' },
     { code: '67028', description: 'Vitrectomy', reimbursement: 5500, turnover_time: 30, category: 'Ophthalmology', procedure_indicator: 'S' },
 
     // General Surgery
