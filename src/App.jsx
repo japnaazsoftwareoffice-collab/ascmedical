@@ -50,6 +50,7 @@ function App() {
   const [staff, setStaff] = useState([]);
   const [settings, setSettings] = useState(null);
   const [supplies, setSupplies] = useState([]);
+  const [procedureGroupItems, setProcedureGroupItems] = useState([]);
   const [userPermissions, setUserPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -95,7 +96,7 @@ function App() {
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
         // No database configured - use mock data
         console.log('No database configured. Using mock data.');
-        const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES } = await import('./data/mockData');
+        const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES, INITIAL_PROCEDURE_GROUP_ITEMS } = await import('./data/mockData');
 
         // Transform surgeons to add 'name' property
         const surgeonsWithNames = (INITIAL_SURGEONS || []).map(surgeon => ({
@@ -106,26 +107,53 @@ function App() {
         setPatients(INITIAL_PATIENTS || []);
         setSurgeons(surgeonsWithNames);
         setCptCodes(CPT_CODES || []);
+        setProcedureGroupItems(INITIAL_PROCEDURE_GROUP_ITEMS || []);
         setSurgeries([]);
         setBilling([]);
         setLoading(false);
         return;
       }
 
+      // Helper for safe data fetching
+      const safeFetch = async (promise, fallbackValue = []) => {
+        try {
+          return await promise;
+        } catch (e) {
+          console.warn('Data fetch failed for a resource, using fallback:', e);
+          return fallbackValue;
+        }
+      };
+
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData, staffData, permsData, suppliesData] = await Promise.all([
-        db.getPatients(),
-        db.getSurgeons(),
-        db.getCPTCodes(),
-        db.getSurgeries(),
-        user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling(),
-        user.role === 'admin' ? db.getUsers() : Promise.resolve([]),
-        db.getClaims ? db.getClaims() : Promise.resolve([]),
-        db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([]),
-        db.getSettings ? db.getSettings() : Promise.resolve(null),
-        db.getStaff ? db.getStaff() : Promise.resolve([]),
-        user ? db.getRolePermissions(user.role) : Promise.resolve([]),
-        db.getSupplies ? db.getSupplies() : Promise.resolve([])
+      // We fetch everything in parallel, but handle errors individually so one failure doesn't break everything
+      const [
+        patientsData,
+        surgeonsData,
+        cptCodesData,
+        surgeriesData,
+        billingData,
+        usersData,
+        claimsData,
+        orBlockScheduleData,
+        settingsData,
+        staffData,
+        permsData,
+        suppliesData,
+        procedureGroupItemsData
+      ] = await Promise.all([
+        safeFetch(db.getPatients()),
+        safeFetch(db.getSurgeons()),
+        safeFetch(db.getCPTCodes()),
+        safeFetch(db.getSurgeries()),
+        safeFetch(user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling()),
+        safeFetch(user.role === 'admin' ? db.getUsers() : Promise.resolve([])),
+        safeFetch(db.getClaims ? db.getClaims() : Promise.resolve([])),
+        safeFetch(db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([])),
+        safeFetch(db.getSettings ? db.getSettings() : Promise.resolve(null), null),
+        safeFetch(db.getStaff ? db.getStaff() : Promise.resolve([])),
+        safeFetch(user ? db.getRolePermissions(user.role) : Promise.resolve([])),
+        safeFetch(db.getSupplies ? db.getSupplies() : Promise.resolve([])),
+        safeFetch(db.getProcedureGroupItems ? db.getProcedureGroupItems() : Promise.resolve([]))
       ]);
 
       // Transform surgeons to add 'name' property
@@ -145,16 +173,17 @@ function App() {
       setStaff(staffData || []);
       setSettings(settingsData);
       setSupplies(suppliesData || []);
+      setProcedureGroupItems(procedureGroupItemsData || []);
 
-      if (user) {
+      if (user && permsData) {
         // Use permissions from role_permissions table for all roles
         setUserPermissions(permsData.map(rp => rp.permissions?.name).filter(Boolean));
       }
     } catch (err) {
-      console.error('Error loading data:', err);
+      console.error('Critical Error loading data:', err);
       // Fallback to mock data on error
       console.log('Database error. Falling back to mock data.');
-      const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES } = await import('./data/mockData');
+      const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES, INITIAL_PROCEDURE_GROUP_ITEMS } = await import('./data/mockData');
 
       // Transform surgeons to add 'name' property
       const surgeonsWithNames = (INITIAL_SURGEONS || []).map(surgeon => ({
@@ -165,9 +194,10 @@ function App() {
       setPatients(INITIAL_PATIENTS || []);
       setSurgeons(surgeonsWithNames);
       setCptCodes(CPT_CODES || []);
+      setProcedureGroupItems(INITIAL_PROCEDURE_GROUP_ITEMS || []);
       setSurgeries([]);
       setBilling([]);
-      setError(null); // Clear error since we're using fallback
+      // Don't set error here, just rely on fallback
     } finally {
       setLoading(false);
     }
@@ -639,6 +669,56 @@ function App() {
     }
   };
 
+  // Procedure Group Items Handlers
+  const handleAddProcedureGroupItem = async (newItem) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        const itemWithId = { ...newItem, id: Date.now() };
+        setProcedureGroupItems([itemWithId, ...procedureGroupItems]);
+        return itemWithId;
+      }
+      const addedItem = await db.addProcedureGroupItem(newItem);
+      setProcedureGroupItems([addedItem, ...procedureGroupItems]);
+      return addedItem;
+    } catch (err) {
+      console.error('Error adding procedure group item:', err);
+      const itemWithId = { ...newItem, id: Date.now() };
+      setProcedureGroupItems([itemWithId, ...procedureGroupItems]);
+      return itemWithId;
+    }
+  };
+
+  const handleUpdateProcedureGroupItem = async (id, updates) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setProcedureGroupItems(procedureGroupItems.map(i => i.id === id ? { ...i, ...updates } : i));
+        return;
+      }
+      await db.updateProcedureGroupItem(id, updates);
+      setProcedureGroupItems(procedureGroupItems.map(i => i.id === id ? { ...i, ...updates } : i));
+    } catch (err) {
+      console.error('Error updating procedure group item:', err);
+      Swal.fire({ title: 'Error!', text: 'Failed to update item', icon: 'error' });
+    }
+  };
+
+  const handleDeleteProcedureGroupItem = async (id) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setProcedureGroupItems(procedureGroupItems.filter(i => i.id !== id));
+        return;
+      }
+      await db.deleteProcedureGroupItem(id);
+      setProcedureGroupItems(procedureGroupItems.filter(i => i.id !== id));
+    } catch (err) {
+      console.error('Error deleting procedure group item:', err);
+      Swal.fire({ title: 'Error!', text: 'Failed to delete item', icon: 'error' });
+    }
+  };
+
   // User Management Handlers
   const handleAddUser = async (newUser) => {
     try {
@@ -1095,7 +1175,19 @@ function App() {
     }
 
     if (view === 'supply-manager' && hasPerm('manage_supplies')) {
-      return <SupplyManager supplies={supplies} onAddSupply={handleAddSupply} onUpdateSupply={handleUpdateSupply} onDeleteSupply={handleDeleteSupply} onRefreshSupplies={loadAllData} />;
+      return (
+        <SupplyManager
+          supplies={supplies}
+          procedureGroupItems={procedureGroupItems}
+          onAddSupply={handleAddSupply}
+          onUpdateSupply={handleUpdateSupply}
+          onDeleteSupply={handleDeleteSupply}
+          onRefreshSupplies={loadAllData}
+          onAddProcedureGroupItem={handleAddProcedureGroupItem}
+          onUpdateProcedureGroupItem={handleUpdateProcedureGroupItem}
+          onDeleteProcedureGroupItem={handleDeleteProcedureGroupItem}
+        />
+      );
     }
 
     if (view === 'auto-cpt' && hasPerm('use_auto_updater')) return <CPTAutoUpdate />;

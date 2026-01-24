@@ -27,8 +27,8 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
 
     const getMenuItems = () => {
         if (user.role === 'admin') {
-            // Admins see everything that they have permissions for
-            return allMenuItems.filter(item => !item.permission || permissions.includes(item.permission));
+            // Admins see all menu items
+            return allMenuItems;
         } else if (user.role === 'surgeon') {
             return [
                 { id: 'my-schedule', icon: '📅', label: 'My Schedule' },

@@ -1,118 +1,108 @@
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
 import { formatCurrency } from '../utils/hospitalUtils';
-import { db } from '../lib/supabase';
 import './Management.css';
 
-const SupplyManager = ({ supplies, onAddSupply, onUpdateSupply, onDeleteSupply, onRefreshSupplies }) => {
-    const [formData, setFormData] = useState({
-        name: '',
-        category: '',
-        unit_cost: '',
-        quantity_in_stock: '',
-        reorder_level: '',
-        supplier: '',
-        sku: '',
-        description: ''
+const SupplyManager = ({
+    procedureGroupItems = [],
+    onAddProcedureGroupItem,
+    onUpdateProcedureGroupItem,
+    onDeleteProcedureGroupItem
+}) => {
+    // === PROCEDURE GROUP ITEM STATE ===
+    const [pgFormData, setPgFormData] = useState({
+        procedure_group: '',
+        item_name: '',
+        item_type: 'Supply',
+        is_reusable: false,
+        quantity_per_case: 1,
+        is_high_cost: false,
+        unit_price: ''
     });
-    const [filterCategory, setFilterCategory] = useState('All Categories');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [editingId, setEditingId] = useState(null);
-    const [isNewCategory, setIsNewCategory] = useState(false);
+    const [pgEditingId, setPgEditingId] = useState(null);
+    const [pgSearchQuery, setPgSearchQuery] = useState('');
+    const [pgFilterGroup, setPgFilterGroup] = useState('All Groups');
 
-    // Get unique categories from existing supplies
-    const uniqueCategories = React.useMemo(() => {
-        const cats = new Set(supplies.map(s => s.category));
-        cats.add('General');
-        return [...cats].sort();
-    }, [supplies]);
+    // Get unique procedure groups
+    const uniqueProcedureGroups = React.useMemo(() => {
+        const groups = new Set(procedureGroupItems.map(i => i.procedure_group));
+        return ['All Groups', ...[...groups].sort()];
+    }, [procedureGroupItems]);
 
-    // Pagination State
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
-
-    const handleSubmit = async (e) => {
+    // === PROCEDURE GROUP ITEM HANDLERS ===
+    const handlePgSubmit = async (e) => {
         e.preventDefault();
 
-        // Validation
-        if (!formData.name || !formData.category || !formData.unit_cost) {
+        if (!pgFormData.procedure_group || !pgFormData.item_name || !pgFormData.item_type) {
             Swal.fire({
                 title: 'Missing Fields',
-                text: 'Please fill in all required fields (Name, Category, Unit Cost)',
+                text: 'Please fill in required fields (Group, Item Name, Type)',
                 icon: 'warning',
                 confirmButtonColor: '#3b82f6'
             });
             return;
         }
 
-        const supplyData = {
-            name: formData.name,
-            category: formData.category,
-            unit_cost: parseFloat(formData.unit_cost),
-            quantity_in_stock: parseInt(formData.quantity_in_stock) || 0,
-            reorder_level: parseInt(formData.reorder_level) || 0,
-            supplier: formData.supplier || '',
-            sku: formData.sku || '',
-            description: formData.description || ''
+        const itemData = {
+            procedure_group: pgFormData.procedure_group,
+            item_name: pgFormData.item_name,
+            item_type: pgFormData.item_type,
+            is_reusable: pgFormData.is_reusable,
+            quantity_per_case: parseInt(pgFormData.quantity_per_case) || 1,
+            is_high_cost: pgFormData.is_high_cost,
+            unit_price: parseFloat(pgFormData.unit_price) || 0.00
         };
 
-        if (editingId) {
-            await onUpdateSupply(editingId, supplyData);
+        if (pgEditingId) {
+            await onUpdateProcedureGroupItem(pgEditingId, itemData);
             await Swal.fire({
                 title: 'Updated!',
-                text: 'Supply item updated successfully',
+                text: 'Item updated successfully',
                 icon: 'success',
                 timer: 1500,
                 showConfirmButton: false
             });
-            setEditingId(null);
+            setPgEditingId(null);
         } else {
-            await onAddSupply(supplyData);
+            await onAddProcedureGroupItem(itemData);
             await Swal.fire({
                 title: 'Added!',
-                text: 'Supply item added successfully',
+                text: 'Item added successfully',
                 icon: 'success',
                 timer: 1500,
                 showConfirmButton: false
             });
         }
 
-        setFormData({
-            name: '',
-            category: '',
-            unit_cost: '',
-            quantity_in_stock: '',
-            reorder_level: '',
-            supplier: '',
-            sku: '',
-            description: ''
+        setPgFormData({
+            procedure_group: '',
+            item_name: '',
+            item_type: 'Supply',
+            is_reusable: false,
+            quantity_per_case: 1,
+            is_high_cost: false,
+            unit_price: ''
         });
-        setIsNewCategory(false);
     };
 
-    const handleEdit = (supply) => {
-        setFormData({
-            name: supply.name,
-            category: supply.category,
-            unit_cost: supply.unit_cost,
-            quantity_in_stock: supply.quantity_in_stock || 0,
-            reorder_level: supply.reorder_level || 0,
-            supplier: supply.supplier || '',
-            sku: supply.sku || '',
-            description: supply.description || ''
+    const handlePgEdit = (item) => {
+        setPgFormData({
+            procedure_group: item.procedure_group,
+            item_name: item.item_name,
+            item_type: item.item_type,
+            is_reusable: item.is_reusable,
+            quantity_per_case: item.quantity_per_case,
+            is_high_cost: item.is_high_cost,
+            unit_price: item.unit_price
         });
-        setEditingId(supply.id);
-
-        // Scroll to form
-        setTimeout(() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 100);
+        setPgEditingId(item.id);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleDelete = async (id) => {
+    const handlePgDelete = async (id) => {
         const result = await Swal.fire({
-            title: 'Delete Supply Item?',
-            text: 'Are you sure you want to delete this supply item?',
+            title: 'Delete Item?',
+            text: 'Are you sure you want to delete this item?',
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#ef4444',
@@ -121,342 +111,277 @@ const SupplyManager = ({ supplies, onAddSupply, onUpdateSupply, onDeleteSupply, 
         });
 
         if (result.isConfirmed) {
-            onDeleteSupply(id);
+            onDeleteProcedureGroupItem(id);
         }
     };
 
-    const handleCancelEdit = () => {
-        setFormData({
-            name: '',
-            category: '',
-            unit_cost: '',
-            quantity_in_stock: '',
-            reorder_level: '',
-            supplier: '',
-            sku: '',
-            description: ''
+    const handlePgCancelEdit = () => {
+        setPgFormData({
+            procedure_group: '',
+            item_name: '',
+            item_type: 'Supply',
+            is_reusable: false,
+            quantity_per_case: 1,
+            is_high_cost: false,
+            unit_price: ''
         });
-        setEditingId(null);
-        setIsNewCategory(false);
+        setPgEditingId(null);
     };
 
-    // Filter supply list based on selected category and search query
-    const filteredSupplyList = supplies.filter(supply => {
-        const matchesCategory = filterCategory === 'All Categories' || supply.category === filterCategory;
-        const matchesSearch = searchQuery === '' ||
-            (supply.name && supply.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (supply.sku && supply.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (supply.description && supply.description.toLowerCase().includes(searchQuery.toLowerCase()));
-
-        return matchesCategory && matchesSearch;
+    // Filter procedure group items
+    const filteredPgItems = procedureGroupItems.filter(item => {
+        const matchesGroup = pgFilterGroup === 'All Groups' || item.procedure_group === pgFilterGroup;
+        const matchesSearch = pgSearchQuery === '' ||
+            (item.item_name && item.item_name.toLowerCase().includes(pgSearchQuery.toLowerCase())) ||
+            (item.procedure_group && item.procedure_group.toLowerCase().includes(pgSearchQuery.toLowerCase()));
+        return matchesGroup && matchesSearch;
     });
-
-    // Pagination Logic
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filteredSupplyList.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(filteredSupplyList.length / itemsPerPage);
-
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-    // Get unique categories for filter
-    const categories = ['All Categories', ...new Set(supplies.map(supply => supply.category))];
-
-    // Calculate low stock items
-    const lowStockItems = supplies.filter(s => s.quantity_in_stock <= s.reorder_level);
 
     return (
         <div className="management-container">
             <div className="management-header">
                 <div>
                     <h1>📦 Supply Manager</h1>
-                    <p>Manage medical supplies, inventory, and costs</p>
+                    <p>Manage procedure group cost sets and standard items</p>
                 </div>
                 <div className="header-stats">
                     <div className="stat-box">
-                        <div className="stat-value">{supplies.length}</div>
-                        <div className="stat-label">Total Items</div>
-                    </div>
-                    <div className="stat-box" style={{ backgroundColor: lowStockItems.length > 0 ? '#fee2e2' : '#dbeafe' }}>
-                        <div className="stat-value" style={{ color: lowStockItems.length > 0 ? '#dc2626' : '#0284c7' }}>
-                            {lowStockItems.length}
-                        </div>
-                        <div className="stat-label">Low Stock</div>
-                    </div>
-                    <div className="stat-box">
-                        <div className="stat-value">
-                            {formatCurrency(supplies.reduce((sum, s) => sum + (s.unit_cost * s.quantity_in_stock), 0))}
-                        </div>
-                        <div className="stat-label">Inventory Value</div>
+                        <div className="stat-value">{procedureGroupItems.length}</div>
+                        <div className="stat-label">Proc. Items</div>
                     </div>
                 </div>
             </div>
 
-            {/* Add/Edit Supply Form */}
-            <div className="management-section">
-                <h2>{editingId ? '✏️ Edit Supply Item' : '➕ Add New Supply'}</h2>
-                <form onSubmit={handleSubmit} className="management-form">
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>Item Name *</label>
-                            <input
-                                type="text"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                placeholder="e.g., Sterile Gloves (Size M)"
-                                required
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label>SKU</label>
-                            <input
-                                type="text"
-                                value={formData.sku}
-                                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                                placeholder="e.g., GLV-M-001"
-                            />
+            <div className="vertical-layout">
+                {/* Top Section: Form Card */}
+                <div className="content-card form-card-wide">
+                    <div className="card-header-compact">
+                        <div className="header-info">
+                            <h3>{pgEditingId ? 'Edit Procedure Set Item' : 'Add Procedure Set Item'}</h3>
+                            <p className="card-subtitle">Define standard items used for specific procedure groups</p>
                         </div>
                     </div>
 
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>Category *</label>
-                            {isNewCategory ? (
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <form onSubmit={handlePgSubmit} className="cpt-form-grid">
+                        <div className="form-row-grid">
+                            <div className="form-group">
+                                <label>Procedure Group *</label>
+                                <div className="input-with-action">
                                     <input
                                         type="text"
-                                        value={formData.category}
-                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                        placeholder="New category name"
+                                        className="form-input"
+                                        value={pgFormData.procedure_group}
+                                        onChange={e => setPgFormData({ ...pgFormData, procedure_group: e.target.value })}
+                                        placeholder="e.g. Cataract Surgery"
+                                        list="procedure-groups"
                                         required
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsNewCategory(false)}
-                                        style={{ padding: '0.5rem 1rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '0.375rem', cursor: 'pointer' }}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <select
-                                        value={formData.category}
-                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                        required
-                                    >
-                                        <option value="">Select Category...</option>
-                                        {uniqueCategories.map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
+                                    <datalist id="procedure-groups">
+                                        {uniqueProcedureGroups.slice(1).map(g => (
+                                            <option key={g} value={g} />
                                         ))}
-                                    </select>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsNewCategory(true)}
-                                        style={{ padding: '0.5rem 1rem', backgroundColor: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: '0.375rem', cursor: 'pointer' }}
-                                    >
-                                        + New
-                                    </button>
+                                    </datalist>
                                 </div>
+                            </div>
+                            <div className="form-group">
+                                <label>Item Name *</label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    value={pgFormData.item_name}
+                                    onChange={e => setPgFormData({ ...pgFormData, item_name: e.target.value })}
+                                    placeholder="e.g. Scalpel #11"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Type *</label>
+                                <select
+                                    className="form-select"
+                                    value={pgFormData.item_type}
+                                    onChange={e => setPgFormData({ ...pgFormData, item_type: e.target.value })}
+                                >
+                                    <option value="Supply">Supply</option>
+                                    <option value="Tool">Tool</option>
+                                    <option value="High Cost">High Cost</option>
+                                </select>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Unit Price ($)</label>
+                                <div className="currency-input">
+                                    <span className="unit">$</span>
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        step="0.01"
+                                        value={pgFormData.unit_price}
+                                        onChange={e => setPgFormData({ ...pgFormData, unit_price: e.target.value })}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Qty Per Case</label>
+                                <input
+                                    type="number"
+                                    className="form-input"
+                                    value={pgFormData.quantity_per_case}
+                                    onChange={e => setPgFormData({ ...pgFormData, quantity_per_case: e.target.value })}
+                                    min="1"
+                                />
+                            </div>
+
+                            {/* Checkboxes styled as toggle buttons or similar */}
+                            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', justifyContent: 'center' }}>
+                                <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={pgFormData.is_reusable}
+                                        onChange={e => setPgFormData({ ...pgFormData, is_reusable: e.target.checked })}
+                                    />
+                                    <span>Reusable Item</span>
+                                </label>
+                                <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={pgFormData.is_high_cost}
+                                        onChange={e => setPgFormData({ ...pgFormData, is_high_cost: e.target.checked })}
+                                    />
+                                    <span>High Cost Item</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="form-submit-row">
+                            <button type="submit" className="btn-save-modern">
+                                {pgEditingId ? 'Update Item' : 'Add Item'}
+                            </button>
+                            {pgEditingId && (
+                                <button type="button" className="btn-cancel-modern" onClick={handlePgCancelEdit}>
+                                    Cancel Edit
+                                </button>
                             )}
                         </div>
-                        <div className="form-group">
-                            <label>Unit Cost ($) *</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                value={formData.unit_cost}
-                                onChange={(e) => setFormData({ ...formData, unit_cost: e.target.value })}
-                                placeholder="0.00"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>Quantity in Stock</label>
-                            <input
-                                type="number"
-                                value={formData.quantity_in_stock}
-                                onChange={(e) => setFormData({ ...formData, quantity_in_stock: e.target.value })}
-                                placeholder="0"
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label>Reorder Level</label>
-                            <input
-                                type="number"
-                                value={formData.reorder_level}
-                                onChange={(e) => setFormData({ ...formData, reorder_level: e.target.value })}
-                                placeholder="0"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-row">
-                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                            <label>Supplier</label>
-                            <input
-                                type="text"
-                                value={formData.supplier}
-                                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                                placeholder="e.g., Medline Industries"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-row">
-                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                            <label>Description</label>
-                            <textarea
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                placeholder="Additional details about the supply..."
-                                rows="3"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="form-actions">
-                        <button type="submit" className="btn-primary">
-                            {editingId ? '💾 Update Supply' : '➕ Add Supply'}
-                        </button>
-                        {editingId && (
-                            <button type="button" onClick={handleCancelEdit} className="btn-secondary">
-                                ✕ Cancel Edit
-                            </button>
-                        )}
-                    </div>
-                </form>
-            </div>
-
-            {/* Supply List */}
-            <div className="management-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h2>Supply Inventory</h2>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                        <input
-                            type="text"
-                            placeholder="🔍 Search by name, SKU, or description..."
-                            value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            style={{ padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.375rem', flex: 1, minWidth: '200px' }}
-                        />
-                        <select
-                            value={filterCategory}
-                            onChange={(e) => {
-                                setFilterCategory(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            style={{ padding: '0.5rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.375rem' }}
-                        >
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    </div>
+                    </form>
                 </div>
 
-                {currentItems.length > 0 ? (
-                    <>
-                        <div className="table-wrapper">
-                            <table className="management-table">
+                {/* Bottom Section: List Card */}
+                <div className="content-card full-width list-card-modern">
+                    <div className="card-header list-header" style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '1.5rem'
+                    }}>
+                        <div>
+                            <h3>Procedure Group Items</h3>
+                            <p className="card-subtitle">{filteredPgItems.length} items found</p>
+                        </div>
+                        <div className="list-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div className="search-wrapper" style={{ position: 'relative', flex: '1 1 auto' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Search group or item..."
+                                    value={pgSearchQuery}
+                                    onChange={(e) => setPgSearchQuery(e.target.value)}
+                                    className="form-input"
+                                    style={{
+                                        paddingLeft: '2.5rem',
+                                        width: '280px',
+                                        height: '42px',
+                                        margin: 0
+                                    }}
+                                />
+                                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
+                            </div>
+                            <select
+                                className="filter-select form-input"
+                                value={pgFilterGroup}
+                                onChange={(e) => setPgFilterGroup(e.target.value)}
+                                style={{ height: '42px', minWidth: '160px' }}
+                            >
+                                {uniqueProcedureGroups.map(g => (
+                                    <option key={g} value={g}>{g}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {filteredPgItems.length > 0 ? (
+                        <div className="table-container" style={{ boxShadow: 'none', border: 'none', borderRadius: 0 }}>
+                            <table className="data-table">
                                 <thead>
                                     <tr>
+                                        <th>Group</th>
                                         <th>Item Name</th>
-                                        <th>SKU</th>
-                                        <th>Category</th>
-                                        <th>Unit Cost</th>
-                                        <th>Qty Stock</th>
-                                        <th>Reorder Level</th>
-                                        <th>Total Value</th>
-                                        <th>Supplier</th>
-                                        <th>Status</th>
+                                        <th>Type</th>
+                                        <th>Price</th>
+                                        <th>Qty</th>
+                                        <th>High Cost</th>
+                                        <th>Reusable</th>
+                                        <th>Created At</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {currentItems.map(supply => {
-                                        const isLowStock = supply.quantity_in_stock <= supply.reorder_level;
-                                        const totalValue = supply.unit_cost * supply.quantity_in_stock;
-                                        return (
-                                            <tr key={supply.id} style={{ opacity: isLowStock ? 0.9 : 1 }}>
-                                                <td style={{ fontWeight: '500' }}>{supply.name}</td>
-                                                <td>{supply.sku || '-'}</td>
-                                                <td><span style={{ backgroundColor: '#f1f5f9', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontSize: '0.875rem' }}>{supply.category}</span></td>
-                                                <td>{formatCurrency(supply.unit_cost)}</td>
-                                                <td style={{ textAlign: 'center', color: isLowStock ? '#dc2626' : '#0284c7', fontWeight: isLowStock ? '600' : '500' }}>
-                                                    {supply.quantity_in_stock}
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>{supply.reorder_level}</td>
-                                                <td>{formatCurrency(totalValue)}</td>
-                                                <td>{supply.supplier || '-'}</td>
-                                                <td>
-                                                    {isLowStock ? (
-                                                        <span style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '0.25rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem', fontWeight: '500' }}>
-                                                            ⚠️ Low Stock
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{ backgroundColor: '#dbeafe', color: '#0284c7', padding: '0.25rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem', fontWeight: '500' }}>
-                                                            ✓ In Stock
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>
+                                    {filteredPgItems.map(item => (
+                                        <tr key={item.id}>
+                                            <td style={{ fontWeight: '600', color: '#334155' }}>{item.procedure_group}</td>
+                                            <td style={{ fontWeight: '500' }}>{item.item_name}</td>
+                                            <td>
+                                                <span className={`badge ${item.item_type === 'High Cost' ? 'badge-red' : item.item_type === 'Tool' ? 'badge-blue' : 'badge-gray'}`}
+                                                    style={{
+                                                        backgroundColor: item.item_type === 'High Cost' ? '#fee2e2' : item.item_type === 'Tool' ? '#e0e7ff' : '#f1f5f9',
+                                                        color: item.item_type === 'High Cost' ? '#dc2626' : item.item_type === 'Tool' ? '#4338ca' : '#475569',
+                                                        padding: '0.25rem 0.75rem',
+                                                        borderRadius: '9999px',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '600'
+                                                    }}
+                                                >
+                                                    {item.item_type}
+                                                </span>
+                                            </td>
+                                            <td style={{ fontWeight: '600', color: '#10b981' }}>{formatCurrency(item.unit_price)}</td>
+                                            <td style={{ textAlign: 'center' }}>{item.quantity_per_case}</td>
+                                            <td style={{ textAlign: 'center' }}>{item.is_high_cost ? '✅' : '-'}</td>
+                                            <td style={{ textAlign: 'center' }}>{item.is_reusable ? '✅' : '-'}</td>
+                                            <td style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                                {item.created_at ? new Date(item.created_at).toLocaleDateString() : '-'}
+                                            </td>
+                                            <td>
+                                                <div className="actions-cell">
                                                     <button
-                                                        onClick={() => handleEdit(supply)}
-                                                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0.25rem 0.5rem' }}
+                                                        className="btn-icon btn-edit"
+                                                        onClick={() => handlePgEdit(item)}
                                                         title="Edit"
                                                     >
                                                         ✏️
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDelete(supply.id)}
-                                                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0.25rem 0.5rem' }}
+                                                        className="btn-icon btn-delete"
+                                                        onClick={() => handlePgDelete(item.id)}
                                                         title="Delete"
                                                     >
                                                         🗑️
                                                     </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
-
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                    <button
-                                        key={page}
-                                        onClick={() => paginate(page)}
-                                        style={{
-                                            padding: '0.5rem 0.75rem',
-                                            border: currentPage === page ? 'none' : '1px solid #e2e8f0',
-                                            backgroundColor: currentPage === page ? '#3b82f6' : 'transparent',
-                                            color: currentPage === page ? 'white' : '#1e293b',
-                                            borderRadius: '0.375rem',
-                                            cursor: 'pointer',
-                                            fontWeight: currentPage === page ? '600' : '500'
-                                        }}
-                                    >
-                                        {page}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                        <p style={{ fontSize: '1.1rem' }}>No supplies found. Add your first supply item to get started! 📦</p>
-                    </div>
-                )}
+                    ) : (
+                        <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                            <p style={{ fontSize: '1.1rem' }}>No procedure group items found.</p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

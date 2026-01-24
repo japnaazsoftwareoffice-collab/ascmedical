@@ -228,3 +228,61 @@ export const INITIAL_SURGEONS = [
         phone: '(555) 345-6789'
     }
 ];
+
+export const INITIAL_PROCEDURE_GROUP_ITEMS = [
+    {
+        id: 1,
+        procedure_group: 'Cataract Surgery',
+        item_name: 'IOL Implant (Alcon AcrySof)',
+        item_type: 'High Cost',
+        unit_price: 350.00,
+        quantity_per_case: 1,
+        is_high_cost: true,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 2,
+        procedure_group: 'Cataract Surgery',
+        item_name: 'Viscoelastic (Healon)',
+        item_type: 'Supply',
+        unit_price: 85.00,
+        quantity_per_case: 1,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 3,
+        procedure_group: 'Orthopedics / Musculoskeletal Procedures',
+        item_name: 'Shaver Blade 4.0mm',
+        item_type: 'Supply',
+        unit_price: 55.00,
+        quantity_per_case: 1,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 4,
+        procedure_group: 'Orthopedics / Musculoskeletal Procedures',
+        item_name: 'Arthroscopy Pump Tubing',
+        item_type: 'Supply',
+        unit_price: 25.00,
+        quantity_per_case: 1,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 5,
+        procedure_group: 'General Surgery',
+        item_name: 'Laparoscopic Trocar 5mm',
+        item_type: 'Supply',
+        unit_price: 120.00,
+        quantity_per_case: 2,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    }
+];
