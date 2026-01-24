@@ -1079,9 +1079,8 @@ function App() {
   const currentSurgeon = user.role === 'surgeon' ? surgeons.find(s => s.id === user.surgeon_id) : null;
   const patientSurgeries = user.role === 'patient' ? surgeries.filter(s => s.patient_id === user.patient_id) : surgeries;
 
-  // Render content based on user role and permissions
   const renderContent = () => {
-    const hasPerm = (perm) => user.role === 'admin' || userPermissions.includes(perm);
+    const hasPerm = (perm) => userPermissions.includes(perm);
 
     // 1. Permission-based rendering (Unified for Admin & Manager)
     if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
