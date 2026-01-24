@@ -286,30 +286,44 @@ const SupplyManager = ({
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '1.5rem'
+                        flexWrap: 'nowrap',
+                        gap: '12px',
+                        paddingBottom: '1rem',
+                        borderBottom: '1px solid #e2e8f0',
+                        overflowX: 'auto'
                     }}>
-                        <div>
-                            <h3>Procedure Group Items</h3>
-                            <p className="card-subtitle">{filteredPgItems.length} items found</p>
+                        <div style={{ flex: '0 0 auto' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.25rem', whiteSpace: 'nowrap' }}>Procedure Group Items</h3>
+                            <p className="card-subtitle" style={{ margin: 0 }}>{filteredPgItems.length} items found</p>
                         </div>
-                        <div className="list-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <div className="search-wrapper" style={{ position: 'relative', flex: '1 1 auto' }}>
+
+                        <div className="list-actions" style={{
+                            display: 'flex',
+                            gap: '10px',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            flex: '1 1 auto',
+                            minWidth: '0'
+                        }}>
+                            <div className="search-wrapper" style={{ position: 'relative', width: '280px' }}>
                                 <input
                                     type="text"
-                                    placeholder="Search group or item..."
+                                    placeholder="Search..."
                                     value={pgSearchQuery}
                                     onChange={(e) => setPgSearchQuery(e.target.value)}
                                     className="form-input"
                                     style={{
                                         paddingLeft: '2.5rem',
-                                        width: '280px',
-                                        height: '42px',
-                                        margin: 0
+                                        width: '100%',
+                                        height: '40px',
+                                        margin: 0,
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '6px'
                                     }}
                                 />
-                                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
+                                <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
                             </div>
+
                             <select
                                 className="filter-select form-input"
                                 value={pgFilterGroup}
@@ -317,7 +331,7 @@ const SupplyManager = ({
                                     setPgFilterGroup(e.target.value);
                                     setPgCurrentPage(1); // Reset to page 1 on filter change
                                 }}
-                                style={{ height: '42px', minWidth: '160px' }}
+                                style={{ height: '40px', width: '180px', flexShrink: 0 }}
                             >
                                 {uniqueProcedureGroups.map(g => (
                                     <option key={g} value={g}>{g}</option>
@@ -376,14 +390,22 @@ const SupplyManager = ({
                                                             onClick={() => handlePgEdit(item)}
                                                             title="Edit"
                                                         >
-                                                            ✏️
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                            </svg>
                                                         </button>
                                                         <button
                                                             className="btn-icon btn-delete"
                                                             onClick={() => handlePgDelete(item.id)}
                                                             title="Delete"
                                                         >
-                                                            🗑️
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                                                            </svg>
                                                         </button>
                                                     </div>
                                                 </td>
