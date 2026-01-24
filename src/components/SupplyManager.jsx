@@ -23,6 +23,10 @@ const SupplyManager = ({
     const [pgSearchQuery, setPgSearchQuery] = useState('');
     const [pgFilterGroup, setPgFilterGroup] = useState('All Groups');
 
+    // Pagination State
+    const [pgCurrentPage, setPgCurrentPage] = useState(1);
+    const pgItemsPerPage = 10;
+
     // Get unique procedure groups
     const uniqueProcedureGroups = React.useMemo(() => {
         const groups = new Set(procedureGroupItems.map(i => i.procedure_group));
@@ -136,6 +140,14 @@ const SupplyManager = ({
             (item.procedure_group && item.procedure_group.toLowerCase().includes(pgSearchQuery.toLowerCase()));
         return matchesGroup && matchesSearch;
     });
+
+    // Pagination Logic
+    const indexOfLastPgItem = pgCurrentPage * pgItemsPerPage;
+    const indexOfFirstPgItem = indexOfLastPgItem - pgItemsPerPage;
+    const currentPgItems = filteredPgItems.slice(indexOfFirstPgItem, indexOfLastPgItem);
+    const totalPgPages = Math.ceil(filteredPgItems.length / pgItemsPerPage);
+
+    const paginatePg = (pageNumber) => setPgCurrentPage(pageNumber);
 
     return (
         <div className="management-container">
@@ -301,7 +313,10 @@ const SupplyManager = ({
                             <select
                                 className="filter-select form-input"
                                 value={pgFilterGroup}
-                                onChange={(e) => setPgFilterGroup(e.target.value)}
+                                onChange={(e) => {
+                                    setPgFilterGroup(e.target.value);
+                                    setPgCurrentPage(1); // Reset to page 1 on filter change
+                                }}
                                 style={{ height: '42px', minWidth: '160px' }}
                             >
                                 {uniqueProcedureGroups.map(g => (
@@ -312,70 +327,125 @@ const SupplyManager = ({
                     </div>
 
                     {filteredPgItems.length > 0 ? (
-                        <div className="table-container" style={{ boxShadow: 'none', border: 'none', borderRadius: 0 }}>
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Group</th>
-                                        <th>Item Name</th>
-                                        <th>Type</th>
-                                        <th>Price</th>
-                                        <th>Qty</th>
-                                        <th>High Cost</th>
-                                        <th>Reusable</th>
-                                        <th>Created At</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredPgItems.map(item => (
-                                        <tr key={item.id}>
-                                            <td style={{ fontWeight: '600', color: '#334155' }}>{item.procedure_group}</td>
-                                            <td style={{ fontWeight: '500' }}>{item.item_name}</td>
-                                            <td>
-                                                <span className={`badge ${item.item_type === 'High Cost' ? 'badge-red' : item.item_type === 'Tool' ? 'badge-blue' : 'badge-gray'}`}
-                                                    style={{
-                                                        backgroundColor: item.item_type === 'High Cost' ? '#fee2e2' : item.item_type === 'Tool' ? '#e0e7ff' : '#f1f5f9',
-                                                        color: item.item_type === 'High Cost' ? '#dc2626' : item.item_type === 'Tool' ? '#4338ca' : '#475569',
-                                                        padding: '0.25rem 0.75rem',
-                                                        borderRadius: '9999px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: '600'
-                                                    }}
-                                                >
-                                                    {item.item_type}
-                                                </span>
-                                            </td>
-                                            <td style={{ fontWeight: '600', color: '#10b981' }}>{formatCurrency(item.unit_price)}</td>
-                                            <td style={{ textAlign: 'center' }}>{item.quantity_per_case}</td>
-                                            <td style={{ textAlign: 'center' }}>{item.is_high_cost ? '✅' : '-'}</td>
-                                            <td style={{ textAlign: 'center' }}>{item.is_reusable ? '✅' : '-'}</td>
-                                            <td style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                                                {item.created_at ? new Date(item.created_at).toLocaleDateString() : '-'}
-                                            </td>
-                                            <td>
-                                                <div className="actions-cell">
-                                                    <button
-                                                        className="btn-icon btn-edit"
-                                                        onClick={() => handlePgEdit(item)}
-                                                        title="Edit"
-                                                    >
-                                                        ✏️
-                                                    </button>
-                                                    <button
-                                                        className="btn-icon btn-delete"
-                                                        onClick={() => handlePgDelete(item.id)}
-                                                        title="Delete"
-                                                    >
-                                                        🗑️
-                                                    </button>
-                                                </div>
-                                            </td>
+                        <>
+                            <div className="table-container" style={{ boxShadow: 'none', border: 'none', borderRadius: 0 }}>
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Group</th>
+                                            <th>Item Name</th>
+                                            <th>Type</th>
+                                            <th>Price</th>
+                                            <th>Qty</th>
+                                            <th>High Cost</th>
+                                            <th>Reusable</th>
+                                            <th>Created At</th>
+                                            <th>Actions</th>
                                         </tr>
+                                    </thead>
+                                    <tbody>
+                                        {currentPgItems.map(item => (
+                                            <tr key={item.id}>
+                                                <td style={{ fontWeight: '600', color: '#334155' }}>{item.procedure_group}</td>
+                                                <td style={{ fontWeight: '500' }}>{item.item_name}</td>
+                                                <td>
+                                                    <span className={`badge ${item.item_type === 'High Cost' ? 'badge-red' : item.item_type === 'Tool' ? 'badge-blue' : 'badge-gray'}`}
+                                                        style={{
+                                                            backgroundColor: item.item_type === 'High Cost' ? '#fee2e2' : item.item_type === 'Tool' ? '#e0e7ff' : '#f1f5f9',
+                                                            color: item.item_type === 'High Cost' ? '#dc2626' : item.item_type === 'Tool' ? '#4338ca' : '#475569',
+                                                            padding: '0.25rem 0.75rem',
+                                                            borderRadius: '9999px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    >
+                                                        {item.item_type}
+                                                    </span>
+                                                </td>
+                                                <td style={{ fontWeight: '600', color: '#10b981' }}>{formatCurrency(item.unit_price)}</td>
+                                                <td style={{ textAlign: 'center' }}>{item.quantity_per_case}</td>
+                                                <td style={{ textAlign: 'center' }}>{item.is_high_cost ? '✅' : '-'}</td>
+                                                <td style={{ textAlign: 'center' }}>{item.is_reusable ? '✅' : '-'}</td>
+                                                <td style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                                    {item.created_at ? new Date(item.created_at).toLocaleDateString() : '-'}
+                                                </td>
+                                                <td>
+                                                    <div className="actions-cell">
+                                                        <button
+                                                            className="btn-icon btn-edit"
+                                                            onClick={() => handlePgEdit(item)}
+                                                            title="Edit"
+                                                        >
+                                                            ✏️
+                                                        </button>
+                                                        <button
+                                                            className="btn-icon btn-delete"
+                                                            onClick={() => handlePgDelete(item.id)}
+                                                            title="Delete"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination Controls */}
+                            {totalPgPages > 1 && (
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', padding: '1.5rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                    <button
+                                        onClick={() => paginatePg(Math.max(1, pgCurrentPage - 1))}
+                                        disabled={pgCurrentPage === 1}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            border: '1px solid #e2e8f0',
+                                            backgroundColor: pgCurrentPage === 1 ? '#f1f5f9' : 'white',
+                                            color: pgCurrentPage === 1 ? '#94a3b8' : '#334155',
+                                            borderRadius: '0.375rem',
+                                            cursor: pgCurrentPage === 1 ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        Previous
+                                    </button>
+
+                                    {Array.from({ length: totalPgPages }, (_, i) => i + 1).map(page => (
+                                        <button
+                                            key={page}
+                                            onClick={() => paginatePg(page)}
+                                            style={{
+                                                padding: '0.5rem 1rem',
+                                                border: pgCurrentPage === page ? 'none' : '1px solid #e2e8f0',
+                                                backgroundColor: pgCurrentPage === page ? '#3b82f6' : 'white',
+                                                color: pgCurrentPage === page ? 'white' : '#334155',
+                                                borderRadius: '0.375rem',
+                                                cursor: 'pointer',
+                                                fontWeight: pgCurrentPage === page ? '600' : '400'
+                                            }}
+                                        >
+                                            {page}
+                                        </button>
                                     ))}
-                                </tbody>
-                            </table>
-                        </div>
+
+                                    <button
+                                        onClick={() => paginatePg(Math.min(totalPgPages, pgCurrentPage + 1))}
+                                        disabled={pgCurrentPage === totalPgPages}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            border: '1px solid #e2e8f0',
+                                            backgroundColor: pgCurrentPage === totalPgPages ? '#f1f5f9' : 'white',
+                                            color: pgCurrentPage === totalPgPages ? '#94a3b8' : '#334155',
+                                            borderRadius: '0.375rem',
+                                            cursor: pgCurrentPage === totalPgPages ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     ) : (
                         <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
                             <p style={{ fontSize: '1.1rem' }}>No procedure group items found.</p>
