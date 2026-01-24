@@ -41,7 +41,7 @@ const selfPayRates = [
     { name: 'Total Shoulder', price: 3200 }
 ];
 
-const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settings, onSchedule, onUpdate, onDelete, onComplete }) => {
+const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settings, procedureGroupItems = [], onSchedule, onUpdate, onDelete, onComplete }) => {
     // Initial fees for default 60 mins
     const initialFees = calculateCosmeticFees(60);
 
@@ -82,6 +82,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const [orSchedule, setOrSchedule] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
     const [expandedMonths, setExpandedMonths] = useState(new Set([new Date().toISOString().slice(0, 7)]));
+    const [selectedProcedureGroup, setSelectedProcedureGroup] = useState('');
+
+    // Extract unique procedure groups
+    const uniqueProcedureGroups = useMemo(() => {
+        if (!procedureGroupItems) return [];
+        return [...new Set(procedureGroupItems.map(item => item.procedure_group))];
+    }, [procedureGroupItems]);
 
     // Fetch OR Schedule for availability check
     useEffect(() => {
@@ -262,7 +269,47 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         });
     };
 
+
+
+    const applyProcedureGroup = (groupName) => {
+        setSelectedProcedureGroup(groupName);
+
+        if (groupName) {
+            const groupItems = procedureGroupItems.filter(i => i.procedure_group === groupName);
+            const totalCost = groupItems.reduce((sum, item) => sum + (parseFloat(item.unit_price || 0) * parseFloat(item.quantity_per_case || 0)), 0);
+
+            // Update supplies cost with group total
+            setFormData(prev => ({
+                ...prev,
+                suppliesCost: totalCost
+            }));
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `Auto-applied Procedure Group: ${groupName}`,
+                showConfirmButton: false,
+                timer: 2000
+            });
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                suppliesCost: 0
+            }));
+        }
+    };
+
     const handleCptToggle = (code) => {
+        // Auto-select procedure group if available
+        const isSelected = formData.selectedCptCodes.includes(code);
+        if (!isSelected) {
+            const cpt = cptCodes.find(c => String(c.code) === String(code));
+            if (cpt && cpt.procedure_group) {
+                applyProcedureGroup(cpt.procedure_group);
+            }
+        }
+
         setFormData(prev => {
             const exists = prev.selectedCptCodes.includes(code);
             let newSelectedCodes;
@@ -390,13 +437,31 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             suppliesCost: 0,
             implantsCost: 0,
             medicationsCost: 0,
-            medicationsCost: 0,
             turnoverTime: 0
         });
     };
 
     const handleEdit = (surgery) => {
         setEditingSurgery(surgery);
+
+        // Determine procedure group from CPT codes
+        let group = '';
+        let groupCost = 0;
+        if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
+            for (const code of surgery.cpt_codes) {
+                const cpt = cptCodes.find(c => String(c.code) === String(code));
+                if (cpt && cpt.procedure_group) {
+                    group = cpt.procedure_group;
+                    // Calculate cost for this group from procedureGroupItems
+                    const groupItems = procedureGroupItems.filter(i => i.procedure_group === group);
+                    if (groupItems.length > 0) {
+                        groupCost = groupItems.reduce((sum, item) => sum + (parseFloat(item.unit_price || 0) * parseFloat(item.quantity_per_case || 0)), 0);
+                    }
+                    break;
+                }
+            }
+        }
+        setSelectedProcedureGroup(group);
 
         // Calculate fees for existing surgery if it's cosmetic
         const duration = surgery.duration_minutes || 60;
@@ -439,7 +504,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             anesthesiaFee: anesthesiaFee,
             isSelfPayAnesthesia: isSelfPay,
             selfPayRateName: selfPayRateName,
-            suppliesCost: surgery.supplies_cost || 0,
+            suppliesCost: surgery.supplies_cost || groupCost || 0,
             implantsCost: surgery.implants_cost || 0,
             medicationsCost: surgery.medications_cost || 0,
             turnoverTime: (() => {
@@ -464,6 +529,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
     const handleCancelEdit = () => {
         setEditingSurgery(null);
+        setSelectedProcedureGroup('');
         setIsFormOpen(false);
         setFormData({
             patientId: '',
@@ -631,10 +697,11 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         if (!formData.selectedCptCodes || formData.selectedCptCodes.length === 0 || isCosmeticSurgeon) {
             return 0;
         }
-        // Total Revenue = CPT Reimbursements + Billable Facility Fee
+        // Total Revenue = CPT Reimbursements + Billable Facility Fee + Billable Supplies (Pass-through)
         const cptRevenue = calculateMedicareRevenue(formData.selectedCptCodes, cptCodes, settings?.apply_medicare_mppr || false);
-        return cptRevenue + billableFacilityFee;
-    }, [formData.selectedCptCodes, cptCodes, isCosmeticSurgeon, settings, billableFacilityFee]);
+        const suppliesRevenue = (formData.suppliesCost || 0);
+        return cptRevenue + billableFacilityFee + suppliesRevenue;
+    }, [formData.selectedCptCodes, cptCodes, isCosmeticSurgeon, settings, billableFacilityFee, formData.suppliesCost]);
 
     // Calculate projected margin
     const projectedMargin = useMemo(() => {
@@ -1025,8 +1092,28 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                         )}
                                                                     </td>
                                                                     <td>
-                                                                        <div style={{ fontWeight: '500' }}>{surgery.duration_minutes || 0}m + <span style={{ color: '#f59e0b' }}>{surgery.turnover_time || 0}m</span></div>
-                                                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Total: {(surgery.duration_minutes || 0) + (surgery.turnover_time || 0)}m</div>
+                                                                        {(() => {
+                                                                            let turnover = parseInt(surgery.turnover_time || 0);
+                                                                            // Fallback to CPT defaults if turnover is 0 (likely not saved/calculated yet)
+                                                                            if (turnover === 0 && surgery.cpt_codes && surgery.cpt_codes.length > 0) {
+                                                                                surgery.cpt_codes.forEach(code => {
+                                                                                    const cpt = cptCodes.find(c => String(c.code) === String(code));
+                                                                                    if (cpt) turnover += parseInt(cpt.turnover_time || 0);
+                                                                                });
+                                                                            }
+                                                                            const duration = parseInt(surgery.duration_minutes || 0);
+                                                                            const total = duration + turnover;
+
+                                                                            return (
+                                                                                <>
+                                                                                    <div style={{ fontWeight: '500' }}>
+                                                                                        {duration}m + <span style={{ color: '#f59e0b' }}>{turnover}m</span>
+                                                                                        <div style={{ fontSize: '0.7em', color: '#94a3b8', lineHeight: '1' }}>(Facility Overhead)</div>
+                                                                                    </div>
+                                                                                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Total: {total}m</div>
+                                                                                </>
+                                                                            );
+                                                                        })()}
                                                                     </td>
                                                                     <td style={{ fontWeight: '600', color: '#059669' }}>{formatCurrency(cptTotal)}</td>
                                                                     <td style={{ fontWeight: '600', color: '#dc2626' }}>{formatCurrency(orCost)}</td>
@@ -1573,6 +1660,58 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '1.1rem' }}>
                                             💊 Supplies & Materials Cost
                                         </h4>
+
+                                        {/* Procedure Group Selection */}
+                                        <div className="form-group" style={{ marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                            <label style={{ color: '#0f172a', fontWeight: '600', marginBottom: '0.5rem', display: 'block' }}>Select Procedure Group (Optional)</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <select
+                                                    className="form-input"
+                                                    value={selectedProcedureGroup}
+                                                    onChange={(e) => {
+                                                        applyProcedureGroup(e.target.value);
+                                                    }}
+                                                >
+                                                    <option value="">-- Apply Procedure Group Preset --</option>
+                                                    {uniqueProcedureGroups.map(g => (
+                                                        <option key={g} value={g}>{g}</option>
+                                                    ))}
+                                                </select>
+
+                                                {selectedProcedureGroup && (
+                                                    <div className="fade-in" style={{ background: 'white', padding: '1rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                            <strong>Items in Group:</strong>
+                                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                                                {procedureGroupItems.filter(i => i.procedure_group === selectedProcedureGroup).length} items
+                                                            </span>
+                                                        </div>
+                                                        <ul style={{ margin: '0', paddingLeft: '1.25rem', color: '#475569', fontSize: '0.9rem', maxHeight: '150px', overflowY: 'auto' }}>
+                                                            {procedureGroupItems.filter(i => i.procedure_group === selectedProcedureGroup).map((item, idx) => (
+                                                                <li key={idx} style={{ marginBottom: '4px' }}>
+                                                                    <span>{item.item_name}</span>
+                                                                    <span style={{ color: '#94a3b8' }}> (x{item.quantity_per_case})</span>
+                                                                    <span style={{ float: 'right', color: '#0f172a', fontWeight: '500' }}>
+                                                                        {formatCurrency((item.unit_price || 0) * (item.quantity_per_case || 0))}
+                                                                    </span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                        <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '0.75rem', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Total Group Cost:</span>
+                                                            <strong style={{ color: '#059669', fontSize: '1.1rem' }}>
+                                                                {formatCurrency(
+                                                                    procedureGroupItems
+                                                                        .filter(i => i.procedure_group === selectedProcedureGroup)
+                                                                        .reduce((sum, item) => sum + ((item.unit_price || 0) * (item.quantity_per_case || 0)), 0)
+                                                                )}
+                                                            </strong>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label>Surgical Supplies</label>
@@ -1642,7 +1781,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 </h4>
                                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
                                                     <div>
-                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee): </span>
+                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee+Supplies): </span>
                                                         <span style={{ fontWeight: '600', color: '#059669', fontSize: '1.05rem' }}>
                                                             {formatCurrency(projectedRevenue)}
                                                         </span>
@@ -1696,6 +1835,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     </div>
                                                 </div>
                                             </div>
+
                                             <div style={{ textAlign: 'right' }}>
                                                 <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
                                                     Projected Margin

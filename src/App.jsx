@@ -1139,7 +1139,7 @@ function App() {
     }
 
     if (view === 'scheduler' && hasPerm('manage_surgeries')) {
-      return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
+      return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} procedureGroupItems={procedureGroupItems} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
     }
 
     if (view === 'cancellation-rescheduling' && hasPerm('manage_surgeries')) {
