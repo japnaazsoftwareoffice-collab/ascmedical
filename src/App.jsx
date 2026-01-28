@@ -328,6 +328,9 @@ function App() {
         turnover_time: newSurgery.turnover_time || newSurgery.turnoverTime || 0,
         cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
         notes: newSurgery.notes,
+        supplies_cost: newSurgery.supplies_cost || newSurgery.suppliesCost || 0,
+        implants_cost: newSurgery.implants_cost || newSurgery.implantsCost || 0,
+        medications_cost: newSurgery.medications_cost || newSurgery.medicationsCost || 0,
         status: 'scheduled'
       };
 
@@ -367,8 +370,12 @@ function App() {
         date: newSurgery.date,
         start_time: newSurgery.start_time || newSurgery.startTime,
         duration_minutes: newSurgery.duration_minutes || newSurgery.durationMinutes,
+        turnover_time: newSurgery.turnover_time || newSurgery.turnoverTime || 0,
         cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
         notes: newSurgery.notes,
+        supplies_cost: newSurgery.supplies_cost || newSurgery.suppliesCost || 0,
+        implants_cost: newSurgery.implants_cost || newSurgery.implantsCost || 0,
+        medications_cost: newSurgery.medications_cost || newSurgery.medicationsCost || 0,
         status: 'scheduled',
         patients: patientDetails // Attach for display
       };

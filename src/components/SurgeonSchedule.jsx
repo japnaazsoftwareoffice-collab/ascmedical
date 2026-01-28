@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import './SurgeonSchedule.css';
 
 const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
     const [filter, setFilter] = useState('upcoming');
-    const [filteredSurgeries, setFilteredSurgeries] = useState([]);
 
-    useEffect(() => {
-        if (!surgeries || !surgeon) return;
+
+    const filteredSurgeries = useMemo(() => {
+        if (!surgeries || !surgeon) return [];
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        let filtered = surgeries.filter(surgery => {
+        return surgeries.filter(surgery => {
             // Filter by surgeon
             const isMySurgery = surgery.surgeon_id === surgeon.id ||
                 surgery.doctor_name === surgeon.name;
@@ -30,9 +30,8 @@ const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
             }
             return true;
         });
-
-        setFilteredSurgeries(filtered);
     }, [surgeries, surgeon, filter]);
+
 
     const getPatientName = (patientId) => {
         const patient = patients?.find(p => p.id === patientId);
