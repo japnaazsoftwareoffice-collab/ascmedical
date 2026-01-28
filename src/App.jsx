@@ -319,18 +319,18 @@ function App() {
       const surgeon = surgeons.find(s => s.name === doctorName);
 
       const surgeryData = {
-        patient_id: newSurgery.patient_id || newSurgery.patientId,
+        patient_id: parseInt(newSurgery.patient_id || newSurgery.patientId),
         surgeon_id: surgeon?.id || null,
-        doctor_name: doctorName,
+        doctor_name: doctorName || 'Unknown Doctor',
         date: newSurgery.date,
         start_time: newSurgery.start_time || newSurgery.startTime,
-        duration_minutes: newSurgery.duration_minutes || newSurgery.durationMinutes,
-        turnover_time: newSurgery.turnover_time || newSurgery.turnoverTime || 0,
-        cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
-        notes: newSurgery.notes,
-        supplies_cost: newSurgery.supplies_cost || newSurgery.suppliesCost || 0,
-        implants_cost: newSurgery.implants_cost || newSurgery.implantsCost || 0,
-        medications_cost: newSurgery.medications_cost || newSurgery.medicationsCost || 0,
+        duration_minutes: parseInt(newSurgery.duration_minutes || newSurgery.durationMinutes || 0),
+        turnover_time: parseInt(newSurgery.turnover_time || newSurgery.turnoverTime || 0),
+        cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes || [],
+        notes: newSurgery.notes || '',
+        supplies_cost: parseFloat(newSurgery.supplies_cost || newSurgery.suppliesCost || 0),
+        implants_cost: parseFloat(newSurgery.implants_cost || newSurgery.implantsCost || 0),
+        medications_cost: parseFloat(newSurgery.medications_cost || newSurgery.medicationsCost || 0),
         status: 'scheduled'
       };
 
@@ -338,50 +338,40 @@ function App() {
         // No database - use local state only
         const surgeryWithId = { ...surgeryData, id: Date.now() };
         setSurgeries([surgeryWithId, ...surgeries]);
-        // setView('dashboard'); // Keep user on scheduler
         return surgeryWithId;
       }
 
       const addedSurgery = await db.addSurgery(surgeryData);
 
       // Attach patient and surgeon details for local state to avoid "Unknown"
-      const patientDetails = patients.find(p => p.id === parseInt(surgeryData.patient_id));
+      const patientIdInt = parseInt(surgeryData.patient_id);
+      const patientDetails = patients.find(p => p.id === patientIdInt);
       const surgeonDetails = surgeons.find(s => s.id === (surgeon?.id || null));
 
       const surgeryWithDetails = {
         ...addedSurgery,
         patients: patientDetails,
-        surgeons: surgeonDetails
+        surgeons: surgeonDetails,
+        // Ensure UI-friendly property names are also present
+        patient_id: patientIdInt,
+        duration_minutes: surgeryData.duration_minutes
       };
 
       setSurgeries([surgeryWithDetails, ...surgeries]);
-      // setView('dashboard'); // Keep user on scheduler
       return addedSurgery;
     } catch (err) {
       console.error('Error scheduling surgery:', err);
-      // Fallback to local state
-      const patientDetails = patients.find(p => p.id === parseInt(newSurgery.patientId || newSurgery.patient_id));
 
-      const surgeryData = {
-        id: Date.now(),
-        patient_id: parseInt(newSurgery.patientId || newSurgery.patient_id),
-        surgeon_id: null,
-        doctor_name: newSurgery.doctor_name || newSurgery.doctorName,
-        date: newSurgery.date,
-        start_time: newSurgery.start_time || newSurgery.startTime,
-        duration_minutes: newSurgery.duration_minutes || newSurgery.durationMinutes,
-        turnover_time: newSurgery.turnover_time || newSurgery.turnoverTime || 0,
-        cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
-        notes: newSurgery.notes,
-        supplies_cost: newSurgery.supplies_cost || newSurgery.suppliesCost || 0,
-        implants_cost: newSurgery.implants_cost || newSurgery.implantsCost || 0,
-        medications_cost: newSurgery.medications_cost || newSurgery.medicationsCost || 0,
-        status: 'scheduled',
-        patients: patientDetails // Attach for display
-      };
-      setSurgeries([surgeryData, ...surgeries]);
-      // setView('dashboard'); // Keep user on scheduler
-      return surgeryData;
+      // Alert the user about the real error for debugging
+      await Swal.fire({
+        title: 'Cloud Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Maintenance might be in progress. Your data will NOT be saved to the database.`,
+        icon: 'warning',
+        confirmButtonColor: '#3b82f6'
+      });
+
+      // Throw error so UI can handle it (keep modal open)
+      throw err;
     }
   };
 

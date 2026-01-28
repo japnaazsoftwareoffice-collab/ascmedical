@@ -450,59 +450,64 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             surgeryData.notes = notes;
         }
 
-        if (editingSurgery) {
-            // Update existing surgery
-            await onUpdate(editingSurgery.id, {
-                ...surgeryData,
-                surgeon_id: surgeon?.id || null
-            });
+        try {
+            if (editingSurgery) {
+                // Update existing surgery
+                await onUpdate(editingSurgery.id, {
+                    ...surgeryData,
+                    surgeon_id: surgeon?.id || null
+                });
 
-            await Swal.fire({
-                title: 'Updated!',
-                text: 'Surgery updated successfully',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false
+                await Swal.fire({
+                    title: 'Updated!',
+                    text: 'Surgery updated successfully',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+                setEditingSurgery(null);
+                setIsFormOpen(false);
+            } else {
+                // Add new surgery
+                await onSchedule({
+                    ...surgeryData,
+                    id: Date.now(),
+                    patientId: parseInt(formData.patientId),
+                    selectedCptCodes: isCosmeticSurgeon ? [] : formData.selectedCptCodes
+                });
+                await Swal.fire({
+                    title: 'Scheduled!',
+                    text: 'Surgery scheduled successfully',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+                setIsFormOpen(false);
+            }
+
+            // Only reset form on success
+            const defaultFees = calculateCosmeticFees(60);
+            setFormData({
+                patientId: '',
+                doctorName: '',
+                date: new Date().toISOString().split('T')[0],
+                startTime: '',
+                durationMinutes: 60,
+                selectedCptCodes: [],
+                cosmeticFacilityFee: defaultFees.facilityFee,
+                cosmeticAnesthesiaFee: defaultFees.anesthesiaFee,
+                anesthesiaFee: 0,
+                isSelfPayAnesthesia: false,
+                selfPayRateName: '',
+                suppliesCost: 0,
+                implantsCost: 0,
+                medicationsCost: 0,
+                turnoverTime: 0
             });
-            setEditingSurgery(null);
-            setIsFormOpen(false);
-        } else {
-            // Add new surgery
-            await onSchedule({
-                ...surgeryData,
-                id: Date.now(),
-                patientId: parseInt(formData.patientId),
-                selectedCptCodes: isCosmeticSurgeon ? [] : formData.selectedCptCodes
-            });
-            await Swal.fire({
-                title: 'Scheduled!',
-                text: 'Surgery scheduled successfully',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false
-            });
-            setIsFormOpen(false);
+        } catch (error) {
+            // Error is already handled by Swal in handleScheduleSurgery (App.jsx)
+            console.error('Submission failed:', error);
         }
-
-        // Reset form
-        const defaultFees = calculateCosmeticFees(60);
-        setFormData({
-            patientId: '',
-            doctorName: '',
-            date: new Date().toISOString().split('T')[0],
-            startTime: '',
-            durationMinutes: 60,
-            selectedCptCodes: [],
-            cosmeticFacilityFee: defaultFees.facilityFee,
-            cosmeticAnesthesiaFee: defaultFees.anesthesiaFee,
-            anesthesiaFee: 0,
-            isSelfPayAnesthesia: false,
-            selfPayRateName: '',
-            suppliesCost: 0,
-            implantsCost: 0,
-            medicationsCost: 0,
-            turnoverTime: 0
-        });
     };
 
     const handleEdit = (surgery) => {
