@@ -896,21 +896,15 @@ function App() {
 
     try {
       // Calculate costs based on finalized duration
-      // Calculate Room Cost (OR Cost)
-      let actualRoomCost = 0;
-      if (surgery.actual_room_cost) {
-        actualRoomCost = surgery.actual_room_cost;
-      } else {
-        const hourlyRate = 1200; // $1200/hr base rate
-        actualRoomCost = (surgery.duration_minutes / 60) * hourlyRate;
-      }
+      const duration = parseInt(surgery.duration_minutes || 0);
+      const turnover = parseInt(surgery.turnover_time || 0);
 
-      // Calculate labor cost - use ACTUAL anesthesia costs from notes
+      // Calculate Labor Cost - use ACTUAL anesthesia costs from notes if available
       let actualLaborCost = 0;
       let laborCostSource = 'Estimated';
 
       if (surgery.notes) {
-        // Check for Self-Pay Anesthesia (e.g., "Self-Pay Anesthesia (Total Hip): $3,200")
+        // Check for Self-Pay Anesthesia
         const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
         if (selfPayMatch) {
           actualLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
@@ -927,39 +921,60 @@ function App() {
 
       // If no actual anesthesia cost found, use calculated estimate
       if (actualLaborCost === 0) {
-        actualLaborCost = calculateLaborCost(surgery.duration_minutes || 0);
+        actualLaborCost = calculateLaborCost(duration);
         laborCostSource = 'Calculated Estimate';
       }
 
-      // Calculate expected reimbursement
+      // 1. Calculate INTERNAL Room Cost (Hospital cost for duration + turnover)
+      const internalRoomCost = calculateORCost(duration + turnover);
+
+      // 2. Calculate BILLABLE Facility Fee (Patient pays for duration only)
+      const billableFacilityFee = calculateORCost(duration);
+
+      // 3. Get total supplies costs
+      const suppliesCost = parseFloat(surgery.supplies_cost || 0);
+      const implantsCost = parseFloat(surgery.implants_cost || 0);
+      const medicationsCost = parseFloat(surgery.medications_cost || 0);
+      const totalSuppliesCost = suppliesCost + implantsCost + medicationsCost;
+
+      // 4. Calculate expected reimbursement (Revenue)
       let expectedReimbursement = 0;
       let reimbursementSource = '';
 
-      // Check if it's a cosmetic surgery
       const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
 
       if (isCosmeticSurgery && surgery.notes) {
         // Parse cosmetic fees from notes
-        const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([0-9,]+)/i);
-        const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
-        const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-        const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-        expectedReimbursement = facilityFee + anesthesiaFee;
-        reimbursementSource = 'CSC Facility + Quantum Anesthesia';
+        const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([0-9,.]+)/i);
+        const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,.]+)/i);
+        const cscFacilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+        const cscAnesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+
+        // Revenue = Cosmetic Fees + Supplies
+        expectedReimbursement = cscFacilityFee + cscAnesthesiaFee + totalSuppliesCost;
+        reimbursementSource = 'CSC Fees + Supplies';
       } else if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
-        // Regular surgery with CPT codes - use MPPR
-        expectedReimbursement = calculateMedicareRevenue(surgery.cpt_codes, cptCodes);
-        reimbursementSource = 'Medicare MPPR';
+        // Regular surgery: Revenue = CPT + Facility Fee + Supplies + Anesthesia Extra
+        const cptRevenue = calculateMedicareRevenue(surgery.cpt_codes, cptCodes, settings?.apply_medicare_mppr || false);
+
+        let anesthesiaExtra = 0;
+        if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
+          const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
+          if (match) anesthesiaExtra = parseFloat(match[2].replace(/,/g, ''));
+        }
+
+        // Total Revenue matching the "Rev (CPT+Fee+Supplies)" logic
+        expectedReimbursement = cptRevenue + billableFacilityFee + totalSuppliesCost + anesthesiaExtra;
+        reimbursementSource = 'CPT + Facility + Supplies';
       }
 
-      // Get supplies costs (if entered)
-      const suppliesCost = surgery.supplies_cost || 0;
-      const implantsCost = surgery.implants_cost || 0;
-      const medicationsCost = surgery.medications_cost || 0;
-      const totalSuppliesCost = suppliesCost + implantsCost + medicationsCost;
+      // 5. Calculate Net Margin (Revenue - Total Internal Costs)
+      // Internal costs = Internal Room Cost + Labor Cost + Supplies Cost
+      const totalInternalCosts = internalRoomCost + actualLaborCost + totalSuppliesCost;
+      const netMargin = expectedReimbursement - totalInternalCosts;
 
-      // Calculate net margin
-      const netMargin = expectedReimbursement - actualRoomCost - actualLaborCost - totalSuppliesCost;
+      // Update local storage/state surgery reference for the summary display
+      const actualRoomCost = internalRoomCost; // For display compatibility with existing UI
 
       // Update surgery with financial snapshot
       const updates = {
@@ -983,7 +998,7 @@ function App() {
             <h4 style="margin-top: 0; color: #1e293b;">Financial Summary</h4>
             <div style="display: grid; gap: 0.5rem; font-size: 0.95rem;">
               <div style="display: flex; justify-content: space-between;">
-                <span style="color: #64748b;">Expected Revenue:</span>
+                <span style="color: #64748b;">Total Revenue:</span>
                 <strong style="color: #059669;">$${expectedReimbursement.toLocaleString()}</strong>
               </div>
               ${reimbursementSource ? `
@@ -991,8 +1006,9 @@ function App() {
                   ✓ ${reimbursementSource}
                 </div>
               ` : ''}
+              <hr style="margin: 0.25rem 0; border: none; border-top: 1px dotted #e2e8f0;">
               <div style="display: flex; justify-content: space-between;">
-                <span style="color: #64748b;">OR Cost:</span>
+                <span style="color: #64748b;">Internal Room Cost:</span>
                 <strong style="color: #dc2626;">-$${actualRoomCost.toLocaleString()}</strong>
               </div>
               <div style="display: flex; justify-content: space-between;">
