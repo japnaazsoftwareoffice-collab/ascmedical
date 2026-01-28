@@ -911,7 +911,7 @@ function App() {
 
       // If no actual anesthesia cost found, use calculated estimate
       if (actualLaborCost === 0) {
-        actualLaborCost = calculateLaborCost(duration);
+        actualLaborCost = calculateLaborCost(duration + turnover);
         laborCostSource = 'Calculated Estimate';
       }
 
@@ -1096,7 +1096,7 @@ function App() {
     const hasPerm = (perm) => userPermissions.includes(perm);
 
     // 1. Permission-based rendering (Unified for Admin & Manager)
-    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
+    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
 
     // Manager Dashboard - Check permission
     if (view === 'manager-dashboard' && (user.role === 'manager' || hasPerm('view_manager_dashboard'))) {

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { db } from '../lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost, getSurgeryMetrics } from '../utils/hospitalUtils';
 import ORBlockSchedule from './ORBlockSchedule';
 import './Management.css';
 
@@ -248,69 +248,19 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     }, [surgeriesByMonth]);
 
     // Helper to calculate financials for any surgery object consistently
+    // Unified metrics calculation for consistent financial reporting
     const calculateSurgeryFinancials = (surgery) => {
-        const isCosmetic = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
-        let cptTotal = 0;
-        let orCost = 0; // Billable Facility Fee
-        let internalRoomCost = 0;
-        let laborCost = 0;
-        let totalValue = 0;
-        let netProfit = 0;
-        let anesthesiaExtra = 0;
-
-        // 1. Calculate Supply Costs with fallback for old records
-        let supplyCosts = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
-
-        // Fallback: If no supplies cost but CPT codes exist, try to infer from procedure group
-        if (supplyCosts === 0 && !isCosmetic && surgery.cpt_codes && surgery.cpt_codes.length > 0) {
-            let inferedGroup = '';
-            for (const code of surgery.cpt_codes) {
-                const cpt = cptCodes.find(c => String(c.code) === String(code));
-                if (cpt && cpt.procedure_group) {
-                    inferedGroup = cpt.procedure_group;
-                    break;
-                }
-            }
-            if (inferedGroup) {
-                const groupItems = procedureGroupItems.filter(i => i.procedure_group === inferedGroup);
-                supplyCosts = groupItems.reduce((sum, item) => sum + (parseFloat(item.unit_price || 0) * parseFloat(item.quantity_per_case || 0)), 0);
-            }
-        }
-
-        const duration = parseInt(surgery.duration_minutes || 0);
-        const turnover = parseInt(surgery.turnover_time || 0);
-
-        if (isCosmetic) {
-            // Parse cosmetic fees from notes
-            if (surgery.notes) {
-                const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,.]+)/i);
-                const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
-                const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-                const anesthesiaAnesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                orCost = facilityFee + anesthesiaAnesthesiaFee;
-                internalRoomCost = calculateORCost(duration + turnover);
-                laborCost = calculateLaborCost(duration);
-                totalValue = orCost + supplyCosts;
-                netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts);
-            }
-        } else {
-            cptTotal = calculateMedicareRevenue(surgery.cpt_codes || [], cptCodes, settings?.apply_medicare_mppr || false);
-            orCost = calculateORCost(duration);
-            internalRoomCost = calculateORCost(duration + turnover);
-
-            if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
-                if (match) {
-                    anesthesiaExtra = parseFloat(match[2].replace(/,/g, ''));
-                }
-            }
-            orCost += anesthesiaExtra;
-            laborCost = calculateLaborCost(duration);
-            totalValue = cptTotal + orCost + supplyCosts;
-            netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaExtra);
-        }
-
-        return { cptTotal, orCost, totalValue, netProfit, supplyCosts, internalRoomCost, laborCost, isCosmetic };
+        const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+        return {
+            cptTotal: metrics.cptRevenue,
+            orCost: metrics.facilityRevenue,
+            totalValue: metrics.totalRevenue,
+            netProfit: metrics.netProfit,
+            supplyCosts: metrics.supplyCosts,
+            internalRoomCost: metrics.internalRoomCost,
+            laborCost: metrics.laborCost,
+            isCosmetic: metrics.isCosmetic
+        };
     };
 
     // Format month for display
@@ -775,8 +725,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     // Calculate projected margin
     const projectedMargin = useMemo(() => {
         const suppliesCost = (formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0);
-        // Estimated Labor Cost (usually tracks procedure duration)
-        const estimatedLaborCost = calculateLaborCost(formData.durationMinutes);
+        // Estimated Labor Cost (usually tracks procedure duration + turnover)
+        const estimatedLaborCost = calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0));
 
         // Margin = Revenue - Internal Costs (Internal Room Cost + Labor + Supplies)
         // Note: We subtract internalFacilityCost (duration + turnover) because that's the real cost of the room time used.
@@ -1765,7 +1715,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     <div>
                                                         <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Est. Labor: </span>
                                                         <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
-                                                            {formatCurrency(calculateLaborCost(formData.durationMinutes))}
+                                                            {formatCurrency(calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)))}
                                                         </span>
                                                     </div>
                                                     {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
@@ -1786,7 +1736,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                         <span style={{ fontWeight: '700', color: '#dc2626', fontSize: '1.2rem' }}>
                                                             {formatCurrency(
                                                                 internalFacilityCost + // Facility Fee (Internal)
-                                                                calculateLaborCost(formData.durationMinutes) + // Labor Cost
+                                                                calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)) + // Labor Cost
                                                                 ((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) + // Supplies
                                                                 (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0) // Self-Pay Anesthesia
                                                             )}
