@@ -293,7 +293,9 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             const sM = parseInt(start.substring(2, 4));
             const eH = parseInt(end.substring(0, 2));
             const eM = parseInt(end.substring(2, 4));
-            return (eH * 60 + eM) - (sH * 60 + sM);
+            let diff = (eH * 60 + eM) - (sH * 60 + sM);
+            if (diff < 0) diff += 1440; // Handle overnight/next-day wrap
+            return diff;
         };
 
         const calculateBlockStats = () => {
@@ -744,8 +746,8 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                                         className="donut-chart"
                                         style={{
                                             background: `conic-gradient(
-                                                #10b981 0% ${(stats.netProfit / stats.totalRevenue) * 100}%,
-                                                #ef4444 ${(stats.netProfit / stats.totalRevenue) * 100}% 100%
+                                                #10b981 0% ${Math.max(0, (stats.netProfit / stats.totalRevenue) * 100)}%,
+                                                #ef4444 ${Math.max(0, (stats.netProfit / stats.totalRevenue) * 100)}% 100%
                                             )`
                                         }}
                                     >
@@ -753,7 +755,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                                             <div className="donut-center-text">
                                                 <span className="donut-label">Margin</span>
                                                 <span className="donut-value">
-                                                    {Math.round((stats.netProfit / stats.totalRevenue) * 100)}%
+                                                    {stats.totalRevenue > 0 ? Math.round((stats.netProfit / stats.totalRevenue) * 100) : 0}%
                                                 </span>
                                             </div>
                                         </div>

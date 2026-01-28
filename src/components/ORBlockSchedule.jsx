@@ -66,7 +66,11 @@ const calcDuration = (start, end) => {
     const sM = parseInt(s.substring(2, 4));
     const eH = parseInt(e.substring(0, 2));
     const eM = parseInt(e.substring(2, 4));
-    return (eH * 60 + eM) - (sH * 60 + sM);
+
+    let diff = (eH * 60 + eM) - (sH * 60 + sM);
+    // If end time is before start time, assume it spans to the next day
+    if (diff < 0) diff += 1440;
+    return diff;
 };
 
 /** Helper: Get week of month (First, Second, etc.) */
@@ -613,6 +617,12 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                 className="form-input"
                                                 required
                                             />
+                                            {formData.start_time && formData.end_time && (
+                                                <div style={{ fontSize: '0.75rem', marginTop: '4px', color: calcDuration(formData.start_time, formData.end_time) > 720 ? '#ef4444' : '#64748b' }}>
+                                                    Duration: {Math.floor(calcDuration(formData.start_time, formData.end_time) / 60)}h {calcDuration(formData.start_time, formData.end_time) % 60}m
+                                                    {calcDuration(formData.start_time, formData.end_time) > 720 && " (Warning: Overnight?)"}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="modal-actions">
