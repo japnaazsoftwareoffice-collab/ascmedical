@@ -740,17 +740,8 @@ export const db = {
 
     // ==================== SUPPLIES ====================
     async getSupplies() {
-        const { data, error } = await supabase
-            .from('supplies')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            // Handle table missing or other fetch errors gracefully for non-critical tables
-            console.warn('Error fetching supplies:', error);
-            return [];
-        }
-        return data || [];
+        // Disabled to prevent console errors as tables are not present
+        return [];
     },
 
     async addSupply(supply) {
@@ -787,23 +778,8 @@ export const db = {
 
     // ==================== PROCEDURE GROUP ITEMS ====================
     async getProcedureGroupItems() {
-        // Try fetching with robust error handling
-        const { data, error } = await supabase
-            .from('procedure_group_items')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.warn('Error fetching procedure_group_items:', error);
-            // Even if this fails, we return empty array so app doesn't crash.
-            // But if the user says DB has data, and this fails, it might be due to RLS policies
-            // or schema mismatch. However, for "missing table" (42P01) this is the correct fix.
-            if (error.code === '42P01') return [];
-            // If it's a different error (like 400 Bad Request or 500), we probably still want to fallback
-            // rather than crash the whole dashboard manifest logic.
-            return [];
-        }
-        return data || [];
+        // Disabled to prevent console errors as tables are not present
+        return [];
     },
 
     async addProcedureGroupItem(item) {

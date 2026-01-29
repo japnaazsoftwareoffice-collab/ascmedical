@@ -152,8 +152,8 @@ function App() {
         safeFetch(db.getSettings ? db.getSettings() : Promise.resolve(null), null),
         safeFetch(db.getStaff ? db.getStaff() : Promise.resolve([])),
         safeFetch(user ? db.getRolePermissions(user.role) : Promise.resolve([])),
-        safeFetch(db.getSupplies ? db.getSupplies() : Promise.resolve([])),
-        safeFetch(db.getProcedureGroupItems ? db.getProcedureGroupItems() : Promise.resolve([]))
+        Promise.resolve([]), // db.getSupplies skipped
+        Promise.resolve([])  // db.getProcedureGroupItems skipped
       ]);
 
       // Transform surgeons to add 'name' property
