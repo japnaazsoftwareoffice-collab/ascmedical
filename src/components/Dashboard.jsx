@@ -18,6 +18,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [timeframe, setTimeframe] = useState('daily'); // daily, weekly, monthly
+    const [outcomeView, setOutcomeView] = useState('all'); // all, daily
     const [stats, setStats] = useState({
         totalSurgeries: 0,
         totalRevenue: 0,
@@ -180,13 +181,24 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         });
 
         // Update Outcome Stats
-        // Update Outcome Stats (Using ALL surgeries, not filtered)
+        const getRelevantSurgeries = () => {
+            if (outcomeView === 'daily') {
+                return surgeries.filter(s => {
+                    const sDate = new Date(s.date).toISOString().split('T')[0];
+                    return sDate === selectedDate;
+                });
+            }
+            return surgeries;
+        };
+
+        const relevantOutcomeSurgeries = getRelevantSurgeries();
+
         setOutcomeData({
-            completed: surgeries.filter(s => s.status === 'completed').length,
-            scheduled: surgeries.filter(s => s.status === 'scheduled').length,
-            rescheduled: surgeries.filter(s => s.status === 'rescheduled').length,
-            cancelled: surgeries.filter(s => s.status === 'cancelled').length,
-            total: surgeries.length
+            completed: relevantOutcomeSurgeries.filter(s => s.status === 'completed').length,
+            scheduled: relevantOutcomeSurgeries.filter(s => s.status === 'scheduled').length,
+            rescheduled: relevantOutcomeSurgeries.filter(s => s.status === 'rescheduled').length,
+            cancelled: relevantOutcomeSurgeries.filter(s => s.status === 'cancelled').length,
+            total: relevantOutcomeSurgeries.length
         });
 
         setChartData(currentStats.perCaseData);
@@ -370,7 +382,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             setBlockStats(calculateBlockStats());
         }
 
-    }, [surgeries, selectedDate, cptCodes, timeframe, blockSchedule, selectedRoom]);
+    }, [surgeries, selectedDate, cptCodes, timeframe, blockSchedule, selectedRoom, outcomeView]);
 
     // Helper for consistent colors
     const generateColor = (str) => {
@@ -874,7 +886,18 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                     {/* Surgery Outcome Analysis Chart (New) */}
                     <div className="chart-card utilization-chart-card">
                         <div className="chart-header">
-                            <h3>Outcome Analysis (All Time)</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                <h3>Outcome Analysis ({outcomeView === 'all' ? 'All Time' : 'Daily'})</h3>
+                                <select
+                                    className="filter-select"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                                    value={outcomeView}
+                                    onChange={(e) => setOutcomeView(e.target.value)}
+                                >
+                                    <option value="all">All Time</option>
+                                    <option value="daily">Daily</option>
+                                </select>
+                            </div>
                         </div>
                         <div className="utilization-chart-container">
                             {outcomeData.total === 0 ? (
