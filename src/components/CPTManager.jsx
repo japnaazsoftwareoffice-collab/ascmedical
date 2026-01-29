@@ -39,7 +39,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         body_part: '',
         average_duration: '',
         turnover_time: '',
-        procedure_group: ''
+        procedure_group: '',
+        is_active: true
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [searchQuery, setSearchQuery] = useState('');
@@ -90,7 +91,9 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             procedure_indicator: formData.procedure_indicator,
             body_part: formData.body_part,
             average_duration: parseInt(formData.average_duration) || 0,
-            turnover_time: parseInt(formData.turnover_time) || 0
+            turnover_time: parseInt(formData.turnover_time) || 0,
+            procedure_group: formData.procedure_group,
+            is_active: formData.is_active
         };
 
         if (editingId) {
@@ -114,7 +117,18 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', turnover_time: '', procedure_group: '' });
+        setFormData({
+            category: '',
+            code: '',
+            description: '',
+            reimbursement: '',
+            procedure_indicator: '',
+            body_part: '',
+            average_duration: '',
+            turnover_time: '',
+            procedure_group: '',
+            is_active: true
+        });
         setIsNewCategory(false);
     };
 
@@ -128,7 +142,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             body_part: cpt.body_part || '',
             average_duration: cpt.average_duration || '',
             turnover_time: cpt.turnover_time || '',
-            procedure_group: cpt.procedure_group || ''
+            procedure_group: cpt.procedure_group || '',
+            is_active: cpt.is_active !== false
         });
         setEditingId(cpt.id);
 
@@ -155,7 +170,18 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     };
 
     const handleCancelEdit = () => {
-        setFormData({ category: '', code: '', description: '', reimbursement: '', procedure_indicator: '', body_part: '', average_duration: '', turnover_time: '', procedure_group: '' });
+        setFormData({
+            category: '',
+            code: '',
+            description: '',
+            reimbursement: '',
+            procedure_indicator: '',
+            body_part: '',
+            average_duration: '',
+            turnover_time: '',
+            procedure_group: '',
+            is_active: true
+        });
         setEditingId(null);
         setIsNewCategory(false);
     };
@@ -510,6 +536,18 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                         required
                                     />
                                 </div>
+                            </div>
+
+                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
+                                <label className="checkbox-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.is_active}
+                                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    <span style={{ fontWeight: '600', color: '#1e293b' }}>Active / Published</span>
+                                </label>
                             </div>
                         </div>
 

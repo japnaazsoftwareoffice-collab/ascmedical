@@ -28,7 +28,7 @@ import CancellationRescheduling from './components/CancellationRescheduling';
 
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, calculateLaborCost } from './utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, calculateLaborCost, getSurgeryMetrics } from './utils/hospitalUtils';
 import './App.css';
 import Chatbot from './components/Chatbot';
 
@@ -254,22 +254,37 @@ function App() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+      // Sanitize fields: Convert empty strings to null for database compatibility
+      const sanitized = { ...newPatient };
+      ['dob', 'insurance_effective_date', 'insurance_expiration_date'].forEach(f => {
+        if (sanitized[f] === '') sanitized[f] = null;
+      });
+      ['copay_amount', 'deductible_amount'].forEach(f => {
+        if (sanitized[f] === '' || sanitized[f] === undefined) {
+          sanitized[f] = null;
+        } else {
+          sanitized[f] = parseFloat(sanitized[f]);
+        }
+      });
+
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
-        const patientWithId = { ...newPatient, id: Date.now() };
+        const patientWithId = { ...sanitized, id: Date.now() };
         setPatients([patientWithId, ...patients]);
         return patientWithId;
       }
 
-      const addedPatient = await db.addPatient(newPatient);
+      const addedPatient = await db.addPatient(sanitized);
       setPatients([addedPatient, ...patients]);
       return addedPatient;
     } catch (err) {
       console.error('Error adding patient:', err);
-      // Fallback to local state
-      const patientWithId = { ...newPatient, id: Date.now() };
-      setPatients([patientWithId, ...patients]);
-      return patientWithId;
+      await Swal.fire({
+        title: 'Cloud Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Data was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -277,17 +292,35 @@ function App() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+      // Sanitize fields: Convert empty strings to null for database compatibility
+      const sanitized = { ...updatedPatient };
+      ['dob', 'insurance_effective_date', 'insurance_expiration_date'].forEach(f => {
+        if (sanitized[f] === '') sanitized[f] = null;
+      });
+      ['copay_amount', 'deductible_amount'].forEach(f => {
+        if (sanitized[f] === '' || sanitized[f] === undefined) {
+          sanitized[f] = null;
+        } else {
+          sanitized[f] = parseFloat(sanitized[f]);
+        }
+      });
+
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+        setPatients(patients.map(p => p.id === sanitized.id ? sanitized : p));
         return;
       }
 
-      await db.updatePatient(updatedPatient.id, updatedPatient);
-      setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+      await db.updatePatient(sanitized.id, sanitized);
+      setPatients(patients.map(p => p.id === sanitized.id ? sanitized : p));
     } catch (err) {
       console.error('Error updating patient:', err);
-      // Fallback
-      setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -304,8 +337,13 @@ function App() {
       setPatients(patients.filter(p => p.id !== id));
     } catch (err) {
       console.error('Error deleting patient:', err);
-      // Fallback
-      setPatients(patients.filter(p => p.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Patient was NOT deleted.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -380,7 +418,6 @@ function App() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
         const surgeonWithId = {
           ...newSurgeon,
           id: Date.now(),
@@ -399,14 +436,13 @@ function App() {
       return surgeonWithName;
     } catch (err) {
       console.error('Error adding surgeon:', err);
-      // Fallback to local state
-      const surgeonWithId = {
-        ...newSurgeon,
-        id: Date.now(),
-        name: newSurgeon.name || `${newSurgeon.firstname || newSurgeon.first_name || ''} ${newSurgeon.lastname || newSurgeon.last_name || ''}`.trim()
-      };
-      setSurgeons([surgeonWithId, ...surgeons]);
-      return surgeonWithId;
+      await Swal.fire({
+        title: 'Surgeon Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -428,8 +464,13 @@ function App() {
       setSurgeons(surgeons.map(s => s.id === surgeonWithName.id ? surgeonWithName : s));
     } catch (err) {
       console.error('Error updating surgeon:', err);
-      // Fallback
-      setSurgeons(surgeons.map(s => s.id === updatedSurgeon.id ? updatedSurgeon : s));
+      await Swal.fire({
+        title: 'Surgeon Update Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -446,8 +487,13 @@ function App() {
       setSurgeons(surgeons.filter(s => s.id !== id));
     } catch (err) {
       console.error('Error deleting surgeon:', err);
-      // Fallback
-      setSurgeons(surgeons.filter(s => s.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Surgeon was NOT removed.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -458,22 +504,25 @@ function App() {
       const isCompleted = updates.status === 'completed' || (currentSurgery && currentSurgery.status === 'completed');
 
       if (currentSurgery && isCompleted) {
-        // If duration changed, recalculate costs
-        if (updates.duration_minutes) {
-          const duration = parseFloat(updates.duration_minutes);
-          const turnover = updates.turnover_time || currentSurgery.turnover_time || 0;
-          // Internal Room Cost includes turnover
-          updates.actual_room_cost = calculateORCost(duration + turnover);
-          updates.actual_labor_cost = calculateLaborCost(duration);
-        }
+        // Prepare a merged surgery object for metrics calculation
+        const mergedSurgery = {
+          ...currentSurgery,
+          ...updates,
+          // Ensure CPT codes are in the correct field
+          cpt_codes: updates.cpt_codes || updates.selectedCptCodes || currentSurgery.cpt_codes || []
+        };
 
-        // If CPTs changed, recalculate revenue
-        if (updates.cpt_codes || updates.selectedCptCodes) {
-          const codes = updates.cpt_codes || updates.selectedCptCodes || currentSurgery.cpt_codes || [];
-          // Only recalculate if not explicitly provided in updates (e.g. from completion flow)
-          if (!updates.expected_reimbursement) {
-            updates.expected_reimbursement = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
-          }
+        const metrics = getSurgeryMetrics(mergedSurgery, cptCodes, settings, procedureGroupItems);
+
+        // Update the fields for the database
+        updates.actual_room_cost = metrics.internalRoomCost;
+        updates.actual_labor_cost = metrics.laborCost;
+
+        // Only override reimbursement if not explicitly provided
+        if (!updates.expected_reimbursement) {
+          // Note: for non-cosmetic, expected_reimbursement = cptRevenue
+          // for cosmetic, it's the total fee mapped to reimbursement
+          updates.expected_reimbursement = metrics.isCosmetic ? metrics.facilityRevenue : metrics.cptRevenue;
         }
       }
 
@@ -481,12 +530,13 @@ function App() {
       await loadAllData(); // Reload surgeries from database
     } catch (error) {
       console.error('Error updating surgery:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to update surgery',
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${error.message || 'Failed to update surgery'}. Changes were NOT saved.`,
         icon: 'error',
-        confirmButtonColor: '#3b82f6'
+        confirmButtonColor: '#ef4444'
       });
+      throw error;
     }
   };
 
@@ -529,7 +579,6 @@ function App() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
         const cptWithId = { ...newCPT, id: Date.now() };
         setCptCodes([cptWithId, ...cptCodes]);
         return cptWithId;
@@ -540,10 +589,13 @@ function App() {
       return addedCPT;
     } catch (err) {
       console.error('Error adding CPT code:', err);
-      // Fallback to local state
-      const cptWithId = { ...newCPT, id: Date.now() };
-      setCptCodes([cptWithId, ...cptCodes]);
-      return cptWithId;
+      await Swal.fire({
+        title: 'CPT Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. CPT code was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -590,7 +642,6 @@ function App() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
         const supplyWithId = { ...newSupply, id: Date.now() };
         setSupplies([supplyWithId, ...supplies]);
         return supplyWithId;
@@ -601,10 +652,13 @@ function App() {
       return addedSupply;
     } catch (err) {
       console.error('Error adding supply:', err);
-      // Fallback to local state
-      const supplyWithId = { ...newSupply, id: Date.now() };
-      setSupplies([supplyWithId, ...supplies]);
-      return supplyWithId;
+      await Swal.fire({
+        title: 'Supply Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -621,12 +675,13 @@ function App() {
       setSupplies(supplies.map(s => s.id === id ? { ...s, ...updates } : s));
     } catch (error) {
       console.error('Error updating supply:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to update supply',
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${error.message || 'Failed to update supply'}. Changes were NOT saved.`,
         icon: 'error',
-        confirmButtonColor: '#3b82f6'
+        confirmButtonColor: '#ef4444'
       });
+      throw error;
     }
   };
 
@@ -636,33 +691,20 @@ function App() {
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
         setSupplies(supplies.filter(s => s.id !== id));
-        await Swal.fire({
-          title: 'Deleted!',
-          text: 'Supply item has been deleted',
-          icon: 'success',
-          timer: 1500,
-          showConfirmButton: false
-        });
         return;
       }
 
       await db.deleteSupply(id);
       setSupplies(supplies.filter(s => s.id !== id));
-      await Swal.fire({
-        title: 'Deleted!',
-        text: 'Supply item has been deleted',
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false
-      });
     } catch (error) {
       console.error('Error deleting supply:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to delete supply',
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${error.message || 'Failed to delete supply item'}.`,
         icon: 'error',
-        confirmButtonColor: '#3b82f6'
+        confirmButtonColor: '#ef4444'
       });
+      throw error;
     }
   };
 
@@ -680,9 +722,13 @@ function App() {
       return addedItem;
     } catch (err) {
       console.error('Error adding procedure group item:', err);
-      const itemWithId = { ...newItem, id: Date.now() };
-      setProcedureGroupItems([itemWithId, ...procedureGroupItems]);
-      return itemWithId;
+      await Swal.fire({
+        title: 'Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Item was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -697,7 +743,13 @@ function App() {
       setProcedureGroupItems(procedureGroupItems.map(i => i.id === id ? { ...i, ...updates } : i));
     } catch (err) {
       console.error('Error updating procedure group item:', err);
-      Swal.fire({ title: 'Error!', text: 'Failed to update item', icon: 'error' });
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${err.message || 'Failed to update item'}.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -754,7 +806,6 @@ function App() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
         const claimWithId = { ...newClaim, id: Date.now() };
         setClaims([claimWithId, ...claims]);
         return claimWithId;
@@ -765,10 +816,13 @@ function App() {
       return addedClaim;
     } catch (err) {
       console.error('Error adding claim:', err);
-      // Fallback to local state
-      const claimWithId = { ...newClaim, id: Date.now() };
-      setClaims([claimWithId, ...claims]);
-      return claimWithId;
+      await Swal.fire({
+        title: 'Claim Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Claim was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -785,8 +839,13 @@ function App() {
       setClaims(claims.map(c => c.id === updatedClaim.id ? updatedClaim : c));
     } catch (err) {
       console.error('Error updating claim:', err);
-      // Fallback
-      setClaims(claims.map(c => c.id === updatedClaim.id ? updatedClaim : c));
+      await Swal.fire({
+        title: 'Claim Update Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -803,8 +862,13 @@ function App() {
       setClaims(claims.filter(c => c.id !== id));
     } catch (err) {
       console.error('Error deleting claim:', err);
-      // Fallback
-      setClaims(claims.filter(c => c.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Claim was NOT deleted.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -816,10 +880,13 @@ function App() {
       return addedStaff;
     } catch (err) {
       console.error('Error adding staff:', err);
-      // Fallback
-      const staffWithId = { ...newStaffMember, id: Date.now() };
-      setStaff([staffWithId, ...staff]);
-      return staffWithId;
+      await Swal.fire({
+        title: 'Staff Member Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Data was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -829,7 +896,13 @@ function App() {
       setStaff(staff.map(s => s.id === updatedStaff.id ? updatedStaff : s));
     } catch (err) {
       console.error('Error updating staff:', err);
-      setStaff(staff.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+      await Swal.fire({
+        title: 'Staff Update Failed',
+        text: `Error: ${err.message || 'Failed to update staff member'}.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -839,7 +912,13 @@ function App() {
       setStaff(staff.filter(s => s.id !== id));
     } catch (err) {
       console.error('Error deleting staff:', err);
-      setStaff(staff.filter(s => s.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Failed to delete staff member'}.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 

@@ -9,10 +9,10 @@ import html2canvas from 'html2canvas';
 import Swal from 'sweetalert2';
 import emailjs from '@emailjs/browser';
 
-// EmailJS Configuration (Replace with your actual keys from emailjs.com)
-const EMAILJS_SERVICE_ID = 'service_1uqpug2';
-const EMAILJS_TEMPLATE_ID = 'template_7bwe5or';
-const EMAILJS_PUBLIC_KEY = 'kemMSpgMmsNS0Hcu5';
+// EmailJS Configuration
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_1uqpug2';
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_7bwe5or';
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'kemMSpgMmsNS0Hcu5';
 
 const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);

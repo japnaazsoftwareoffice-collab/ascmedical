@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue } from '../utils/hospitalUtils';
+import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue, getSurgeryMetrics } from '../utils/hospitalUtils';
 import './ORUtilization.css';
 
-const ORUtilization = ({ surgeries, cptCodes, settings }) => {
+const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedOR, setSelectedOR] = useState('all'); // 'all' or specific OR number
 
@@ -47,88 +47,17 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
         // Assign surgeries to ORs and calculate costs
         dateSurgeries.forEach((surgery, index) => {
             const orIndex = surgery.or_room ? surgery.or_room - 1 : index % OR_COUNT;
-            const duration = surgery.duration_minutes || 0;
-            let turnover = surgery.turnover_time || surgery.turnoverTime || 0;
 
-            // Fallback: Calculate turnover from CPT codes if not stored on surgery
-            if (turnover === 0 && surgery.cpt_codes && surgery.cpt_codes.length > 0) {
-                surgery.cpt_codes.forEach(code => {
-                    const cpt = cptCodes.find(c => String(c.code) === String(code));
-                    if (cpt) {
-                        turnover += parseInt(cpt.turnover_time || cpt.turnoverTime || 0);
-                    }
-                });
-            }
+            // Use unified metrics calculation
+            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
 
-            // Calculate OR Cost (Expense) - Includes Turnover (Internal Cost)
-            const surgeryORCost = calculateORCost(duration + turnover);
-            totalORCost += surgeryORCost;
+            const duration = parseInt(surgery.duration_minutes || surgery.durationMinutes || 0);
+            const turnover = parseInt(surgery.turnover_time || surgery.turnoverTime || 0);
 
-            // Calculate Labor Cost from notes or use actual_labor_cost
-            let surgeryLaborCost = surgery.actual_labor_cost || 0;
-
-            if (!surgeryLaborCost && surgery.notes) {
-                // Extract self-pay anesthesia
-                const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
-                if (selfPayMatch) {
-                    surgeryLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
-                }
-
-                // Extract cosmetic anesthesia
-                const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
-                if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
-                    surgeryLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
-                }
-            }
-
-            // If still no labor cost, default to 30% of OR cost
-            if (!surgeryLaborCost) {
-                surgeryLaborCost = surgeryORCost * 0.3;
-            }
-
-            // Get supplies costs
-            const surgerySuppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
-
-            // Calculate Operation Cost (Revenue)
-            let surgeryRevenue = 0;
-
-            // Check if cosmetic
-            const isCosmetic = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
-
-            if (isCosmetic) {
-                if (surgery.notes) {
-                    const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,]+)/);
-                    const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,]+)/);
-                    const facilityFee = facilityMatch ? parseInt(facilityMatch[1].replace(/,/g, '')) : 0;
-                    const anesthesiaFee = anesthesiaMatch ? parseInt(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                    surgeryRevenue = facilityFee + anesthesiaFee;
-                }
-            } else {
-                // CPT Codes revenue
-                const cptRevenue = calculateMedicareRevenue(
-                    surgery.cpt_codes || [],
-                    cptCodes,
-                    settings?.apply_medicare_mppr || false
-                );
-
-                // Add Billable Facility Fee (based on procedure duration only)
-                const billableFacilityFee = calculateORCost(duration);
-
-                // Add Self-Pay Anesthesia if applicable
-                let anesthesiaExtra = 0;
-                if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                    const match = surgery.notes.match(/Self-Pay Anesthesia: \$([\d,]+)/);
-                    if (match) {
-                        anesthesiaExtra = parseFloat(match[1].replace(/,/g, ''));
-                    }
-                }
-
-                surgeryRevenue = cptRevenue + billableFacilityFee + anesthesiaExtra;
-            }
-
-            totalOperationCost += surgeryRevenue;
-            totalLaborCost += surgeryLaborCost;
-            totalSuppliesCost += surgerySuppliesCost;
+            totalOperationCost += metrics.totalRevenue;
+            totalORCost += metrics.internalRoomCost;
+            totalLaborCost += metrics.laborCost;
+            totalSuppliesCost += metrics.supplyCosts;
 
             // Determine Patient Name
             let patientName = surgery.patient_name;
@@ -162,10 +91,10 @@ const ORUtilization = ({ surgeries, cptCodes, settings }) => {
                     startTime: surgery.start_time,
                     duration: duration,
                     turnover: turnover,
-                    revenue: surgeryRevenue,
-                    cost: surgeryORCost,
-                    laborCost: surgeryLaborCost,
-                    suppliesCost: surgerySuppliesCost
+                    revenue: metrics.totalRevenue,
+                    cost: metrics.internalRoomCost,
+                    laborCost: metrics.laborCost,
+                    suppliesCost: metrics.supplyCosts
                 });
             }
         });

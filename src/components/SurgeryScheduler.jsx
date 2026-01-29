@@ -1,34 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { db } from '../lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost, getSurgeryMetrics } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost, getSurgeryMetrics, calculateCosmeticFees } from '../utils/hospitalUtils';
 import ORBlockSchedule from './ORBlockSchedule';
 import './Management.css';
-
-// Cosmetic fee calculator based on duration
-const calculateCosmeticFees = (durationMinutes, isPlastic = false) => {
-    // CSC Facility Fee rates
-    const facilityRates = {
-        30: 750, 60: 1500, 90: 1800, 120: 2100, 150: 2500,
-        180: 2900, 210: 3300, 240: 3700, 270: 4100, 300: 4500,
-        330: 4900, 360: 5300, 390: 5700, 420: 6100, 480: 6500, 540: 6900
-    };
-
-    // Quantum Anesthesia rates
-    const anesthesiaRates = {
-        30: 600, 60: 750, 90: 900, 120: 1050, 150: 1200,
-        180: 1350, 210: 1500, 240: 1650, 270: 1800, 300: 1950,
-        330: 2100, 360: 2250, 390: 2400, 420: 2550, 480: 2700, 540: 2850
-    };
-
-    // Round up to nearest 30 minutes for fee lookup
-    const lookupDuration = Math.ceil(durationMinutes / 30) * 30;
-
-    return {
-        facilityFee: facilityRates[lookupDuration] || 0,
-        anesthesiaFee: isPlastic ? 0 : (anesthesiaRates[lookupDuration] || 0)
-    };
-};
 
 const selfPayRates = [
     { name: 'Cataracts x 1', price: 400 },
@@ -700,38 +675,27 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         }
     };
 
-    // Billable Facility Fee: Based ONLY on procedure duration (what the patient/payer sees)
-    const billableFacilityFee = useMemo(() => {
-        return calculateORCost(formData.durationMinutes || 0);
-    }, [formData.durationMinutes]);
+    // Calculate current form metrics for display
+    const formMetrics = useMemo(() => {
+        // Construct a dummy surgery object from form data for consistent metrics calculation
+        const dummySurgery = {
+            duration_minutes: formData.durationMinutes,
+            turnover_time: formData.turnoverTime,
+            cpt_codes: isCosmeticSurgeon ? [] : formData.selectedCptCodes,
+            supplies_cost: formData.suppliesCost,
+            implants_cost: formData.implantsCost,
+            medications_cost: formData.medicationsCost,
+            notes: (isCosmeticSurgeon ? `Cosmetic Surgery - Facility Fee: $${formData.cosmeticFacilityFee}, Anesthesia: $${formData.cosmeticAnesthesiaFee}` : '') +
+                (formData.isSelfPayAnesthesia ? `; Self-Pay Anesthesia: $${formData.anesthesiaFee}` : '')
+        };
 
-    // Internal Facility Cost: Based on Total Room Occupancy (Duration + Turnover)
-    const internalFacilityCost = useMemo(() => {
-        const totalMinutes = (formData.durationMinutes || 0) + (formData.turnoverTime || 0);
-        return calculateORCost(totalMinutes);
-    }, [formData.durationMinutes, formData.turnoverTime]);
+        return getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
+    }, [formData, isCosmeticSurgeon, cptCodes, settings, procedureGroupItems]);
 
-    // Calculate projected revenue with MPPR
-    const projectedRevenue = useMemo(() => {
-        if (!formData.selectedCptCodes || formData.selectedCptCodes.length === 0 || isCosmeticSurgeon) {
-            return 0;
-        }
-        // Total Revenue = CPT Reimbursements + Billable Facility Fee + Billable Supplies (Pass-through)
-        const cptRevenue = calculateMedicareRevenue(formData.selectedCptCodes, cptCodes, settings?.apply_medicare_mppr || false);
-        const suppliesRevenue = (formData.suppliesCost || 0);
-        return cptRevenue + billableFacilityFee + suppliesRevenue;
-    }, [formData.selectedCptCodes, cptCodes, isCosmeticSurgeon, settings, billableFacilityFee, formData.suppliesCost]);
-
-    // Calculate projected margin
-    const projectedMargin = useMemo(() => {
-        const suppliesCost = (formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0);
-        // Estimated Labor Cost (usually tracks procedure duration + turnover)
-        const estimatedLaborCost = calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0));
-
-        // Margin = Revenue - Internal Costs (Internal Room Cost + Labor + Supplies)
-        // Note: We subtract internalFacilityCost (duration + turnover) because that's the real cost of the room time used.
-        return projectedRevenue - internalFacilityCost - estimatedLaborCost - suppliesCost;
-    }, [projectedRevenue, internalFacilityCost, formData.durationMinutes, formData.suppliesCost, formData.implantsCost, formData.medicationsCost]);
+    const projectedRevenue = formMetrics.totalRevenue;
+    const projectedMargin = formMetrics.netProfit;
+    const internalFacilityCost = formMetrics.internalRoomCost;
+    const billableFacilityFee = formMetrics.facilityRevenue;
 
     // Determine cost tier
     const costTier = useMemo(() => {
