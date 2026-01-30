@@ -291,6 +291,7 @@ function App() {
         date: newSurgery.date,
         start_time: newSurgery.start_time || newSurgery.startTime,
         duration_minutes: newSurgery.duration_minutes || newSurgery.durationMinutes,
+        turnover_time: newSurgery.turnover_time || newSurgery.turnoverTime || 0,
         cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
         notes: newSurgery.notes,
         status: 'scheduled'
@@ -429,8 +430,9 @@ function App() {
         // If duration changed, recalculate costs
         if (updates.duration_minutes) {
           const duration = parseFloat(updates.duration_minutes);
-          // Ensure consistent calculation using updated hospitalUtils (30% Labor Rule)
-          updates.actual_room_cost = calculateORCost(duration);
+          const turnover = updates.turnover_time || currentSurgery.turnover_time || 0;
+          // Internal Room Cost includes turnover
+          updates.actual_room_cost = calculateORCost(duration + turnover);
           updates.actual_labor_cost = calculateLaborCost(duration);
         }
 
@@ -998,7 +1000,7 @@ function App() {
 
     if (view === 'roles-permissions' && hasPerm('manage_permissions')) return <RolePermissionManagement />;
 
-    if (view === 'analysis' && hasPerm('view_analytics')) return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} />;
+    if (view === 'analysis' && hasPerm('view_analytics')) return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
 
     if (view === 'scorecard' && hasPerm('view_scorecards')) return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} />;
 
