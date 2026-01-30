@@ -778,8 +778,16 @@ export const db = {
 
     // ==================== PROCEDURE GROUP ITEMS ====================
     async getProcedureGroupItems() {
-        // Disabled to prevent console errors as tables are not present
-        return [];
+        const { data, error } = await supabase
+            .from('procedure_group_items')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
+        return data || [];
     },
 
     async addProcedureGroupItem(item) {
