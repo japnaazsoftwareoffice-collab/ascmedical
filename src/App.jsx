@@ -21,13 +21,14 @@ import CPTAutoUpdate from './components/CPTAutoUpdate';
 import SurgeonScorecard from './components/SurgeonScorecard';
 import StaffManagement from './components/StaffManagement';
 import RolePermissionManagement from './components/RolePermissionManagement';
+import SupplyManager from './components/SupplyManager';
 
 import ManagerDashboard from './components/ManagerDashboard';
 import CancellationRescheduling from './components/CancellationRescheduling';
 
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, calculateLaborCost } from './utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, calculateLaborCost, getSurgeryMetrics } from './utils/hospitalUtils';
 import './App.css';
 import Chatbot from './components/Chatbot';
 
@@ -48,6 +49,8 @@ function App() {
   const [orBlockSchedule, setOrBlockSchedule] = useState([]);
   const [staff, setStaff] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [supplies, setSupplies] = useState([]);
+  const [procedureGroupItems, setProcedureGroupItems] = useState([]);
   const [userPermissions, setUserPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -93,7 +96,7 @@ function App() {
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
         // No database configured - use mock data
         console.log('No database configured. Using mock data.');
-        const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES } = await import('./data/mockData');
+        const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES, INITIAL_PROCEDURE_GROUP_ITEMS } = await import('./data/mockData');
 
         // Transform surgeons to add 'name' property
         const surgeonsWithNames = (INITIAL_SURGEONS || []).map(surgeon => ({
@@ -104,25 +107,53 @@ function App() {
         setPatients(INITIAL_PATIENTS || []);
         setSurgeons(surgeonsWithNames);
         setCptCodes(CPT_CODES || []);
+        setProcedureGroupItems(INITIAL_PROCEDURE_GROUP_ITEMS || []);
         setSurgeries([]);
         setBilling([]);
         setLoading(false);
         return;
       }
 
+      // Helper for safe data fetching
+      const safeFetch = async (promise, fallbackValue = []) => {
+        try {
+          return await promise;
+        } catch (e) {
+          console.warn('Data fetch failed for a resource, using fallback:', e);
+          return fallbackValue;
+        }
+      };
+
       // Database is configured - fetch from Supabase
-      const [patientsData, surgeonsData, cptCodesData, surgeriesData, billingData, usersData, claimsData, orBlockScheduleData, settingsData, staffData, permsData] = await Promise.all([
-        db.getPatients(),
-        db.getSurgeons(),
-        db.getCPTCodes(),
-        db.getSurgeries(),
-        user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling(),
-        user.role === 'admin' ? db.getUsers() : Promise.resolve([]),
-        db.getClaims ? db.getClaims() : Promise.resolve([]),
-        db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([]),
-        db.getSettings ? db.getSettings() : Promise.resolve(null),
-        db.getStaff ? db.getStaff() : Promise.resolve([]),
-        user ? db.getRolePermissions(user.role) : Promise.resolve([])
+      // We fetch everything in parallel, but handle errors individually so one failure doesn't break everything
+      const [
+        patientsData,
+        surgeonsData,
+        cptCodesData,
+        surgeriesData,
+        billingData,
+        usersData,
+        claimsData,
+        orBlockScheduleData,
+        settingsData,
+        staffData,
+        permsData,
+        suppliesData,
+        procedureGroupItemsData
+      ] = await Promise.all([
+        safeFetch(db.getPatients()),
+        safeFetch(db.getSurgeons()),
+        safeFetch(db.getCPTCodes()),
+        safeFetch(db.getSurgeries()),
+        safeFetch(user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling()),
+        safeFetch(user.role === 'admin' ? db.getUsers() : Promise.resolve([])),
+        safeFetch(db.getClaims ? db.getClaims() : Promise.resolve([])),
+        safeFetch(db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([])),
+        safeFetch(db.getSettings ? db.getSettings() : Promise.resolve(null), null),
+        safeFetch(db.getStaff ? db.getStaff() : Promise.resolve([])),
+        safeFetch(user ? db.getRolePermissions(user.role) : Promise.resolve([])),
+        Promise.resolve([]), // db.getSupplies skipped
+        safeFetch(db.getProcedureGroupItems())
       ]);
 
       // Transform surgeons to add 'name' property
@@ -141,16 +172,18 @@ function App() {
       setOrBlockSchedule(orBlockScheduleData || []);
       setStaff(staffData || []);
       setSettings(settingsData);
+      setSupplies(suppliesData || []);
+      setProcedureGroupItems(procedureGroupItemsData || []);
 
-      if (user) {
+      if (user && permsData) {
         // Use permissions from role_permissions table for all roles
         setUserPermissions(permsData.map(rp => rp.permissions?.name).filter(Boolean));
       }
     } catch (err) {
-      console.error('Error loading data:', err);
+      console.error('Critical Error loading data:', err);
       // Fallback to mock data on error
       console.log('Database error. Falling back to mock data.');
-      const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES } = await import('./data/mockData');
+      const { INITIAL_PATIENTS, INITIAL_SURGEONS, CPT_CODES, INITIAL_PROCEDURE_GROUP_ITEMS } = await import('./data/mockData');
 
       // Transform surgeons to add 'name' property
       const surgeonsWithNames = (INITIAL_SURGEONS || []).map(surgeon => ({
@@ -161,9 +194,10 @@ function App() {
       setPatients(INITIAL_PATIENTS || []);
       setSurgeons(surgeonsWithNames);
       setCptCodes(CPT_CODES || []);
+      setProcedureGroupItems(INITIAL_PROCEDURE_GROUP_ITEMS || []);
       setSurgeries([]);
       setBilling([]);
-      setError(null); // Clear error since we're using fallback
+      // Don't set error here, just rely on fallback
     } finally {
       setLoading(false);
     }
@@ -220,22 +254,37 @@ function App() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+      // Sanitize fields: Convert empty strings to null for database compatibility
+      const sanitized = { ...newPatient };
+      ['dob', 'insurance_effective_date', 'insurance_expiration_date'].forEach(f => {
+        if (sanitized[f] === '') sanitized[f] = null;
+      });
+      ['copay_amount', 'deductible_amount'].forEach(f => {
+        if (sanitized[f] === '' || sanitized[f] === undefined) {
+          sanitized[f] = null;
+        } else {
+          sanitized[f] = parseFloat(sanitized[f]);
+        }
+      });
+
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
-        const patientWithId = { ...newPatient, id: Date.now() };
+        const patientWithId = { ...sanitized, id: Date.now() };
         setPatients([patientWithId, ...patients]);
         return patientWithId;
       }
 
-      const addedPatient = await db.addPatient(newPatient);
+      const addedPatient = await db.addPatient(sanitized);
       setPatients([addedPatient, ...patients]);
       return addedPatient;
     } catch (err) {
       console.error('Error adding patient:', err);
-      // Fallback to local state
-      const patientWithId = { ...newPatient, id: Date.now() };
-      setPatients([patientWithId, ...patients]);
-      return patientWithId;
+      await Swal.fire({
+        title: 'Cloud Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Data was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -243,17 +292,35 @@ function App() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+      // Sanitize fields: Convert empty strings to null for database compatibility
+      const sanitized = { ...updatedPatient };
+      ['dob', 'insurance_effective_date', 'insurance_expiration_date'].forEach(f => {
+        if (sanitized[f] === '') sanitized[f] = null;
+      });
+      ['copay_amount', 'deductible_amount'].forEach(f => {
+        if (sanitized[f] === '' || sanitized[f] === undefined) {
+          sanitized[f] = null;
+        } else {
+          sanitized[f] = parseFloat(sanitized[f]);
+        }
+      });
+
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+        setPatients(patients.map(p => p.id === sanitized.id ? sanitized : p));
         return;
       }
 
-      await db.updatePatient(updatedPatient.id, updatedPatient);
-      setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+      await db.updatePatient(sanitized.id, sanitized);
+      setPatients(patients.map(p => p.id === sanitized.id ? sanitized : p));
     } catch (err) {
       console.error('Error updating patient:', err);
-      // Fallback
-      setPatients(patients.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -270,8 +337,13 @@ function App() {
       setPatients(patients.filter(p => p.id !== id));
     } catch (err) {
       console.error('Error deleting patient:', err);
-      // Fallback
-      setPatients(patients.filter(p => p.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Patient was NOT deleted.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -285,15 +357,18 @@ function App() {
       const surgeon = surgeons.find(s => s.name === doctorName);
 
       const surgeryData = {
-        patient_id: newSurgery.patient_id || newSurgery.patientId,
+        patient_id: parseInt(newSurgery.patient_id || newSurgery.patientId),
         surgeon_id: surgeon?.id || null,
-        doctor_name: doctorName,
+        doctor_name: doctorName || 'Unknown Doctor',
         date: newSurgery.date,
         start_time: newSurgery.start_time || newSurgery.startTime,
-        duration_minutes: newSurgery.duration_minutes || newSurgery.durationMinutes,
-        turnover_time: newSurgery.turnover_time || newSurgery.turnoverTime || 0,
-        cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
-        notes: newSurgery.notes,
+        duration_minutes: parseInt(newSurgery.duration_minutes || newSurgery.durationMinutes || 0),
+        turnover_time: parseInt(newSurgery.turnover_time || newSurgery.turnoverTime || 0),
+        cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes || [],
+        notes: newSurgery.notes || '',
+        supplies_cost: parseFloat(newSurgery.supplies_cost || newSurgery.suppliesCost || 0),
+        implants_cost: parseFloat(newSurgery.implants_cost || newSurgery.implantsCost || 0),
+        medications_cost: parseFloat(newSurgery.medications_cost || newSurgery.medicationsCost || 0),
         status: 'scheduled'
       };
 
@@ -301,46 +376,40 @@ function App() {
         // No database - use local state only
         const surgeryWithId = { ...surgeryData, id: Date.now() };
         setSurgeries([surgeryWithId, ...surgeries]);
-        // setView('dashboard'); // Keep user on scheduler
         return surgeryWithId;
       }
 
       const addedSurgery = await db.addSurgery(surgeryData);
 
       // Attach patient and surgeon details for local state to avoid "Unknown"
-      const patientDetails = patients.find(p => p.id === parseInt(surgeryData.patient_id));
+      const patientIdInt = parseInt(surgeryData.patient_id);
+      const patientDetails = patients.find(p => p.id === patientIdInt);
       const surgeonDetails = surgeons.find(s => s.id === (surgeon?.id || null));
 
       const surgeryWithDetails = {
         ...addedSurgery,
         patients: patientDetails,
-        surgeons: surgeonDetails
+        surgeons: surgeonDetails,
+        // Ensure UI-friendly property names are also present
+        patient_id: patientIdInt,
+        duration_minutes: surgeryData.duration_minutes
       };
 
       setSurgeries([surgeryWithDetails, ...surgeries]);
-      // setView('dashboard'); // Keep user on scheduler
       return addedSurgery;
     } catch (err) {
       console.error('Error scheduling surgery:', err);
-      // Fallback to local state
-      const patientDetails = patients.find(p => p.id === parseInt(newSurgery.patientId || newSurgery.patient_id));
 
-      const surgeryData = {
-        id: Date.now(),
-        patient_id: parseInt(newSurgery.patientId || newSurgery.patient_id),
-        surgeon_id: null,
-        doctor_name: newSurgery.doctor_name || newSurgery.doctorName,
-        date: newSurgery.date,
-        start_time: newSurgery.start_time || newSurgery.startTime,
-        duration_minutes: newSurgery.duration_minutes || newSurgery.durationMinutes,
-        cpt_codes: newSurgery.cpt_codes || newSurgery.selectedCptCodes,
-        notes: newSurgery.notes,
-        status: 'scheduled',
-        patients: patientDetails // Attach for display
-      };
-      setSurgeries([surgeryData, ...surgeries]);
-      // setView('dashboard'); // Keep user on scheduler
-      return surgeryData;
+      // Alert the user about the real error for debugging
+      await Swal.fire({
+        title: 'Cloud Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Maintenance might be in progress. Your data will NOT be saved to the database.`,
+        icon: 'warning',
+        confirmButtonColor: '#3b82f6'
+      });
+
+      // Throw error so UI can handle it (keep modal open)
+      throw err;
     }
   };
 
@@ -349,7 +418,6 @@ function App() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
         const surgeonWithId = {
           ...newSurgeon,
           id: Date.now(),
@@ -368,14 +436,13 @@ function App() {
       return surgeonWithName;
     } catch (err) {
       console.error('Error adding surgeon:', err);
-      // Fallback to local state
-      const surgeonWithId = {
-        ...newSurgeon,
-        id: Date.now(),
-        name: newSurgeon.name || `${newSurgeon.firstname || newSurgeon.first_name || ''} ${newSurgeon.lastname || newSurgeon.last_name || ''}`.trim()
-      };
-      setSurgeons([surgeonWithId, ...surgeons]);
-      return surgeonWithId;
+      await Swal.fire({
+        title: 'Surgeon Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -397,8 +464,13 @@ function App() {
       setSurgeons(surgeons.map(s => s.id === surgeonWithName.id ? surgeonWithName : s));
     } catch (err) {
       console.error('Error updating surgeon:', err);
-      // Fallback
-      setSurgeons(surgeons.map(s => s.id === updatedSurgeon.id ? updatedSurgeon : s));
+      await Swal.fire({
+        title: 'Surgeon Update Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -415,8 +487,13 @@ function App() {
       setSurgeons(surgeons.filter(s => s.id !== id));
     } catch (err) {
       console.error('Error deleting surgeon:', err);
-      // Fallback
-      setSurgeons(surgeons.filter(s => s.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Surgeon was NOT removed.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -427,22 +504,25 @@ function App() {
       const isCompleted = updates.status === 'completed' || (currentSurgery && currentSurgery.status === 'completed');
 
       if (currentSurgery && isCompleted) {
-        // If duration changed, recalculate costs
-        if (updates.duration_minutes) {
-          const duration = parseFloat(updates.duration_minutes);
-          const turnover = updates.turnover_time || currentSurgery.turnover_time || 0;
-          // Internal Room Cost includes turnover
-          updates.actual_room_cost = calculateORCost(duration + turnover);
-          updates.actual_labor_cost = calculateLaborCost(duration);
-        }
+        // Prepare a merged surgery object for metrics calculation
+        const mergedSurgery = {
+          ...currentSurgery,
+          ...updates,
+          // Ensure CPT codes are in the correct field
+          cpt_codes: updates.cpt_codes || updates.selectedCptCodes || currentSurgery.cpt_codes || []
+        };
 
-        // If CPTs changed, recalculate revenue
-        if (updates.cpt_codes || updates.selectedCptCodes) {
-          const codes = updates.cpt_codes || updates.selectedCptCodes || currentSurgery.cpt_codes || [];
-          // Only recalculate if not explicitly provided in updates (e.g. from completion flow)
-          if (!updates.expected_reimbursement) {
-            updates.expected_reimbursement = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
-          }
+        const metrics = getSurgeryMetrics(mergedSurgery, cptCodes, settings, procedureGroupItems);
+
+        // Update the fields for the database
+        updates.actual_room_cost = metrics.internalRoomCost;
+        updates.actual_labor_cost = metrics.laborCost;
+
+        // Only override reimbursement if not explicitly provided
+        if (!updates.expected_reimbursement) {
+          // Note: for non-cosmetic, expected_reimbursement = cptRevenue
+          // for cosmetic, it's the total fee mapped to reimbursement
+          updates.expected_reimbursement = metrics.isCosmetic ? metrics.facilityRevenue : metrics.cptRevenue;
         }
       }
 
@@ -450,12 +530,13 @@ function App() {
       await loadAllData(); // Reload surgeries from database
     } catch (error) {
       console.error('Error updating surgery:', error);
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to update surgery',
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${error.message || 'Failed to update surgery'}. Changes were NOT saved.`,
         icon: 'error',
-        confirmButtonColor: '#3b82f6'
+        confirmButtonColor: '#ef4444'
       });
+      throw error;
     }
   };
 
@@ -498,7 +579,6 @@ function App() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
         const cptWithId = { ...newCPT, id: Date.now() };
         setCptCodes([cptWithId, ...cptCodes]);
         return cptWithId;
@@ -509,10 +589,13 @@ function App() {
       return addedCPT;
     } catch (err) {
       console.error('Error adding CPT code:', err);
-      // Fallback to local state
-      const cptWithId = { ...newCPT, id: Date.now() };
-      setCptCodes([cptWithId, ...cptCodes]);
-      return cptWithId;
+      await Swal.fire({
+        title: 'CPT Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. CPT code was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -550,6 +633,138 @@ function App() {
         icon: 'error',
         confirmButtonColor: '#3b82f6'
       });
+    }
+  };
+
+  // Supply Management Handlers
+  const handleAddSupply = async (newSupply) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        const supplyWithId = { ...newSupply, id: Date.now() };
+        setSupplies([supplyWithId, ...supplies]);
+        return supplyWithId;
+      }
+
+      const addedSupply = await db.addSupply(newSupply);
+      setSupplies([addedSupply, ...supplies]);
+      return addedSupply;
+    } catch (err) {
+      console.error('Error adding supply:', err);
+      await Swal.fire({
+        title: 'Supply Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
+    }
+  };
+
+  const handleUpdateSupply = async (id, updates) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setSupplies(supplies.map(s => s.id === id ? { ...s, ...updates } : s));
+        return;
+      }
+
+      await db.updateSupply(id, updates);
+      setSupplies(supplies.map(s => s.id === id ? { ...s, ...updates } : s));
+    } catch (error) {
+      console.error('Error updating supply:', error);
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${error.message || 'Failed to update supply'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw error;
+    }
+  };
+
+  const handleDeleteSupply = async (id) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setSupplies(supplies.filter(s => s.id !== id));
+        return;
+      }
+
+      await db.deleteSupply(id);
+      setSupplies(supplies.filter(s => s.id !== id));
+    } catch (error) {
+      console.error('Error deleting supply:', error);
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${error.message || 'Failed to delete supply item'}.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw error;
+    }
+  };
+
+  // Procedure Group Items Handlers
+  const handleAddProcedureGroupItem = async (newItem) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        const itemWithId = { ...newItem, id: Date.now() };
+        setProcedureGroupItems([itemWithId, ...procedureGroupItems]);
+        return itemWithId;
+      }
+      const addedItem = await db.addProcedureGroupItem(newItem);
+      setProcedureGroupItems([addedItem, ...procedureGroupItems]);
+      return addedItem;
+    } catch (err) {
+      console.error('Error adding procedure group item:', err);
+      await Swal.fire({
+        title: 'Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Item was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
+    }
+  };
+
+  const handleUpdateProcedureGroupItem = async (id, updates) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setProcedureGroupItems(procedureGroupItems.map(i => i.id === id ? { ...i, ...updates } : i));
+        return;
+      }
+      await db.updateProcedureGroupItem(id, updates);
+      setProcedureGroupItems(procedureGroupItems.map(i => i.id === id ? { ...i, ...updates } : i));
+    } catch (err) {
+      console.error('Error updating procedure group item:', err);
+      await Swal.fire({
+        title: 'Update Failed',
+        text: `Error: ${err.message || 'Failed to update item'}.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
+    }
+  };
+
+  const handleDeleteProcedureGroupItem = async (id) => {
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        setProcedureGroupItems(procedureGroupItems.filter(i => i.id !== id));
+        return;
+      }
+      await db.deleteProcedureGroupItem(id);
+      setProcedureGroupItems(procedureGroupItems.filter(i => i.id !== id));
+    } catch (err) {
+      console.error('Error deleting procedure group item:', err);
+      Swal.fire({ title: 'Error!', text: 'Failed to delete item', icon: 'error' });
     }
   };
 
@@ -591,7 +806,6 @@ function App() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // No database - use local state only
         const claimWithId = { ...newClaim, id: Date.now() };
         setClaims([claimWithId, ...claims]);
         return claimWithId;
@@ -602,10 +816,13 @@ function App() {
       return addedClaim;
     } catch (err) {
       console.error('Error adding claim:', err);
-      // Fallback to local state
-      const claimWithId = { ...newClaim, id: Date.now() };
-      setClaims([claimWithId, ...claims]);
-      return claimWithId;
+      await Swal.fire({
+        title: 'Claim Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Claim was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -622,8 +839,13 @@ function App() {
       setClaims(claims.map(c => c.id === updatedClaim.id ? updatedClaim : c));
     } catch (err) {
       console.error('Error updating claim:', err);
-      // Fallback
-      setClaims(claims.map(c => c.id === updatedClaim.id ? updatedClaim : c));
+      await Swal.fire({
+        title: 'Claim Update Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Changes were NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -640,8 +862,13 @@ function App() {
       setClaims(claims.filter(c => c.id !== id));
     } catch (err) {
       console.error('Error deleting claim:', err);
-      // Fallback
-      setClaims(claims.filter(c => c.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Claim was NOT deleted.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -653,10 +880,13 @@ function App() {
       return addedStaff;
     } catch (err) {
       console.error('Error adding staff:', err);
-      // Fallback
-      const staffWithId = { ...newStaffMember, id: Date.now() };
-      setStaff([staffWithId, ...staff]);
-      return staffWithId;
+      await Swal.fire({
+        title: 'Staff Member Save Failed',
+        text: `Error: ${err.message || 'Unknown database error'}. Data was NOT saved.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -666,7 +896,13 @@ function App() {
       setStaff(staff.map(s => s.id === updatedStaff.id ? updatedStaff : s));
     } catch (err) {
       console.error('Error updating staff:', err);
-      setStaff(staff.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+      await Swal.fire({
+        title: 'Staff Update Failed',
+        text: `Error: ${err.message || 'Failed to update staff member'}.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -676,7 +912,13 @@ function App() {
       setStaff(staff.filter(s => s.id !== id));
     } catch (err) {
       console.error('Error deleting staff:', err);
-      setStaff(staff.filter(s => s.id !== id));
+      await Swal.fire({
+        title: 'Delete Failed',
+        text: `Error: ${err.message || 'Failed to delete staff member'}.`,
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      });
+      throw err;
     }
   };
 
@@ -723,21 +965,15 @@ function App() {
 
     try {
       // Calculate costs based on finalized duration
-      // Calculate Room Cost (OR Cost)
-      let actualRoomCost = 0;
-      if (surgery.actual_room_cost) {
-        actualRoomCost = surgery.actual_room_cost;
-      } else {
-        const hourlyRate = 1200; // $1200/hr base rate
-        actualRoomCost = (surgery.duration_minutes / 60) * hourlyRate;
-      }
+      const duration = parseInt(surgery.duration_minutes || 0);
+      const turnover = parseInt(surgery.turnover_time || 0);
 
-      // Calculate labor cost - use ACTUAL anesthesia costs from notes
+      // Calculate Labor Cost - use ACTUAL anesthesia costs from notes if available
       let actualLaborCost = 0;
       let laborCostSource = 'Estimated';
 
       if (surgery.notes) {
-        // Check for Self-Pay Anesthesia (e.g., "Self-Pay Anesthesia (Total Hip): $3,200")
+        // Check for Self-Pay Anesthesia
         const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
         if (selfPayMatch) {
           actualLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
@@ -754,39 +990,60 @@ function App() {
 
       // If no actual anesthesia cost found, use calculated estimate
       if (actualLaborCost === 0) {
-        actualLaborCost = calculateLaborCost(surgery.duration_minutes || 0);
+        actualLaborCost = calculateLaborCost(duration + turnover);
         laborCostSource = 'Calculated Estimate';
       }
 
-      // Calculate expected reimbursement
+      // 1. Calculate INTERNAL Room Cost (Hospital cost for duration + turnover)
+      const internalRoomCost = calculateORCost(duration + turnover);
+
+      // 2. Calculate BILLABLE Facility Fee (Patient pays for duration only)
+      const billableFacilityFee = calculateORCost(duration);
+
+      // 3. Get total supplies costs
+      const suppliesCost = parseFloat(surgery.supplies_cost || 0);
+      const implantsCost = parseFloat(surgery.implants_cost || 0);
+      const medicationsCost = parseFloat(surgery.medications_cost || 0);
+      const totalSuppliesCost = suppliesCost + implantsCost + medicationsCost;
+
+      // 4. Calculate expected reimbursement (Revenue)
       let expectedReimbursement = 0;
       let reimbursementSource = '';
 
-      // Check if it's a cosmetic surgery
       const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
 
       if (isCosmeticSurgery && surgery.notes) {
         // Parse cosmetic fees from notes
-        const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([0-9,]+)/i);
-        const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
-        const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-        const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-        expectedReimbursement = facilityFee + anesthesiaFee;
-        reimbursementSource = 'CSC Facility + Quantum Anesthesia';
+        const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([0-9,.]+)/i);
+        const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,.]+)/i);
+        const cscFacilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+        const cscAnesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+
+        // Revenue = Cosmetic Fees + Supplies
+        expectedReimbursement = cscFacilityFee + cscAnesthesiaFee + totalSuppliesCost;
+        reimbursementSource = 'CSC Fees + Supplies';
       } else if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
-        // Regular surgery with CPT codes - use MPPR
-        expectedReimbursement = calculateMedicareRevenue(surgery.cpt_codes, cptCodes);
-        reimbursementSource = 'Medicare MPPR';
+        // Regular surgery: Revenue = CPT + Facility Fee + Supplies + Anesthesia Extra
+        const cptRevenue = calculateMedicareRevenue(surgery.cpt_codes, cptCodes, settings?.apply_medicare_mppr || false);
+
+        let anesthesiaExtra = 0;
+        if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
+          const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
+          if (match) anesthesiaExtra = parseFloat(match[2].replace(/,/g, ''));
+        }
+
+        // Total Revenue matching the "Rev (CPT+Fee+Supplies)" logic
+        expectedReimbursement = cptRevenue + billableFacilityFee + totalSuppliesCost + anesthesiaExtra;
+        reimbursementSource = 'CPT + Facility + Supplies';
       }
 
-      // Get supplies costs (if entered)
-      const suppliesCost = surgery.supplies_cost || 0;
-      const implantsCost = surgery.implants_cost || 0;
-      const medicationsCost = surgery.medications_cost || 0;
-      const totalSuppliesCost = suppliesCost + implantsCost + medicationsCost;
+      // 5. Calculate Net Margin (Revenue - Total Internal Costs)
+      // Internal costs = Internal Room Cost + Labor Cost + Supplies Cost
+      const totalInternalCosts = internalRoomCost + actualLaborCost + totalSuppliesCost;
+      const netMargin = expectedReimbursement - totalInternalCosts;
 
-      // Calculate net margin
-      const netMargin = expectedReimbursement - actualRoomCost - actualLaborCost - totalSuppliesCost;
+      // Update local storage/state surgery reference for the summary display
+      const actualRoomCost = internalRoomCost; // For display compatibility with existing UI
 
       // Update surgery with financial snapshot
       const updates = {
@@ -810,7 +1067,7 @@ function App() {
             <h4 style="margin-top: 0; color: #1e293b;">Financial Summary</h4>
             <div style="display: grid; gap: 0.5rem; font-size: 0.95rem;">
               <div style="display: flex; justify-content: space-between;">
-                <span style="color: #64748b;">Expected Revenue:</span>
+                <span style="color: #64748b;">Total Revenue:</span>
                 <strong style="color: #059669;">$${expectedReimbursement.toLocaleString()}</strong>
               </div>
               ${reimbursementSource ? `
@@ -818,8 +1075,9 @@ function App() {
                   ✓ ${reimbursementSource}
                 </div>
               ` : ''}
+              <hr style="margin: 0.25rem 0; border: none; border-top: 1px dotted #e2e8f0;">
               <div style="display: flex; justify-content: space-between;">
-                <span style="color: #64748b;">OR Cost:</span>
+                <span style="color: #64748b;">Internal Room Cost:</span>
                 <strong style="color: #dc2626;">-$${actualRoomCost.toLocaleString()}</strong>
               </div>
               <div style="display: flex; justify-content: space-between;">
@@ -913,12 +1171,11 @@ function App() {
   const currentSurgeon = user.role === 'surgeon' ? surgeons.find(s => s.id === user.surgeon_id) : null;
   const patientSurgeries = user.role === 'patient' ? surgeries.filter(s => s.patient_id === user.patient_id) : surgeries;
 
-  // Render content based on user role and permissions
   const renderContent = () => {
-    const hasPerm = (perm) => user.role === 'admin' || userPermissions.includes(perm);
+    const hasPerm = (perm) => userPermissions.includes(perm);
 
     // 1. Permission-based rendering (Unified for Admin & Manager)
-    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
+    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
 
     // Manager Dashboard - Check permission
     if (view === 'manager-dashboard' && (user.role === 'manager' || hasPerm('view_manager_dashboard'))) {
@@ -973,7 +1230,7 @@ function App() {
     }
 
     if (view === 'scheduler' && hasPerm('manage_surgeries')) {
-      return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
+      return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} procedureGroupItems={procedureGroupItems} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
     }
 
     if (view === 'cancellation-rescheduling' && hasPerm('manage_surgeries')) {
@@ -1006,6 +1263,22 @@ function App() {
 
     if (view === 'cpt' && hasPerm('manage_cpt_codes')) {
       return <CPTManager cptCodes={cptCodes} showAllCPTs={showAllCPTs} setShowAllCPTs={setShowAllCPTs} onAddCPT={handleAddCPT} onUpdateCPT={handleUpdateCPT} onDeleteCPT={handleDeleteCPT} onRefreshCPTCodes={loadAllData} />;
+    }
+
+    if (view === 'supply-manager' && hasPerm('manage_supplies')) {
+      return (
+        <SupplyManager
+          supplies={supplies}
+          procedureGroupItems={procedureGroupItems}
+          onAddSupply={handleAddSupply}
+          onUpdateSupply={handleUpdateSupply}
+          onDeleteSupply={handleDeleteSupply}
+          onRefreshSupplies={loadAllData}
+          onAddProcedureGroupItem={handleAddProcedureGroupItem}
+          onUpdateProcedureGroupItem={handleUpdateProcedureGroupItem}
+          onDeleteProcedureGroupItem={handleDeleteProcedureGroupItem}
+        />
+      );
     }
 
     if (view === 'auto-cpt' && hasPerm('use_auto_updater')) return <CPTAutoUpdate />;

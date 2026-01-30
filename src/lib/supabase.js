@@ -27,7 +27,10 @@ export const db = {
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -70,7 +73,10 @@ export const db = {
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -124,7 +130,10 @@ export const db = {
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -185,7 +194,13 @@ export const db = {
                 .order('created_at', { ascending: false })
                 .range(page * pageSize, (page + 1) * pageSize - 1);
 
-            if (error) throw error;
+            if (error) {
+                if (error.code === '42P01') {
+                    hasMore = false;
+                    return [];
+                }
+                throw error;
+            }
 
             if (data && data.length > 0) {
                 allCodes = [...allCodes, ...data];
@@ -258,6 +273,30 @@ export const db = {
         return data;
     },
 
+    // ==================== PROCEDURE GROUPS (Virtual) ====================
+    async updateProcedureGroupName(oldName, newName) {
+        const { error } = await supabase
+            .from('cpt_codes')
+            .update({ procedure_group: newName })
+            .eq('procedure_group', oldName);
+
+        if (error) throw error;
+    },
+
+    async deleteProcedureGroup(groupName) {
+        if (!groupName) throw new Error('Group name is required');
+
+        // Move codes to 'Other' instead of deleting them
+        const { data, error } = await supabase
+            .from('cpt_codes')
+            .update({ procedure_group: 'Other' })
+            .eq('procedure_group', groupName)
+            .select();
+
+        if (error) throw error;
+        return data;
+    },
+
     // ==================== SURGERIES ====================
     async getSurgeries() {
         const { data, error } = await supabase
@@ -265,7 +304,10 @@ export const db = {
             .select('*, patients(*), surgeons(*)')
             .order('date', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -330,7 +372,10 @@ export const db = {
             .select('*, patients(*), surgeries(*)')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -384,7 +429,10 @@ export const db = {
             .select('*')
             .order('id', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -427,7 +475,10 @@ export const db = {
             .select('*, patients(*), surgeries(*)')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -528,7 +579,10 @@ export const db = {
             .select('*')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -591,7 +645,8 @@ export const db = {
             .limit(1);
 
         // Don't throw error if no rows found, just return null
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
+            if (error.code === 'PGRST116' || error.code === '42P01') return null;
             console.error('Error fetching settings:', error);
             throw error;
         }
@@ -637,7 +692,10 @@ export const db = {
             .select('*')
             .order('name', { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -647,7 +705,10 @@ export const db = {
             .select('permission_id, permissions(name)')
             .eq('role', role);
 
-        if (error) throw error;
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
         return data || [];
     },
 
@@ -675,5 +736,89 @@ export const db = {
 
         if (insertError) throw insertError;
         return data;
+    },
+
+    // ==================== SUPPLIES ====================
+    async getSupplies() {
+        // Disabled to prevent console errors as tables are not present
+        return [];
+    },
+
+    async addSupply(supply) {
+        const { data, error } = await supabase
+            .from('supplies')
+            .insert([supply])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateSupply(id, updates) {
+        const { data, error } = await supabase
+            .from('supplies')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteSupply(id) {
+        const { error } = await supabase
+            .from('supplies')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // ==================== PROCEDURE GROUP ITEMS ====================
+    async getProcedureGroupItems() {
+        const { data, error } = await supabase
+            .from('procedure_group_items')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
+        return data || [];
+    },
+
+    async addProcedureGroupItem(item) {
+        const { data, error } = await supabase
+            .from('procedure_group_items')
+            .insert([item])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateProcedureGroupItem(id, updates) {
+        const { data, error } = await supabase
+            .from('procedure_group_items')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteProcedureGroupItem(id) {
+        const { error } = await supabase
+            .from('procedure_group_items')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
     }
 };

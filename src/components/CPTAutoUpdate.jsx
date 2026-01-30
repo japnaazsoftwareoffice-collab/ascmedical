@@ -120,53 +120,65 @@ const CPTAutoUpdate = () => {
             // AUTO-CATEGORIZATION HELPER
             const getCategoryFromCode = (code) => {
                 const codeStr = String(code).toUpperCase().trim();
+                let category = 'General';
+                let bodyPart = '';
 
                 // 1. Check Specific Map Override
                 if (CPT_CATEGORY_MAP[codeStr]) {
-                    return CPT_CATEGORY_MAP[codeStr];
+                    category = CPT_CATEGORY_MAP[codeStr];
+                } else if (codeStr.endsWith('T')) {
+                    category = 'Emerging Technology (T-Code)';
+                } else {
+                    const c = parseInt(code);
+                    if (!isNaN(c)) {
+                        if (c >= 100 && c <= 1999) {
+                            category = 'Anesthesiology';
+                        } else if (c >= 65000 && c <= 68999) {
+                            category = 'Ophthalmology';
+                            bodyPart = 'Eye';
+                        } else if (c >= 69000 && c <= 69999) {
+                            category = 'Otolaryngology (ENT)';
+                            bodyPart = 'Ear';
+                        } else if (c >= 30000 && c <= 32999) {
+                            category = 'Otolaryngology (ENT)';
+                            bodyPart = 'Nose/Sinus';
+                        } else if (c >= 28000 && c <= 28899) {
+                            category = 'Podiatry';
+                            bodyPart = 'Foot/Ankle';
+                        } else if (c >= 20000 && c <= 29999) {
+                            category = 'Orthopedics';
+                            if (c >= 27300 && c <= 27599) bodyPart = 'Knee';
+                            else if (c >= 27000 && c <= 27299) bodyPart = 'Hip';
+                            else if (c >= 23000 && c <= 24999) bodyPart = 'Shoulder/Arm';
+                            else if (c >= 25000 && c <= 26999) bodyPart = 'Hand/Wrist';
+                        } else if (c >= 19100 && c <= 19299) {
+                            category = 'Breast Oncology';
+                            bodyPart = 'Breast';
+                        } else if (c >= 10000 && c <= 19999) {
+                            category = 'Plastic / Cosmetic';
+                        } else if (c >= 33000 && c <= 39999) {
+                            category = 'Cardiology';
+                        } else if (c >= 40000 && c <= 49999) {
+                            category = 'Gastroenterology';
+                            bodyPart = 'GI Tract';
+                        } else if (c >= 50000 && c <= 59999) {
+                            category = 'Urology';
+                        } else if (c >= 62000 && c <= 64999) {
+                            category = 'Pain Management';
+                            bodyPart = 'Spine/Nerves';
+                        } else if (c >= 60000 && c <= 64999) {
+                            category = 'Neurology';
+                        } else if (c >= 70000 && c <= 79999) {
+                            category = 'Radiology';
+                        } else if (c >= 80000 && c <= 89999) {
+                            category = 'Pathology / Lab';
+                        } else if (c >= 90000 && c <= 99999) {
+                            category = 'Evaluations / Medicine';
+                        }
+                    }
                 }
 
-                // 2. Emerging Technology (T-Codes)
-                if (codeStr.endsWith('T')) return 'Emerging Technology (T-Code)';
-
-                const c = parseInt(code);
-                if (isNaN(c)) return 'General';
-
-                // 2. Anesthesiology
-                if (c >= 100 && c <= 1999) return 'Anesthesiology';
-
-                // 3. Integumentary (Breast vs Plastic)
-                if (c >= 19100 && c <= 19299) return 'Breast Oncology'; // Breast procedures
-                if (c >= 10000 && c <= 19999) return 'Plastic / Cosmetic';
-
-                // 4. Musculoskeletal (Podiatry vs Orthopedics)
-                if (c >= 28000 && c <= 28899) return 'Podiatry'; // Foot & Toes
-                if (c >= 20000 && c <= 29999) return 'Orthopedics';
-
-                // 5. Respiratory & Cardiovascular (ENT vs Cardio)
-                if (c >= 30000 && c <= 32999) return 'Otolaryngology (ENT)'; // Nose/Larynx
-                if (c >= 33000 && c <= 39999) return 'Cardiology';
-
-                // 6. Digestive
-                if (c >= 40000 && c <= 49999) return 'Gastroenterology';
-
-                // 7. Urinary
-                if (c >= 50000 && c <= 59999) return 'Urology';
-
-                // 8. Nervous System (Pain vs Neuro)
-                if (c >= 62000 && c <= 64999) return 'Pain Management'; // Injections/Blocks
-                if (c >= 60000 && c <= 64999) return 'Neurology'; // Cranial/Spinal (Fallback)
-
-                // 9. Eye / Ear
-                if (c >= 65000 && c <= 68999) return 'Ophthalmology';
-                if (c >= 69000 && c <= 69999) return 'Otolaryngology (ENT)'; // Auditory
-
-                // 10. Radiology / Pathology / Medicine
-                if (c >= 70000 && c <= 79999) return 'Radiology';
-                if (c >= 80000 && c <= 89999) return 'Pathology / Lab';
-                if (c >= 90000 && c <= 99999) return 'Evaluations / Medicine';
-
-                return 'General';
+                return { category, bodyPart };
             };
             const sortedFiles = [...selectedFiles].sort((a, b) => {
                 const wA = getQuarterWeight(a.name);
@@ -207,9 +219,12 @@ const CPTAutoUpdate = () => {
                 }
 
                 // DYNAMIC HEADER DETECTION
-                // DYNAMIC HEADER DETECTION
                 let headerIdx = -1;
-                let colIdx = { code: -1, desc: -1, payment: -1, indicator: -1, longDesc: -1, discounting: -1 };
+                let colIdx = {
+                    code: -1, desc: -1, payment: -1, indicator: -1,
+                    longDesc: -1, discounting: -1, category: -1,
+                    bodyPart: -1, duration: -1, turnover: -1, group: -1
+                };
 
                 for (let i = 0; i < Math.min(aoa.length, 25); i++) {
                     const rowStr = (aoa[i] || []).join(' ').toLowerCase();
@@ -242,6 +257,13 @@ const CPTAutoUpdate = () => {
                         // DISCOUNTING
                         colIdx.discounting = row.findIndex(c => c.includes('multiple procedure') || c.includes('discounting'));
 
+                        // EXTENDED FIELDS
+                        colIdx.category = row.findIndex(c => c.includes('category') && !c.includes('body'));
+                        colIdx.bodyPart = row.findIndex(c => c.includes('body') && c.includes('part'));
+                        colIdx.duration = row.findIndex(c => c.includes('duration'));
+                        colIdx.turnover = row.findIndex(c => c.includes('turnover'));
+                        colIdx.group = row.findIndex(c => c.includes('group') && !c.includes('payment'));
+
                         // LOGGING
                         log(`   🎯 Headers found on row ${i + 1}.`);
                         break;
@@ -264,7 +286,7 @@ const CPTAutoUpdate = () => {
                     if (code && code.length >= 3 && code.length <= 7) {
                         const desc = val(colIdx.desc);
                         const longDesc = val(colIdx.longDesc);
-                        const category = getCategoryFromCode(code);
+                        const autoMapping = getCategoryFromCode(code);
 
                         allHistory.push({
                             code,
@@ -274,7 +296,11 @@ const CPTAutoUpdate = () => {
                             reimbursement: parseFloat(val(colIdx.payment).replace(/[$,]/g, '')) || 0,
                             payment_indicator: val(colIdx.indicator),
                             discounting: val(colIdx.discounting),
-                            category: category, // AUTO ASSIGNED
+                            category: val(colIdx.category) || autoMapping.category,
+                            body_part: val(colIdx.bodyPart) || autoMapping.bodyPart,
+                            average_duration: parseInt(val(colIdx.duration)) || 0,
+                            turnover_time: parseInt(val(colIdx.turnover)) || 0,
+                            procedure_group: val(colIdx.group),
                             original_filename: file.name
                         });
                         validCount++;
@@ -363,6 +389,7 @@ const CPTAutoUpdate = () => {
                     reimbursement: row.reimbursement,
                     procedure_indicator: row.payment_indicator, // Map payment_indicator to DB 'procedure_indicator'
                     category: row.category,
+                    procedure_group: row.procedure_group, // NEW: Include procedure_group
                     body_part: row.body_part, // Include body_part in DB update
                     average_duration: row.average_duration,
                     turnover_time: row.turnover_time,
@@ -412,6 +439,7 @@ const CPTAutoUpdate = () => {
             'Payment Rate': record.reimbursement,
             'Payment Indicator': record.payment_indicator,
             'Multiple Procedure Discounting': record.discounting, // ADDED
+            'Procedure Group': record.procedure_group || '', // NEW
             'Effective Date': record.effective_date,
             'Category': record.category,
             'Body Part': record.body_part,
@@ -490,7 +518,7 @@ Generated by ASC Manager
             while (hasMore) {
                 const { data, error } = await supabase
                     .from('cpt_codes')
-                    .select('*')
+                    .select('*, procedure_group') // Explicitly select procedure_group
                     .order('code', { ascending: true })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -515,6 +543,7 @@ Generated by ASC Manager
             }
 
             log(`✅ Retrieved ${allData.length} total records. Generating CSV...`);
+            console.log('Sample Record for Export:', allData[0]); // Debug log
 
             const csvData = allData.map(record => ({
                 'CPT/HCPCS Code': record.code,
@@ -522,6 +551,7 @@ Generated by ASC Manager
                 'Long Descriptor': record.long_descriptor || '',
                 'Payment Rate': record.reimbursement,
                 'Payment Indicator': record.payment_indicator || '',
+                'Procedure Group': record.procedure_group || '', // Added field
                 'Effective Date': record.effective_date || '',
                 'Version Year': record.version_year || '',
                 'Category': record.category || 'General',
@@ -543,8 +573,8 @@ Generated by ASC Manager
             link.click();
             document.body.removeChild(link);
 
-            log('🎉 Master CSV downloaded successfully.');
-            Swal.fire('Success', 'Master CSV downloaded successfully!', 'success');
+            log('🎉 Master CSV (with Groups) downloaded successfully.');
+            Swal.fire('Success', 'Master CSV (with Procedure Groups) downloaded successfully!', 'success');
 
         } catch (error) {
             console.error('Export Error:', error);
@@ -588,6 +618,7 @@ Generated by ASC Manager
                     effDate: -1,
                     duration: -1,
                     turnover: -1,
+                    group: -1,
                     active: -1
                 };
 
@@ -623,6 +654,7 @@ Generated by ASC Manager
                         colIdx.effDate = row.findIndex(c => c.includes('effective'));
                         colIdx.duration = row.findIndex(c => c.includes('duration'));
                         colIdx.turnover = row.findIndex(c => c.includes('turnover'));
+                        colIdx.group = row.findIndex(c => c.includes('group') && !c.includes('payment')); // Avoid confusion with 'payment group' if any
                         colIdx.active = row.findIndex(c => c.includes('active') || c.includes('status'));
 
                         log(`   🎯 Enriched Headers found on row ${i + 1}`);
@@ -663,6 +695,7 @@ Generated by ASC Manager
                             reimbursement: reimbursement,
                             payment_indicator: val(colIdx.indicator),
                             category: val(colIdx.category) || 'General',
+                            procedure_group: val(colIdx.group),
                             body_part: val(colIdx.bodyPart),
                             discounting: val(colIdx.discounting),
                             version_year: val(colIdx.year) || new Date().getFullYear(),

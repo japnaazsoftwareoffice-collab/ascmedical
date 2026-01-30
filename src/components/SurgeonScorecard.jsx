@@ -107,7 +107,7 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings }) => {
 
         return scorecard;
 
-    }, [surgeries, surgeons, cptCodes, sortBy, sortOrder]);
+    }, [surgeries, surgeons, cptCodes, sortBy, sortOrder, settings?.apply_medicare_mppr]);
 
     const handleSort = (column) => {
         if (sortBy === column) {

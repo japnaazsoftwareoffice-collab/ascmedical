@@ -98,7 +98,6 @@ export const calculateMedicareRevenue = (cptCodesArray, cptDatabase, applyMPPR =
     return totalRevenue;
 };
 
-// Calculate labor cost based on duration and complexity
 // Calculate labor cost based on duration (Standard: 30% of OR Cost)
 export const calculateLaborCost = (durationMinutes) => {
     if (!durationMinutes || durationMinutes <= 0) return 0;
@@ -110,6 +109,31 @@ export const calculateLaborCost = (durationMinutes) => {
     return orCost * 0.3;
 };
 
+// Cosmetic fee calculator based on duration
+export const calculateCosmeticFees = (durationMinutes, isPlastic = false) => {
+    // CSC Facility Fee rates
+    const facilityRates = {
+        30: 750, 60: 1500, 90: 1800, 120: 2100, 150: 2500,
+        180: 2900, 210: 3300, 240: 3700, 270: 4100, 300: 4500,
+        330: 4900, 360: 5300, 390: 5700, 420: 6100, 480: 6500, 540: 6900
+    };
+
+    // Quantum Anesthesia rates
+    const anesthesiaRates = {
+        30: 600, 60: 750, 90: 900, 120: 1050, 150: 1200,
+        180: 1350, 210: 1500, 240: 1650, 270: 1800, 300: 1950,
+        330: 2100, 360: 2250, 390: 2400, 420: 2550, 480: 2700, 540: 2850
+    };
+
+    // Round up to nearest 30 minutes for fee lookup
+    const lookupDuration = Math.ceil(durationMinutes / 30) * 30;
+
+    return {
+        facilityFee: facilityRates[lookupDuration] || 0,
+        anesthesiaFee: isPlastic ? 0 : (anesthesiaRates[lookupDuration] || 0)
+    };
+};
+
 // Format currency
 export const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
@@ -118,4 +142,92 @@ export const formatCurrency = (amount) => {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     }).format(amount);
+};
+
+// Calculate all metrics for a surgery consistently across the app
+export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGroupItems = []) => {
+    const isCosmetic = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
+    let cptTotal = 0;
+    let orCost = 0; // Billable Facility Fee
+    let internalRoomCost = 0;
+    let laborCost = 0;
+    let totalValue = 0;
+    let netProfit = 0;
+    let anesthesiaExtra = 0;
+
+    // 1. Calculate Supply Costs with fallback for old records
+    let supplyCosts = (parseFloat(surgery.supplies_cost) || 0) +
+        (parseFloat(surgery.implants_cost) || 0) +
+        (parseFloat(surgery.medications_cost) || 0);
+
+    // Fallback: If no supplies cost but CPT codes exist, try to infer from procedure group
+    if (supplyCosts === 0 && !isCosmetic && surgery.cpt_codes && surgery.cpt_codes.length > 0) {
+        let inferedGroup = '';
+        for (const code of surgery.cpt_codes) {
+            const cpt = cptCodes.find(c => String(c.code) === String(code));
+            if (cpt && cpt.procedure_group) {
+                inferedGroup = cpt.procedure_group;
+                break;
+            }
+        }
+        if (inferedGroup && procedureGroupItems.length > 0) {
+            const groupItems = procedureGroupItems.filter(i => i.procedure_group === inferedGroup);
+            supplyCosts = groupItems.reduce((sum, item) => sum + (parseFloat(item.unit_price || 0) * parseFloat(item.quantity_per_case || 0)), 0);
+        }
+    }
+
+    const duration = parseInt(surgery.duration_minutes || surgery.durationMinutes || 0);
+    const turnover = parseInt(surgery.turnover_time || surgery.turnoverTime || 0);
+
+    if (isCosmetic) {
+        // Parse cosmetic fees from notes or use calculated defaults
+        let facilityFee = 0;
+        let anesthesiaFee = 0;
+
+        if (surgery.notes) {
+            const facilityMatch = surgery.notes.match(/(?:Facility |Cosmetic )?Fee:?\s*\$?\s*([\d,.]+)/i);
+            const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
+            facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
+            anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
+        }
+
+        // Fallback to defaults if not in notes
+        if (facilityFee === 0 && anesthesiaFee === 0) {
+            const defaults = calculateCosmeticFees(duration);
+            facilityFee = defaults.facilityFee;
+            anesthesiaFee = defaults.anesthesiaFee;
+        }
+
+        orCost = facilityFee + anesthesiaFee;
+        internalRoomCost = calculateORCost(duration + turnover);
+        laborCost = calculateLaborCost(duration + turnover);
+        totalValue = orCost + supplyCosts;
+        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts);
+    } else {
+        cptTotal = calculateMedicareRevenue(surgery.cpt_codes || surgery.cptCodes || [], cptCodes, settings?.apply_medicare_mppr || false);
+        orCost = calculateORCost(duration); // Billable duration only
+        internalRoomCost = calculateORCost(duration + turnover); // Full room usage cost
+
+        if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
+            const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
+            if (match) {
+                anesthesiaExtra = parseFloat(match[2].replace(/,/g, ''));
+            }
+        }
+        orCost += anesthesiaExtra;
+        laborCost = calculateLaborCost(duration + turnover);
+        totalValue = cptTotal + orCost + supplyCosts;
+        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaExtra);
+    }
+
+    return {
+        cptRevenue: cptTotal,
+        facilityRevenue: orCost,
+        totalRevenue: totalValue,
+        netProfit,
+        supplyCosts,
+        internalRoomCost,
+        laborCost,
+        isCosmetic
+    };
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, getSurgeryMetrics } from '../utils/hospitalUtils';
 import AIAnalystModal from './AIAnalystModal';
 import './Dashboard.css';
 import { jsPDF } from 'jspdf';
@@ -9,15 +9,16 @@ import html2canvas from 'html2canvas';
 import Swal from 'sweetalert2';
 import emailjs from '@emailjs/browser';
 
-// EmailJS Configuration (Replace with your actual keys from emailjs.com)
-const EMAILJS_SERVICE_ID = 'service_1uqpug2';
-const EMAILJS_TEMPLATE_ID = 'template_7bwe5or';
-const EMAILJS_PUBLIC_KEY = 'kemMSpgMmsNS0Hcu5';
+// EmailJS Configuration
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_1uqpug2';
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_7bwe5or';
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'kemMSpgMmsNS0Hcu5';
 
-const Dashboard = ({ surgeries, cptCodes, settings }) => {
+const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [timeframe, setTimeframe] = useState('daily'); // daily, weekly, monthly
+    const [outcomeView, setOutcomeView] = useState('all'); // all, daily
     const [stats, setStats] = useState({
         totalSurgeries: 0,
         totalRevenue: 0,
@@ -77,114 +78,36 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
 
     useEffect(() => {
         const calculateStats = (filteredSurgeries) => {
-            let revenue = 0;
-            let cost = 0;
-            let laborCost = 0;
+            let totalRevenue = 0;
+            let totalCost = 0;
             const usage = {};
             const perCaseData = [];
 
             filteredSurgeries.forEach(surgery => {
-                // Calculate OR Cost
-                const duration = parseFloat(surgery.duration_minutes || surgery.durationMinutes || 0);
-                const caseCost = calculateORCost(duration);
-                cost += caseCost;
+                const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
 
-                // Calculate Labor Cost from notes or use actual_labor_cost
-                let caseLaborCost = parseFloat(surgery.actual_labor_cost);
+                totalRevenue += metrics.totalRevenue;
+                totalCost += (metrics.internalRoomCost + metrics.laborCost + metrics.supplyCosts);
 
-                // Handle NaN or 0 (force default if 0/missing)
-                if (isNaN(caseLaborCost) || caseLaborCost === 0) {
-                    caseLaborCost = 0; // Reset to 0 before trying other methods
-
-                    if (surgery.notes) {
-                        // Extract self-pay anesthesia
-                        const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
-                        if (selfPayMatch) {
-                            caseLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
-                        }
-
-                        // Extract cosmetic anesthesia
-                        const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
-                        if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
-                            caseLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
-                        }
-                    }
-
-                    // If still no labor cost, default to 30% of OR cost
-                    if (caseLaborCost === 0) {
-                        caseLaborCost = caseCost * 0.3;
-                        // console.log('DEBUG: Calculated labor cost', { caseCost, caseLaborCost });
-                    }
-                }
-
-                laborCost += caseLaborCost;
-
-                // Calculate Revenue
-                let caseRevenue = 0;
                 const codes = surgery.cpt_codes || surgery.cptCodes || [];
-
-                if (codes.length === 0 && surgery.notes) {
-                    // CPT codes empty implies Cosmetic Surgery (or custom logic)
-                    // Parse fees from notes - support multiple formats
-                    // Formats: "Facility Fee: $1500", "Fee: 1500", "Paid: 1500", "Price: 1500"
-                    const facilityMatch = surgery.notes.match(/(?:Facility |Cosmetic )?Fee:?\s*\$?\s*([\d,.]+)/i) ||
-                        surgery.notes.match(/Paid:?\s*\$?\s*([\d,.]+)/i) ||
-                        surgery.notes.match(/Price:?\s*\$?\s*([\d,.]+)/i) ||
-                        surgery.notes.match(/Amount:?\s*\$?\s*([\d,.]+)/i) ||
-                        surgery.notes.match(/\$\s*([\d,.]+)/); // Fallback: just a dollar amount
-
-                    const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
-
-                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                    caseRevenue = facilityFee + anesthesiaFee;
-                } else {
-                    // Use calculateMedicareRevenue for proper MPPR handling
-                    caseRevenue = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
-
-                    codes.forEach(code => {
-                        usage[code] = (usage[code] || 0) + 1;
-                    });
-
-                    // Also check for "Self-Pay Anesthesia" in notes for standard surgeries
-                    if (surgery.notes) {
-                        const anesthesiaMatch = surgery.notes.match(/Self-Pay Anesthesia:?\s*\$?\s*([\d,.]+)/i);
-                        if (anesthesiaMatch) {
-                            caseRevenue += parseFloat(anesthesiaMatch[1].replace(/,/g, ''));
-                        }
-                    }
-                }
-                revenue += caseRevenue;
-
-                // Get supplies costs
-                const suppliesCost = (parseFloat(surgery.supplies_cost) || 0) +
-                    (parseFloat(surgery.implants_cost) || 0) +
-                    (parseFloat(surgery.medications_cost) || 0);
-
-                // Track total supplies cost for stats
-                // Note: The original code logic for 'stats' object might need checking, 
-                // but here we just push to perCaseData and accumulate locally if needed.
-                // Wait, perCaseData logic uses local variables.
+                codes.forEach(code => {
+                    usage[code] = (usage[code] || 0) + 1;
+                });
 
                 perCaseData.push({
                     id: surgery.id,
-                    revenue: caseRevenue,
-                    cost: caseCost,
-                    laborCost: caseLaborCost,
-                    suppliesCost: suppliesCost,
-                    profit: caseRevenue - caseCost - caseLaborCost - suppliesCost
+                    revenue: metrics.totalRevenue,
+                    cost: metrics.internalRoomCost + metrics.laborCost + metrics.supplyCosts,
+                    laborCost: metrics.laborCost,
+                    suppliesCost: metrics.supplyCosts,
+                    profit: metrics.netProfit
                 });
             });
 
-            // Calculate total supplies cost from perCaseData
-            const totalSuppliesCost = perCaseData.reduce((sum, c) => sum + c.suppliesCost, 0);
-
             return {
-                revenue,
-                cost,
-                laborCost,
-                suppliesCost: totalSuppliesCost,
-                profit: revenue - cost - laborCost - totalSuppliesCost,
+                revenue: totalRevenue,
+                cost: totalCost,
+                profit: totalRevenue - totalCost,
                 usage,
                 perCaseData
             };
@@ -250,7 +173,7 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
         setStats({
             totalSurgeries: currentSurgeries.length,
             totalRevenue: currentStats.revenue,
-            totalCost: currentStats.cost + currentStats.laborCost + currentStats.suppliesCost,
+            totalCost: currentStats.cost,
             netProfit: currentStats.profit,
             cptUsage: currentStats.usage,
             revenueChange: calculateChange(currentStats.revenue, prevStats.revenue),
@@ -258,13 +181,24 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
         });
 
         // Update Outcome Stats
-        // Update Outcome Stats (Using ALL surgeries, not filtered)
+        const getRelevantSurgeries = () => {
+            if (outcomeView === 'daily') {
+                return surgeries.filter(s => {
+                    const sDate = new Date(s.date).toISOString().split('T')[0];
+                    return sDate === selectedDate;
+                });
+            }
+            return surgeries;
+        };
+
+        const relevantOutcomeSurgeries = getRelevantSurgeries();
+
         setOutcomeData({
-            completed: surgeries.filter(s => s.status === 'completed').length,
-            scheduled: surgeries.filter(s => s.status === 'scheduled').length,
-            rescheduled: surgeries.filter(s => s.status === 'rescheduled').length,
-            cancelled: surgeries.filter(s => s.status === 'cancelled').length,
-            total: surgeries.length
+            completed: relevantOutcomeSurgeries.filter(s => s.status === 'completed').length,
+            scheduled: relevantOutcomeSurgeries.filter(s => s.status === 'scheduled').length,
+            rescheduled: relevantOutcomeSurgeries.filter(s => s.status === 'rescheduled').length,
+            cancelled: relevantOutcomeSurgeries.filter(s => s.status === 'cancelled').length,
+            total: relevantOutcomeSurgeries.length
         });
 
         setChartData(currentStats.perCaseData);
@@ -275,39 +209,8 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
             const profits = {};
             subset.forEach(s => {
                 const name = s.doctor_name || 'Unknown';
-                let revenue = 0;
-                let isCosmetic = false;
-
-                const codes = s.cpt_codes || s.cptCodes || [];
-
-                // Logic to determine revenue
-                if (codes.length === 0 && s.notes) {
-                    // Cosmetic/Custom Logic
-                    // Parse fees from notes - support multiple formats
-                    const facilityMatch = s.notes.match(/(?:Facility |Cosmetic )?Fee:?\s*\$?\s*([\d,.]+)/i) ||
-                        s.notes.match(/Paid:?\s*\$?\s*([\d,.]+)/i) ||
-                        s.notes.match(/Price:?\s*\$?\s*([\d,.]+)/i) ||
-                        s.notes.match(/Amount:?\s*\$?\s*([\d,.]+)/i) ||
-                        s.notes.match(/\$\s*([\d,.]+)/);
-
-                    const anesthesiaMatch = s.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
-
-                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                    revenue = facilityFee + anesthesiaFee;
-                    isCosmetic = true;
-                } else {
-                    // Use calculateMedicareRevenue for proper MPPR handling
-                    revenue = calculateMedicareRevenue(codes, cptCodes, settings?.apply_medicare_mppr || false);
-                }
-
-                // Calculate total costs: OR + Labor + Supplies
-                const orCost = isCosmetic ? 0 : calculateORCost(s.duration_minutes || s.durationMinutes || 0);
-                const laborCost = orCost * 0.3;
-                const suppliesCost = (s.supplies_cost || 0) + (s.implants_cost || 0) + (s.medications_cost || 0);
-                const totalCosts = orCost + laborCost + suppliesCost;
-
-                profits[name] = (profits[name] || 0) + (revenue - totalCosts);
+                const metrics = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems);
+                profits[name] = (profits[name] || 0) + metrics.netProfit;
             });
 
             let top = null;
@@ -402,7 +305,9 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
             const sM = parseInt(start.substring(2, 4));
             const eH = parseInt(end.substring(0, 2));
             const eM = parseInt(end.substring(2, 4));
-            return (eH * 60 + eM) - (sH * 60 + sM);
+            let diff = (eH * 60 + eM) - (sH * 60 + sM);
+            if (diff < 0) diff += 1440; // Handle overnight/next-day wrap
+            return diff;
         };
 
         const calculateBlockStats = () => {
@@ -477,7 +382,7 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
             setBlockStats(calculateBlockStats());
         }
 
-    }, [surgeries, selectedDate, cptCodes, timeframe, blockSchedule, selectedRoom]);
+    }, [surgeries, selectedDate, cptCodes, timeframe, blockSchedule, selectedRoom, outcomeView]);
 
     // Helper for consistent colors
     const generateColor = (str) => {
@@ -853,8 +758,8 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                                         className="donut-chart"
                                         style={{
                                             background: `conic-gradient(
-                                                #10b981 0% ${(stats.netProfit / stats.totalRevenue) * 100}%,
-                                                #ef4444 ${(stats.netProfit / stats.totalRevenue) * 100}% 100%
+                                                #10b981 0% ${Math.max(0, (stats.netProfit / stats.totalRevenue) * 100)}%,
+                                                #ef4444 ${Math.max(0, (stats.netProfit / stats.totalRevenue) * 100)}% 100%
                                             )`
                                         }}
                                     >
@@ -862,7 +767,7 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                                             <div className="donut-center-text">
                                                 <span className="donut-label">Margin</span>
                                                 <span className="donut-value">
-                                                    {Math.round((stats.netProfit / stats.totalRevenue) * 100)}%
+                                                    {stats.totalRevenue > 0 ? Math.round((stats.netProfit / stats.totalRevenue) * 100) : 0}%
                                                 </span>
                                             </div>
                                         </div>
@@ -981,7 +886,18 @@ const Dashboard = ({ surgeries, cptCodes, settings }) => {
                     {/* Surgery Outcome Analysis Chart (New) */}
                     <div className="chart-card utilization-chart-card">
                         <div className="chart-header">
-                            <h3>Outcome Analysis (All Time)</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                <h3>Outcome Analysis ({outcomeView === 'all' ? 'All Time' : 'Daily'})</h3>
+                                <select
+                                    className="filter-select"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                                    value={outcomeView}
+                                    onChange={(e) => setOutcomeView(e.target.value)}
+                                >
+                                    <option value="all">All Time</option>
+                                    <option value="daily">Daily</option>
+                                </select>
+                            </div>
                         </div>
                         <div className="utilization-chart-container">
                             {outcomeData.total === 0 ? (

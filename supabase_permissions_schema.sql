@@ -24,6 +24,7 @@ INSERT INTO permissions (name, description) VALUES
 ('manage_surgeons', 'Add or edit surgeon profiles'),
 ('manage_patients', 'Access and edit master patient records'),
 ('manage_cpt_codes', 'View and edit CPT price list and categories'),
+('manage_supplies', 'Manage medical supplies, inventory, and costs'),
 ('edit_surgery_details', 'Modify surgery specific data like implants and products'),
 ('view_claims', 'Access insurance claims management'),
 ('manage_surgeries', 'Access Surgery Log and OR scheduling'),
@@ -48,7 +49,8 @@ WHERE name IN (
     'view_work_queues', 
     'edit_surgery_details', 
     'manage_patients',
-    'view_claims'
+    'view_claims',
+    'manage_supplies'
 );
 
 -- SURGEON Permissions

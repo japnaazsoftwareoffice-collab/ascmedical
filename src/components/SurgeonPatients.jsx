@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import './SurgeonPatients.css';
 
 const SurgeonPatients = ({ patients, surgeries, surgeon }) => {
-    const [myPatients, setMyPatients] = useState([]);
+
     const [searchTerm, setSearchTerm] = useState('');
 
 
@@ -21,8 +21,8 @@ const SurgeonPatients = ({ patients, surgeries, surgeon }) => {
         return first && last ? `Dr. ${last} ${first}` : 'Unknown';
     };
 
-    useEffect(() => {
-        if (!patients || !surgeries || !surgeon) return;
+    const myPatients = useMemo(() => {
+        if (!patients || !surgeries || !surgeon) return [];
 
         const surgeonName = getSurgeonName(surgeon);
 
@@ -33,14 +33,16 @@ const SurgeonPatients = ({ patients, surgeries, surgeon }) => {
                 .map(s => s.patient_id)
         );
 
-        const filtered = patients.filter(p => patientIds.has(p.id));
-        setMyPatients(filtered);
+        return patients.filter(p => patientIds.has(p.id));
     }, [patients, surgeries, surgeon]);
 
-    const filteredPatients = myPatients.filter(patient =>
-        getPatientName(patient).toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.mrn.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredPatients = useMemo(() => {
+        return myPatients.filter(patient =>
+            getPatientName(patient).toLowerCase().includes(searchTerm.toLowerCase()) ||
+            patient.mrn.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [myPatients, searchTerm]);
+
 
     const getPatientLastSurgery = (patientId) => {
         const surgeonName = getSurgeonName(surgeon);

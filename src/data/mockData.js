@@ -2,7 +2,7 @@ export const CPT_CODES = [
     // === HIGH-PAYING ORTHOPEDIC SURGERIES ===
 
     // Joint Replacements (Highest Revenue)
-    { code: '27130', description: 'Total Hip Replacement', reimbursement: 15000, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Hip' },
+    { code: '27130', description: 'Total Hip Replacement', reimbursement: 15000, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Hip', procedure_group: 'Orthopedics / Musculoskeletal Procedure' },
     { code: '27447', description: 'Total Knee Replacement', reimbursement: 14500, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Knee' },
     { code: '23472', description: 'Total Shoulder Replacement', reimbursement: 14200, turnover_time: 40, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Shoulder' },
     { code: '27134', description: 'Revision Total Hip Replacement', reimbursement: 18000, turnover_time: 60, category: 'Orthopedics', procedure_indicator: 'S', body_part: 'Hip' },
@@ -60,13 +60,13 @@ export const CPT_CODES = [
     // === OTHER SPECIALTIES ===
 
     // Gastroenterology
-    { code: '43239', description: 'EGD with Biopsy', reimbursement: 3000, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
+    { code: '43239', description: 'EGD with Biopsy', reimbursement: 3000, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S', procedure_group: 'Gastroenterology Procedure' },
     { code: '45378', description: 'Colonoscopy, Flexible', reimbursement: 3200, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
     { code: '45380', description: 'Colonoscopy with Biopsy', reimbursement: 3800, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
     { code: '45385', description: 'Colonoscopy with Polypectomy', reimbursement: 4200, turnover_time: 20, category: 'Gastroenterology', procedure_indicator: 'S' },
 
     // Ophthalmology
-    { code: '66984', description: 'Cataract Surgery with IOL', reimbursement: 4000, turnover_time: 15, category: 'Ophthalmology', procedure_indicator: 'S' },
+    { code: '66984', description: 'Cataract Surgery with IOL', reimbursement: 4000, turnover_time: 15, category: 'Ophthalmology', procedure_indicator: 'S', procedure_group: 'Ophthalmology Procedure' },
     { code: '67028', description: 'Vitrectomy', reimbursement: 5500, turnover_time: 30, category: 'Ophthalmology', procedure_indicator: 'S' },
 
     // General Surgery
@@ -226,5 +226,63 @@ export const INITIAL_SURGEONS = [
         license_number: 'MD-34567',
         email: 'echen@hospital.com',
         phone: '(555) 345-6789'
+    }
+];
+
+export const INITIAL_PROCEDURE_GROUP_ITEMS = [
+    {
+        id: 1,
+        procedure_group: 'Cataract Surgery',
+        item_name: 'IOL Implant (Alcon AcrySof)',
+        item_type: 'High Cost',
+        unit_price: 350.00,
+        quantity_per_case: 1,
+        is_high_cost: true,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 2,
+        procedure_group: 'Cataract Surgery',
+        item_name: 'Viscoelastic (Healon)',
+        item_type: 'Supply',
+        unit_price: 85.00,
+        quantity_per_case: 1,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 3,
+        procedure_group: 'Orthopedics / Musculoskeletal Procedures',
+        item_name: 'Shaver Blade 4.0mm',
+        item_type: 'Supply',
+        unit_price: 55.00,
+        quantity_per_case: 1,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 4,
+        procedure_group: 'Orthopedics / Musculoskeletal Procedures',
+        item_name: 'Arthroscopy Pump Tubing',
+        item_type: 'Supply',
+        unit_price: 25.00,
+        quantity_per_case: 1,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 5,
+        procedure_group: 'General Surgery',
+        item_name: 'Laparoscopic Trocar 5mm',
+        item_type: 'Supply',
+        unit_price: 120.00,
+        quantity_per_case: 2,
+        is_high_cost: false,
+        is_reusable: false,
+        created_at: new Date().toISOString()
     }
 ];

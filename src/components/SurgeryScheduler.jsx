@@ -1,34 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { db } from '../lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost, getSurgeryMetrics, calculateCosmeticFees } from '../utils/hospitalUtils';
 import ORBlockSchedule from './ORBlockSchedule';
 import './Management.css';
-
-// Cosmetic fee calculator based on duration
-const calculateCosmeticFees = (durationMinutes, isPlastic = false) => {
-    // CSC Facility Fee rates
-    const facilityRates = {
-        30: 750, 60: 1500, 90: 1800, 120: 2100, 150: 2500,
-        180: 2900, 210: 3300, 240: 3700, 270: 4100, 300: 4500,
-        330: 4900, 360: 5300, 390: 5700, 420: 6100, 480: 6500, 540: 6900
-    };
-
-    // Quantum Anesthesia rates
-    const anesthesiaRates = {
-        30: 600, 60: 750, 90: 900, 120: 1050, 150: 1200,
-        180: 1350, 210: 1500, 240: 1650, 270: 1800, 300: 1950,
-        330: 2100, 360: 2250, 390: 2400, 420: 2550, 480: 2700, 540: 2850
-    };
-
-    // Round up to nearest 30 minutes for fee lookup
-    const lookupDuration = Math.ceil(durationMinutes / 30) * 30;
-
-    return {
-        facilityFee: facilityRates[lookupDuration] || 0,
-        anesthesiaFee: isPlastic ? 0 : (anesthesiaRates[lookupDuration] || 0)
-    };
-};
 
 const selfPayRates = [
     { name: 'Cataracts x 1', price: 400 },
@@ -41,7 +16,7 @@ const selfPayRates = [
     { name: 'Total Shoulder', price: 3200 }
 ];
 
-const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settings, onSchedule, onUpdate, onDelete, onComplete }) => {
+const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settings, procedureGroupItems = [], onSchedule, onUpdate, onDelete, onComplete }) => {
     // Initial fees for default 60 mins
     const initialFees = calculateCosmeticFees(60);
 
@@ -59,7 +34,6 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         selfPayRateName: '',
         suppliesCost: 0,
         implantsCost: 0,
-        medicationsCost: 0,
         medicationsCost: 0,
         turnoverTime: 0
     });
@@ -82,6 +56,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const [orSchedule, setOrSchedule] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
     const [expandedMonths, setExpandedMonths] = useState(new Set([new Date().toISOString().slice(0, 7)]));
+    const [selectedProcedureGroup, setSelectedProcedureGroup] = useState('');
+
+    // Extract unique procedure groups
+    const uniqueProcedureGroups = useMemo(() => {
+        if (!procedureGroupItems) return [];
+        return [...new Set(procedureGroupItems.map(item => item.procedure_group))];
+    }, [procedureGroupItems]);
 
     // Fetch OR Schedule for availability check
     useEffect(() => {
@@ -237,10 +218,25 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         return grouped;
     }, [surgeries]);
 
-    // Get sorted list of months
     const availableMonths = useMemo(() => {
         return Object.keys(surgeriesByMonth).sort().reverse(); // Most recent first
     }, [surgeriesByMonth]);
+
+    // Helper to calculate financials for any surgery object consistently
+    // Unified metrics calculation for consistent financial reporting
+    const calculateSurgeryFinancials = (surgery) => {
+        const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+        return {
+            cptTotal: metrics.cptRevenue,
+            orCost: metrics.facilityRevenue,
+            totalValue: metrics.totalRevenue,
+            netProfit: metrics.netProfit,
+            supplyCosts: metrics.supplyCosts,
+            internalRoomCost: metrics.internalRoomCost,
+            laborCost: metrics.laborCost,
+            isCosmetic: metrics.isCosmetic
+        };
+    };
 
     // Format month for display
     const formatMonthDisplay = (monthKey) => {
@@ -262,7 +258,47 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         });
     };
 
+
+
+    const applyProcedureGroup = (groupName) => {
+        setSelectedProcedureGroup(groupName);
+
+        if (groupName) {
+            const groupItems = procedureGroupItems.filter(i => i.procedure_group === groupName);
+            const totalCost = groupItems.reduce((sum, item) => sum + (parseFloat(item.unit_price || 0) * parseFloat(item.quantity_per_case || 0)), 0);
+
+            // Update supplies cost with group total
+            setFormData(prev => ({
+                ...prev,
+                suppliesCost: totalCost
+            }));
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `Auto-applied Procedure Group: ${groupName}`,
+                showConfirmButton: false,
+                timer: 2000
+            });
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                suppliesCost: 0
+            }));
+        }
+    };
+
     const handleCptToggle = (code) => {
+        // Auto-select procedure group if available
+        const isSelected = formData.selectedCptCodes.includes(code);
+        if (!isSelected) {
+            const cpt = cptCodes.find(c => String(c.code) === String(code));
+            if (cpt && cpt.procedure_group) {
+                applyProcedureGroup(cpt.procedure_group);
+            }
+        }
+
         setFormData(prev => {
             const exists = prev.selectedCptCodes.includes(code);
             let newSelectedCodes;
@@ -339,64 +375,87 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             surgeryData.notes = notes;
         }
 
-        if (editingSurgery) {
-            // Update existing surgery
-            await onUpdate(editingSurgery.id, {
-                ...surgeryData,
-                surgeon_id: surgeon?.id || null
-            });
+        try {
+            if (editingSurgery) {
+                // Update existing surgery
+                await onUpdate(editingSurgery.id, {
+                    ...surgeryData,
+                    surgeon_id: surgeon?.id || null
+                });
 
-            await Swal.fire({
-                title: 'Updated!',
-                text: 'Surgery updated successfully',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false
+                await Swal.fire({
+                    title: 'Updated!',
+                    text: 'Surgery updated successfully',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+                setEditingSurgery(null);
+                setIsFormOpen(false);
+            } else {
+                // Add new surgery
+                await onSchedule({
+                    ...surgeryData,
+                    id: Date.now(),
+                    patientId: parseInt(formData.patientId),
+                    selectedCptCodes: isCosmeticSurgeon ? [] : formData.selectedCptCodes
+                });
+                await Swal.fire({
+                    title: 'Scheduled!',
+                    text: 'Surgery scheduled successfully',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+                setIsFormOpen(false);
+            }
+
+            // Only reset form on success
+            const defaultFees = calculateCosmeticFees(60);
+            setFormData({
+                patientId: '',
+                doctorName: '',
+                date: new Date().toISOString().split('T')[0],
+                startTime: '',
+                durationMinutes: 60,
+                selectedCptCodes: [],
+                cosmeticFacilityFee: defaultFees.facilityFee,
+                cosmeticAnesthesiaFee: defaultFees.anesthesiaFee,
+                anesthesiaFee: 0,
+                isSelfPayAnesthesia: false,
+                selfPayRateName: '',
+                suppliesCost: 0,
+                implantsCost: 0,
+                medicationsCost: 0,
+                turnoverTime: 0
             });
-            setEditingSurgery(null);
-            setIsFormOpen(false);
-        } else {
-            // Add new surgery
-            await onSchedule({
-                ...surgeryData,
-                id: Date.now(),
-                patientId: parseInt(formData.patientId),
-                selectedCptCodes: isCosmeticSurgeon ? [] : formData.selectedCptCodes
-            });
-            await Swal.fire({
-                title: 'Scheduled!',
-                text: 'Surgery scheduled successfully',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false
-            });
-            setIsFormOpen(false);
+        } catch (error) {
+            // Error is already handled by Swal in handleScheduleSurgery (App.jsx)
+            console.error('Submission failed:', error);
         }
-
-        // Reset form
-        const defaultFees = calculateCosmeticFees(60);
-        setFormData({
-            patientId: '',
-            doctorName: '',
-            date: new Date().toISOString().split('T')[0],
-            startTime: '',
-            durationMinutes: 60,
-            selectedCptCodes: [],
-            cosmeticFacilityFee: defaultFees.facilityFee,
-            cosmeticAnesthesiaFee: defaultFees.anesthesiaFee,
-            anesthesiaFee: 0,
-            isSelfPayAnesthesia: false,
-            selfPayRateName: '',
-            suppliesCost: 0,
-            implantsCost: 0,
-            medicationsCost: 0,
-            medicationsCost: 0,
-            turnoverTime: 0
-        });
     };
 
     const handleEdit = (surgery) => {
         setEditingSurgery(surgery);
+
+        // Determine procedure group from CPT codes
+        let group = '';
+        let groupCost = 0;
+        if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
+            for (const code of surgery.cpt_codes) {
+                const cpt = cptCodes.find(c => String(c.code) === String(code));
+                if (cpt && cpt.procedure_group) {
+                    group = cpt.procedure_group;
+                    // Calculate cost for this group from procedureGroupItems
+                    const groupItems = procedureGroupItems.filter(i => i.procedure_group === group);
+                    if (groupItems.length > 0) {
+                        groupCost = groupItems.reduce((sum, item) => sum + (parseFloat(item.unit_price || 0) * parseFloat(item.quantity_per_case || 0)), 0);
+                    }
+                    break;
+                }
+            }
+        }
+        setSelectedProcedureGroup(group);
 
         // Calculate fees for existing surgery if it's cosmetic
         const duration = surgery.duration_minutes || 60;
@@ -439,7 +498,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             anesthesiaFee: anesthesiaFee,
             isSelfPayAnesthesia: isSelfPay,
             selfPayRateName: selfPayRateName,
-            suppliesCost: surgery.supplies_cost || 0,
+            suppliesCost: surgery.supplies_cost || groupCost || 0,
             implantsCost: surgery.implants_cost || 0,
             medicationsCost: surgery.medications_cost || 0,
             turnoverTime: (() => {
@@ -464,6 +523,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
     const handleCancelEdit = () => {
         setEditingSurgery(null);
+        setSelectedProcedureGroup('');
         setIsFormOpen(false);
         setFormData({
             patientId: '',
@@ -615,37 +675,27 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         }
     };
 
-    // Billable Facility Fee: Based ONLY on procedure duration (what the patient/payer sees)
-    const billableFacilityFee = useMemo(() => {
-        return calculateORCost(formData.durationMinutes || 0);
-    }, [formData.durationMinutes]);
+    // Calculate current form metrics for display
+    const formMetrics = useMemo(() => {
+        // Construct a dummy surgery object from form data for consistent metrics calculation
+        const dummySurgery = {
+            duration_minutes: formData.durationMinutes,
+            turnover_time: formData.turnoverTime,
+            cpt_codes: isCosmeticSurgeon ? [] : formData.selectedCptCodes,
+            supplies_cost: formData.suppliesCost,
+            implants_cost: formData.implantsCost,
+            medications_cost: formData.medicationsCost,
+            notes: (isCosmeticSurgeon ? `Cosmetic Surgery - Facility Fee: $${formData.cosmeticFacilityFee}, Anesthesia: $${formData.cosmeticAnesthesiaFee}` : '') +
+                (formData.isSelfPayAnesthesia ? `; Self-Pay Anesthesia: $${formData.anesthesiaFee}` : '')
+        };
 
-    // Internal Facility Cost: Based on Total Room Occupancy (Duration + Turnover)
-    const internalFacilityCost = useMemo(() => {
-        const totalMinutes = (formData.durationMinutes || 0) + (formData.turnoverTime || 0);
-        return calculateORCost(totalMinutes);
-    }, [formData.durationMinutes, formData.turnoverTime]);
+        return getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
+    }, [formData, isCosmeticSurgeon, cptCodes, settings, procedureGroupItems]);
 
-    // Calculate projected revenue with MPPR
-    const projectedRevenue = useMemo(() => {
-        if (!formData.selectedCptCodes || formData.selectedCptCodes.length === 0 || isCosmeticSurgeon) {
-            return 0;
-        }
-        // Total Revenue = CPT Reimbursements + Billable Facility Fee
-        const cptRevenue = calculateMedicareRevenue(formData.selectedCptCodes, cptCodes, settings?.apply_medicare_mppr || false);
-        return cptRevenue + billableFacilityFee;
-    }, [formData.selectedCptCodes, cptCodes, isCosmeticSurgeon, settings, billableFacilityFee]);
-
-    // Calculate projected margin
-    const projectedMargin = useMemo(() => {
-        const suppliesCost = (formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0);
-        // Estimated Labor Cost (usually tracks procedure duration)
-        const estimatedLaborCost = calculateLaborCost(formData.durationMinutes);
-
-        // Margin = Revenue - Internal Costs (Internal Room Cost + Labor + Supplies)
-        // Note: We subtract internalFacilityCost (duration + turnover) because that's the real cost of the room time used.
-        return projectedRevenue - internalFacilityCost - estimatedLaborCost - suppliesCost;
-    }, [projectedRevenue, internalFacilityCost, formData.durationMinutes, formData.suppliesCost, formData.implantsCost, formData.medicationsCost]);
+    const projectedRevenue = formMetrics.totalRevenue;
+    const projectedMargin = formMetrics.netProfit;
+    const internalFacilityCost = formMetrics.internalRoomCost;
+    const billableFacilityFee = formMetrics.facilityRevenue;
 
     // Determine cost tier
     const costTier = useMemo(() => {
@@ -772,35 +822,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                 const monthSurgeries = surgeriesByMonth[monthKey];
                                 const isExpanded = expandedMonths.has(monthKey);
                                 const monthTotal = monthSurgeries.reduce((sum, surgery) => {
-                                    const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
-                                    let totalValue = 0;
-
-                                    if (isCosmeticSurgery) {
-                                        if (surgery.notes) {
-                                            const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,.]+)/i);
-                                            const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
-                                            const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-                                            const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                                            totalValue = facilityFee + anesthesiaFee;
-                                        }
-                                    } else {
-                                        const cptTotal = surgery.cpt_codes?.reduce((cptSum, code) => {
-                                            const cptCode = cptCodes.find(c => c.code === code);
-                                            return cptSum + (cptCode?.reimbursement || 0);
-                                        }, 0) || 0;
-
-                                        let orCost = calculateORCost(surgery.duration_minutes || 0);
-
-                                        if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                                            const match = surgery.notes.match(/Self-Pay Anesthesia:?\s*\$?\s*([\d,]+)/i);
-                                            if (match) {
-                                                orCost += parseFloat(match[1].replace(/,/g, ''));
-                                            }
-                                        }
-
-                                        totalValue = cptTotal + orCost;
-                                    }
-
+                                    const { totalValue } = calculateSurgeryFinancials(surgery);
                                     return sum + totalValue;
                                 }, 0);
 
@@ -875,78 +897,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     </thead>
                                                     <tbody>
                                                         {monthSurgeries.map(surgery => {
-                                                            // Check if this is a cosmetic surgery (no CPT codes)
-                                                            const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
-
-                                                            let cptTotal = 0;
-                                                            let orCost = 0;
-                                                            let totalValue = 0;
-                                                            let netProfit = 0;
-
-                                                            if (isCosmeticSurgery) {
-                                                                // Parse cosmetic fees from notes
-                                                                if (surgery.notes) {
-                                                                    const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([\d,.]+)/i);
-                                                                    const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
-                                                                    const facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-                                                                    const anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                                                                    cptTotal = 0; // No CPT codes for cosmetic surgeries
-                                                                    orCost = facilityFee + anesthesiaFee; // Show cosmetic fees as OR Cost
-
-                                                                    // Add supplies costs
-                                                                    const surgerySuppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
-                                                                    totalValue = orCost + surgerySuppliesCost;
-
-                                                                    // For cosmetic, we assume decent margin, but adhering to formula:
-                                                                    // Revenue (totalValue) - Internal Costs
-                                                                    // Internal costs are still Room + Labor + Supplies
-                                                                    const duration = surgery.duration_minutes || 0;
-                                                                    const turnover = surgery.turnover_time || 0;
-                                                                    const internalRoomCost = calculateORCost(duration + turnover);
-                                                                    const laborCost = calculateLaborCost(duration);
-
-                                                                    const totalInternalCosts = internalRoomCost + laborCost + surgerySuppliesCost;
-                                                                    netProfit = totalValue - totalInternalCosts;
-                                                                }
-                                                            } else {
-                                                                // Calculate CPT codes total for regular surgeries
-                                                                cptTotal = calculateMedicareRevenue(
-                                                                    surgery.cpt_codes || [],
-                                                                    cptCodes,
-                                                                    settings?.apply_medicare_mppr || false
-                                                                );
-
-                                                                const duration = surgery.duration_minutes || 0;
-                                                                const turnover = surgery.turnover_time || 0;
-
-                                                                // Billable Facility Fee (Patient/Payer pays for duration)
-                                                                orCost = calculateORCost(duration);
-
-                                                                // Internal Room Cost (Hospital pays for duration + turnover)
-                                                                const internalRoomCost = calculateORCost(duration + turnover);
-
-                                                                // Check for Self-Pay Anesthesia in notes
-                                                                let anesthesiaExtra = 0;
-                                                                if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                                                                    const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
-                                                                    if (match) {
-                                                                        anesthesiaExtra = parseFloat(match[2].replace(/,/g, ''));
-                                                                    }
-                                                                }
-
-                                                                orCost += anesthesiaExtra; // This is the displayed "Facility Fee" (Billable)
-
-                                                                // Add supplies costs
-                                                                const surgerySuppliesCost = (surgery.supplies_cost || 0) + (surgery.implants_cost || 0) + (surgery.medications_cost || 0);
-
-                                                                // Calculate total value (Revenue)
-                                                                totalValue = cptTotal + orCost + surgerySuppliesCost;
-
-                                                                // Calculate net profit (Revenue - Total Internal Costs)
-                                                                const laborCost = calculateLaborCost(duration);
-                                                                const totalInternalCosts = internalRoomCost + anesthesiaExtra + laborCost + surgerySuppliesCost;
-                                                                netProfit = totalValue - totalInternalCosts;
-                                                            }
+                                                            const { cptTotal, orCost, totalValue, netProfit, isCosmetic: isCosmeticSurgery } = calculateSurgeryFinancials(surgery);
 
                                                             return (
                                                                 <tr key={surgery.id}>
@@ -1025,8 +976,28 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                         )}
                                                                     </td>
                                                                     <td>
-                                                                        <div style={{ fontWeight: '500' }}>{surgery.duration_minutes || 0}m + <span style={{ color: '#f59e0b' }}>{surgery.turnover_time || 0}m</span></div>
-                                                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Total: {(surgery.duration_minutes || 0) + (surgery.turnover_time || 0)}m</div>
+                                                                        {(() => {
+                                                                            let turnover = parseInt(surgery.turnover_time || 0);
+                                                                            // Fallback to CPT defaults if turnover is 0 (likely not saved/calculated yet)
+                                                                            if (turnover === 0 && surgery.cpt_codes && surgery.cpt_codes.length > 0) {
+                                                                                surgery.cpt_codes.forEach(code => {
+                                                                                    const cpt = cptCodes.find(c => String(c.code) === String(code));
+                                                                                    if (cpt) turnover += parseInt(cpt.turnover_time || 0);
+                                                                                });
+                                                                            }
+                                                                            const duration = parseInt(surgery.duration_minutes || 0);
+                                                                            const total = duration + turnover;
+
+                                                                            return (
+                                                                                <>
+                                                                                    <div style={{ fontWeight: '500' }}>
+                                                                                        {duration}m + <span style={{ color: '#f59e0b' }}>{turnover}m</span>
+                                                                                        <div style={{ fontSize: '0.7em', color: '#94a3b8', lineHeight: '1' }}>(Facility Overhead)</div>
+                                                                                    </div>
+                                                                                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>Total: {total}m</div>
+                                                                                </>
+                                                                            );
+                                                                        })()}
                                                                     </td>
                                                                     <td style={{ fontWeight: '600', color: '#059669' }}>{formatCurrency(cptTotal)}</td>
                                                                     <td style={{ fontWeight: '600', color: '#dc2626' }}>{formatCurrency(orCost)}</td>
@@ -1573,6 +1544,58 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '1.1rem' }}>
                                             💊 Supplies & Materials Cost
                                         </h4>
+
+                                        {/* Procedure Group Selection */}
+                                        <div className="form-group" style={{ marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                            <label style={{ color: '#0f172a', fontWeight: '600', marginBottom: '0.5rem', display: 'block' }}>Select Procedure Group (Optional)</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <select
+                                                    className="form-input"
+                                                    value={selectedProcedureGroup}
+                                                    onChange={(e) => {
+                                                        applyProcedureGroup(e.target.value);
+                                                    }}
+                                                >
+                                                    <option value="">-- Apply Procedure Group Preset --</option>
+                                                    {uniqueProcedureGroups.map(g => (
+                                                        <option key={g} value={g}>{g}</option>
+                                                    ))}
+                                                </select>
+
+                                                {selectedProcedureGroup && (
+                                                    <div className="fade-in" style={{ background: 'white', padding: '1rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                            <strong>Items in Group:</strong>
+                                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                                                                {procedureGroupItems.filter(i => i.procedure_group === selectedProcedureGroup).length} items
+                                                            </span>
+                                                        </div>
+                                                        <ul style={{ margin: '0', paddingLeft: '1.25rem', color: '#475569', fontSize: '0.9rem', maxHeight: '150px', overflowY: 'auto' }}>
+                                                            {procedureGroupItems.filter(i => i.procedure_group === selectedProcedureGroup).map((item, idx) => (
+                                                                <li key={idx} style={{ marginBottom: '4px' }}>
+                                                                    <span>{item.item_name}</span>
+                                                                    <span style={{ color: '#94a3b8' }}> (x{item.quantity_per_case})</span>
+                                                                    <span style={{ float: 'right', color: '#0f172a', fontWeight: '500' }}>
+                                                                        {formatCurrency((item.unit_price || 0) * (item.quantity_per_case || 0))}
+                                                                    </span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                        <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '0.75rem', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.9rem', color: '#64748b' }}>Total Group Cost:</span>
+                                                            <strong style={{ color: '#059669', fontSize: '1.1rem' }}>
+                                                                {formatCurrency(
+                                                                    procedureGroupItems
+                                                                        .filter(i => i.procedure_group === selectedProcedureGroup)
+                                                                        .reduce((sum, item) => sum + ((item.unit_price || 0) * (item.quantity_per_case || 0)), 0)
+                                                                )}
+                                                            </strong>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label>Surgical Supplies</label>
@@ -1642,7 +1665,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 </h4>
                                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
                                                     <div>
-                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee): </span>
+                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee+Supplies): </span>
                                                         <span style={{ fontWeight: '600', color: '#059669', fontSize: '1.05rem' }}>
                                                             {formatCurrency(projectedRevenue)}
                                                         </span>
@@ -1656,7 +1679,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     <div>
                                                         <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Est. Labor: </span>
                                                         <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
-                                                            {formatCurrency(calculateLaborCost(formData.durationMinutes))}
+                                                            {formatCurrency(calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)))}
                                                         </span>
                                                     </div>
                                                     {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
@@ -1677,7 +1700,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                         <span style={{ fontWeight: '700', color: '#dc2626', fontSize: '1.2rem' }}>
                                                             {formatCurrency(
                                                                 internalFacilityCost + // Facility Fee (Internal)
-                                                                calculateLaborCost(formData.durationMinutes) + // Labor Cost
+                                                                calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)) + // Labor Cost
                                                                 ((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) + // Supplies
                                                                 (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0) // Self-Pay Anesthesia
                                                             )}
@@ -1696,6 +1719,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     </div>
                                                 </div>
                                             </div>
+
                                             <div style={{ textAlign: 'right' }}>
                                                 <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
                                                     Projected Margin

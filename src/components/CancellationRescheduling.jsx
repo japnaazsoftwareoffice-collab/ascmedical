@@ -4,6 +4,8 @@ import { formatCurrency } from '../utils/hospitalUtils';
 
 const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
     const [activeTab, setActiveTab] = useState('cancelled'); // 'cancelled' or 'rescheduled'
+    const [outcomeView, setOutcomeView] = useState('all'); // 'all' or 'daily'
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
     // Filter surgeries based on status
     const cancelledSurgeries = surgeries.filter(s => s.status === 'cancelled')
@@ -40,14 +42,22 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
 
     const [showChart, setShowChart] = useState(false);
 
-    // Calculate chart data for all statuses
-    const completedSurgeries = surgeries.filter(s => s.status === 'completed').length;
-    const scheduledSurgeries = surgeries.filter(s => s.status === 'scheduled').length;
-    const cancelledCount = cancelledSurgeries.length;
-    const rescheduledCount = rescheduledSurgeries.length;
+    // Filter surgeries for analysis
+    const filteredSurgeriesForAnalysis = outcomeView === 'daily'
+        ? surgeries.filter(s => {
+            const sDate = new Date(s.date).toISOString().split('T')[0];
+            return sDate === selectedDate;
+        })
+        : surgeries;
 
-    // Total should be the sum relative to the data we have, or just surgeries.length if that's accurate
-    const total = surgeries.length;
+    // Calculate chart data for all statuses using filtered surgeries
+    const completedSurgeries = filteredSurgeriesForAnalysis.filter(s => s.status === 'completed').length;
+    const scheduledSurgeries = filteredSurgeriesForAnalysis.filter(s => s.status === 'scheduled').length;
+    const cancelledCount = filteredSurgeriesForAnalysis.filter(s => s.status === 'cancelled').length;
+    const rescheduledCount = filteredSurgeriesForAnalysis.filter(s => s.status === 'rescheduled').length;
+
+    // Total should be the sum relative to the data we have
+    const total = filteredSurgeriesForAnalysis.length;
 
     const completedPercentage = total > 0 ? (completedSurgeries / total) * 100 : 0;
     const scheduledPercentage = total > 0 ? (scheduledSurgeries / total) * 100 : 0;
@@ -231,7 +241,46 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
                             ×
                         </button>
 
-                        <h3 style={{ marginTop: 0, marginBottom: '2rem', color: '#1e293b', textAlign: 'center', fontSize: '1.5rem' }}>Surgery Outcome Analysis</h3>
+                        <h3 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#1e293b', textAlign: 'center', fontSize: '1.5rem' }}>Surgery Outcome Analysis</h3>
+
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            gap: '0.75rem',
+                            marginBottom: '2rem',
+                            alignItems: 'center'
+                        }}>
+                            <select
+                                className="filter-select"
+                                style={{
+                                    padding: '0.4rem 0.75rem',
+                                    fontSize: '0.9rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    background: '#f8fafc'
+                                }}
+                                value={outcomeView}
+                                onChange={(e) => setOutcomeView(e.target.value)}
+                            >
+                                <option value="all">All Time</option>
+                                <option value="daily">Daily View</option>
+                            </select>
+
+                            {outcomeView === 'daily' && (
+                                <input
+                                    type="date"
+                                    className="date-input"
+                                    style={{
+                                        padding: '0.35rem 0.75rem',
+                                        fontSize: '0.9rem',
+                                        borderRadius: '8px',
+                                        border: '1px solid #e2e8f0'
+                                    }}
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                />
+                            )}
+                        </div>
 
                         {total > 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
