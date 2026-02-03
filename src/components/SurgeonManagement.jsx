@@ -15,6 +15,7 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
         email: '',
         countryCode: '+1'
     });
+    const [errors, setErrors] = useState({});
 
     const handleAddClick = () => {
         setEditingSurgeon(null);
@@ -27,6 +28,7 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
             email: '',
             countryCode: '+1'
         });
+        setErrors({});
         setIsModalOpen(true);
     };
 
@@ -83,6 +85,7 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
             email: surgeon.email || '',
             countryCode: countryCode
         });
+        setErrors({});
         setIsModalOpen(true);
     };
 
@@ -125,16 +128,61 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEditingSurgeon(null);
+        setErrors({});
+    };
+
+    const validateForm = () => {
+        const newErrors = {};
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z.-]+\.[a-zA-Z]{2,}$/;
+
+        // First Name: Required, max 20
+        if (!formData.firstname || !formData.firstname.trim()) {
+            newErrors.firstname = 'First Name is required';
+        } else if (formData.firstname.length > 20) {
+            newErrors.firstname = 'Max 20 characters';
+        }
+
+        // Last Name: Required, max 20
+        if (!formData.lastname || !formData.lastname.trim()) {
+            newErrors.lastname = 'Last Name is required';
+        } else if (formData.lastname.length > 20) {
+            newErrors.lastname = 'Max 20 characters';
+        }
+
+        // Specialty: Required
+        if (!formData.specialty || !formData.specialty.trim()) {
+            newErrors.specialty = 'Specialty is required';
+        }
+
+        // License/NPI: Required
+        if (!formData.license_number || !formData.license_number.trim()) {
+            newErrors.license_number = 'License / NPI is required';
+        }
+
+        // Phone: 10 numeric
+        if (!formData.phone || formData.phone.length !== 10) {
+            newErrors.phone = 'Phone must be exactly 10 digits';
+        }
+
+        // Email: Required, proper mail format
+        if (!formData.email || !formData.email.trim()) {
+            newErrors.email = 'Email is required';
+        } else if (!emailRegex.test(formData.email)) {
+            newErrors.email = 'Invalid email format (no numbers in domain name)';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
     const handleSave = async (e) => {
         e.preventDefault();
 
-        if (formData.phone.length !== 10) {
+        if (!validateForm()) {
             Swal.fire({
-                title: 'Invalid Phone',
-                text: 'Phone number must be exactly 10 digits',
-                icon: 'warning',
+                title: 'Validation Error',
+                text: 'Please check the form for missing or invalid fields.',
+                icon: 'error',
                 confirmButtonColor: '#3b82f6'
             });
             return;
@@ -188,7 +236,11 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
     };
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+        if (errors[name]) {
+            setErrors({ ...errors, [name]: null });
+        }
     };
 
     return (
@@ -268,55 +320,57 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
                         <form onSubmit={handleSave}>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>First Name</label>
+                                    <label>First Name <span className="required-star">*</span></label>
                                     <input
                                         type="text"
                                         name="firstname"
                                         value={formData.firstname}
                                         onChange={handleChange}
-                                        className="form-input"
-                                        required
+                                        className={`form-input ${errors.firstname ? 'error-border' : ''}`}
+                                        maxLength={20}
                                     />
+                                    {errors.firstname && <span className="error-text">{errors.firstname}</span>}
                                 </div>
                                 <div className="form-group">
-                                    <label>Last Name</label>
+                                    <label>Last Name <span className="required-star">*</span></label>
                                     <input
                                         type="text"
                                         name="lastname"
                                         value={formData.lastname}
                                         onChange={handleChange}
-                                        className="form-input"
-                                        required
+                                        className={`form-input ${errors.lastname ? 'error-border' : ''}`}
+                                        maxLength={20}
                                     />
+                                    {errors.lastname && <span className="error-text">{errors.lastname}</span>}
                                 </div>
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Specialty</label>
+                                    <label>Specialty <span className="required-star">*</span></label>
                                     <input
                                         type="text"
                                         name="specialty"
                                         value={formData.specialty}
                                         onChange={handleChange}
-                                        className="form-input"
-                                        required
+                                        className={`form-input ${errors.specialty ? 'error-border' : ''}`}
                                     />
+                                    {errors.specialty && <span className="error-text">{errors.specialty}</span>}
                                 </div>
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>License / NPI</label>
+                                    <label>License / NPI <span className="required-star">*</span></label>
                                     <input
                                         type="text"
                                         name="license_number"
                                         value={formData.license_number}
                                         onChange={handleChange}
-                                        className="form-input"
-                                        required
+                                        className={`form-input ${errors.license_number ? 'error-border' : ''}`}
                                     />
+                                    {errors.license_number && <span className="error-text">{errors.license_number}</span>}
                                 </div>
                                 <div className="form-group">
-                                    <label>Phone</label>
+                                    <label>Phone <span className="required-star">*</span></label>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                         <select
                                             name="countryCode"
@@ -340,28 +394,27 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
                                             onChange={(e) => {
                                                 const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                                                 setFormData({ ...formData, phone: val });
+                                                if (errors.phone) setErrors({ ...errors, phone: null });
                                             }}
-                                            className="form-input"
+                                            className={`form-input ${errors.phone ? 'error-border' : ''}`}
                                             placeholder="1234567890"
-                                            pattern="[0-9]{10}"
-                                            title="Please enter a valid 10-digit phone number"
-                                            required
                                             style={{ flex: 1 }}
                                         />
                                     </div>
+                                    {errors.phone && <span className="error-text">{errors.phone}</span>}
                                 </div>
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Email</label>
+                                    <label>Email <span className="required-star">*</span></label>
                                     <input
                                         type="email"
                                         name="email"
                                         value={formData.email}
                                         onChange={handleChange}
-                                        className="form-input"
-                                        required
+                                        className={`form-input ${errors.email ? 'error-border' : ''}`}
                                     />
+                                    {errors.email && <span className="error-text">{errors.email}</span>}
                                 </div>
                             </div>
                             <div className="modal-actions">

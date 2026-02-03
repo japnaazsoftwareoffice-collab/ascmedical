@@ -49,6 +49,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     const [isNewCategory, setIsNewCategory] = useState(false);
     const [isNewProcedureGroup, setIsNewProcedureGroup] = useState(false);
     const [showDurationUpdater, setShowDurationUpdater] = useState(false);
+    const [errors, setErrors] = useState({});
 
     // Get unique categories from existing codes
     const uniqueCategories = React.useMemo(() => {
@@ -69,15 +70,38 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     const itemsPerPage = 10;
 
 
+    const validateForm = () => {
+        const newErrors = {};
+        if (!formData.category || !formData.category.trim()) {
+            newErrors.category = 'Category is required';
+        }
+        if (!formData.code || !formData.code.trim()) {
+            newErrors.code = 'CPT Code is required';
+        } else if (formData.code.trim().length > 10) {
+            newErrors.code = 'CPT Code must be 10 characters or less';
+        }
+        if (!formData.description || !formData.description.trim()) {
+            newErrors.description = 'Description is required';
+        }
+
+        const reimbursement = parseFloat(formData.reimbursement);
+        if (formData.reimbursement === '' || isNaN(reimbursement) || reimbursement < 0) {
+            newErrors.reimbursement = 'Reimbursement must be 0 or greater';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         // Validation
-        if (!formData.category || !formData.code || !formData.description || !formData.reimbursement) {
+        if (!validateForm()) {
             Swal.fire({
-                title: 'Missing Fields',
-                text: 'Please fill in all required fields',
-                icon: 'warning',
+                title: 'Validation Error',
+                text: 'Please check the form for missing or invalid fields.',
+                icon: 'error',
                 confirmButtonColor: '#3b82f6'
             });
             return;
@@ -117,18 +141,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             });
         }
 
-        setFormData({
-            category: '',
-            code: '',
-            description: '',
-            reimbursement: '',
-            procedure_indicator: '',
-            body_part: '',
-            average_duration: '',
-            turnover_time: '',
-            procedure_group: '',
-            is_active: true
-        });
+        setErrors({});
         setIsNewCategory(false);
     };
 
@@ -149,6 +162,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
 
         // Scroll to form
         setTimeout(() => {
+            setErrors({});
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }, 100);
     };
@@ -183,6 +197,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             is_active: true
         });
         setEditingId(null);
+        setErrors({});
         setIsNewCategory(false);
     };
 
@@ -401,39 +416,53 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <div className="input-with-action">
                                         <input
                                             type="text"
-                                            className="form-input"
+                                            className={`form-input ${errors.category ? 'error-border' : ''}`}
                                             placeholder="New category..."
                                             value={formData.category}
-                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                            required
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, category: e.target.value });
+                                                if (errors.category) setErrors({ ...errors, category: null });
+                                            }}
                                             autoFocus
                                         />
                                         <button type="button" className="btn-small-link" onClick={() => setIsNewCategory(false)}>Cancel</button>
                                     </div>
                                 ) : (
                                     <select
-                                        className="form-select"
+                                        className={`form-select ${errors.category ? 'error-border' : ''}`}
                                         value={formData.category}
-                                        onChange={(e) => e.target.value === 'NEW_CATEGORY_OPTION' ? setIsNewCategory(true) : setFormData({ ...formData, category: e.target.value })}
-                                        required
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === 'NEW_CATEGORY_OPTION') {
+                                                setIsNewCategory(true);
+                                            } else {
+                                                setFormData({ ...formData, category: val });
+                                                if (errors.category) setErrors({ ...errors, category: null });
+                                            }
+                                        }}
                                     >
                                         <option value="">Select Category...</option>
                                         {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                         <option value="NEW_CATEGORY_OPTION" className="new-opt">+ Create New...</option>
                                     </select>
                                 )}
+                                {errors.category && <span className="error-text">{errors.category}</span>}
                             </div>
 
                             <div className="form-group">
                                 <label>CPT Code <span className="required-star">*</span></label>
                                 <input
                                     type="text"
-                                    className="form-input"
+                                    className={`form-input ${errors.code ? 'error-border' : ''}`}
                                     placeholder="e.g. 99213"
                                     value={formData.code}
-                                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                                    required
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, code: e.target.value });
+                                        if (errors.code) setErrors({ ...errors, code: null });
+                                    }}
+                                    maxLength={10}
                                 />
+                                {errors.code && <span className="error-text">{errors.code}</span>}
                             </div>
 
                             <div className="form-group">
@@ -470,12 +499,15 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                 <label>Description <span className="required-star">*</span></label>
                                 <input
                                     type="text"
-                                    className="form-input"
+                                    className={`form-input ${errors.description ? 'error-border' : ''}`}
                                     placeholder="Procedure name"
                                     value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    required
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, description: e.target.value });
+                                        if (errors.description) setErrors({ ...errors, description: null });
+                                    }}
                                 />
+                                {errors.description && <span className="error-text">{errors.description}</span>}
                             </div>
 
                             <div className="form-group">
@@ -529,13 +561,16 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <span className="unit">$</span>
                                     <input
                                         type="number"
-                                        className="form-input"
+                                        className={`form-input ${errors.reimbursement ? 'error-border' : ''}`}
                                         step="0.01"
                                         value={formData.reimbursement}
-                                        onChange={(e) => setFormData({ ...formData, reimbursement: e.target.value })}
-                                        required
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, reimbursement: e.target.value });
+                                            if (errors.reimbursement) setErrors({ ...errors, reimbursement: null });
+                                        }}
                                     />
                                 </div>
+                                {errors.reimbursement && <span className="error-text">{errors.reimbursement}</span>}
                             </div>
 
                             <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
