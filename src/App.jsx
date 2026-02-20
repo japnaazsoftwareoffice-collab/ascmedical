@@ -25,6 +25,7 @@ import SupplyManager from './components/SupplyManager';
 
 import ManagerDashboard from './components/ManagerDashboard';
 import CancellationRescheduling from './components/CancellationRescheduling';
+import InstructionPanel from './components/InstructionPanel';
 
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
@@ -1282,6 +1283,8 @@ function App() {
     }
 
     if (view === 'auto-cpt' && hasPerm('use_auto_updater')) return <CPTAutoUpdate />;
+
+    if (view === 'instruction-panel' && hasPerm('manage_chatbot')) return <InstructionPanel />;
 
     if (view === 'settings' && hasPerm('manage_settings')) return <Settings />;
 

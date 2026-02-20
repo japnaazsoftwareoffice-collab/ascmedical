@@ -57,6 +57,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
     const [expandedMonths, setExpandedMonths] = useState(new Set([new Date().toISOString().slice(0, 7)]));
     const [selectedProcedureGroup, setSelectedProcedureGroup] = useState('');
+    const [cptSearchQuery, setCptSearchQuery] = useState('');
 
     // Extract unique procedure groups
     const uniqueProcedureGroups = useMemo(() => {
@@ -162,16 +163,27 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
     // Extract unique categories - filtered by surgeon specialty if surgeon is selected
     const categories = useMemo(() => {
-        if (!selectedSurgeon || !selectedSurgeon.specialty) {
-            // If no surgeon selected, show all categories
-            return [...new Set(cptCodes.map(c => c.category))];
+        let codesToConsider = cptCodes;
+        const surgeonSpecialty = selectedSurgeon?.specialty;
+        const search = cptSearchQuery.toLowerCase().trim();
+
+        if (search) {
+            // When searching, show all categories that contain matching codes
+            codesToConsider = cptCodes.filter(c =>
+                (c.code && String(c.code).toLowerCase().includes(search)) ||
+                (c.description && c.description.toLowerCase().includes(search))
+            );
+        } else if (surgeonSpecialty) {
+            // Default: show only categories matching surgeon specialty
+            codesToConsider = cptCodes.filter(c => c.category === surgeonSpecialty);
         }
-        // Filter categories to only show those matching surgeon's specialty
-        const surgeonSpecialty = selectedSurgeon.specialty;
-        return [...new Set(cptCodes
-            .filter(c => c.category === surgeonSpecialty)
-            .map(c => c.category))];
-    }, [cptCodes, selectedSurgeon]);
+
+        // Always include categories of already selected codes so they don't disappear from UI
+        const selected = cptCodes.filter(c => formData.selectedCptCodes.includes(c.code));
+
+        const cats = new Set([...codesToConsider, ...selected].map(c => c.category).filter(Boolean));
+        return [...cats].sort();
+    }, [cptCodes, selectedSurgeon, cptSearchQuery, formData.selectedCptCodes]);
 
     // Extract unique body parts from the CPT codes matching the surgeon's specialty
     const availableBodyParts = useMemo(() => {
@@ -184,20 +196,36 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
     // Filter CPT codes based on surgeon specialty AND selected body part
     const filteredCptCodes = useMemo(() => {
-        if (!selectedSurgeon || !selectedSurgeon.specialty) {
-            // If no surgeon selected, show all CPT codes
-            return cptCodes;
-        }
-        // Start with specialty filter
-        let codes = cptCodes.filter(c => c.category === selectedSurgeon.specialty);
+        const surgeonSpecialty = selectedSurgeon?.specialty;
+        const search = cptSearchQuery.toLowerCase().trim();
 
-        // Apply body part filter if selected
+        // 1. Initial set: filter by specialty if no search is active
+        let codes = cptCodes;
+        if (search) {
+            // If searching, show all matches regardless of specialty
+            codes = cptCodes.filter(c =>
+                (c.code && String(c.code).toLowerCase().includes(search)) ||
+                (c.description && c.description.toLowerCase().includes(search))
+            );
+        } else if (surgeonSpecialty) {
+            // Default view: filter by surgeon's specialty
+            codes = codes.filter(c => c.category === surgeonSpecialty);
+        }
+
+        // 2. Always include already selected codes so they stay visible
+        const selectedIds = new Set(formData.selectedCptCodes);
+        const selectedCodes = cptCodes.filter(c => selectedIds.has(c.code));
+
+        // Combine and de-duplicate
+        const combined = [...new Map([...codes, ...selectedCodes].map(c => [c.code, c])).values()];
+
+        // 3. Apply body part filter if one is selected
         if (selectedBodyPart) {
-            codes = codes.filter(c => c.body_part === selectedBodyPart);
+            return combined.filter(c => c.body_part === selectedBodyPart || selectedIds.has(c.code));
         }
 
-        return codes;
-    }, [cptCodes, selectedSurgeon, selectedBodyPart]);
+        return combined;
+    }, [cptCodes, selectedSurgeon, selectedBodyPart, cptSearchQuery, formData.selectedCptCodes]);
 
     // Group surgeries by month
     const surgeriesByMonth = useMemo(() => {
@@ -1363,8 +1391,57 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                             <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                         </svg>
                                                         <span style={{ fontSize: '0.9rem', color: '#0c4a6e' }}>
-                                                            Showing <strong>{selectedSurgeon.specialty}</strong> procedures for <strong>{selectedSurgeon.name}</strong>
+                                                            {cptSearchQuery ? (
+                                                                <>Searching for <strong>"{cptSearchQuery}"</strong> across all categories</>
+                                                            ) : (
+                                                                <>Showing <strong>{selectedSurgeon.specialty}</strong> procedures for <strong>{selectedSurgeon.name}</strong></>
+                                                            )}
                                                         </span>
+                                                    </div>
+
+                                                    {/* CPT Search Input */}
+                                                    <div style={{ position: 'relative', marginTop: '0.25rem' }}>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search by code or description (e.g. 19301)..."
+                                                            value={cptSearchQuery}
+                                                            onChange={(e) => setCptSearchQuery(e.target.value)}
+                                                            className="form-input"
+                                                            style={{
+                                                                paddingLeft: '2.5rem',
+                                                                height: '38px',
+                                                                fontSize: '0.9rem',
+                                                                marginBottom: 0,
+                                                                borderColor: cptSearchQuery ? '#3b82f6' : '#bae6fd'
+                                                            }}
+                                                        />
+                                                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>
+                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <circle cx="11" cy="11" r="8"></circle>
+                                                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                                            </svg>
+                                                        </span>
+                                                        {cptSearchQuery && (
+                                                            <button
+                                                                onClick={() => setCptSearchQuery('')}
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    right: '12px',
+                                                                    top: '50%',
+                                                                    transform: 'translateY(-50%)',
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    color: '#94a3b8',
+                                                                    cursor: 'pointer',
+                                                                    padding: '4px'
+                                                                }}
+                                                            >
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                </svg>
+                                                            </button>
+                                                        )}
                                                     </div>
 
                                                     {/* Body Part Filter */}

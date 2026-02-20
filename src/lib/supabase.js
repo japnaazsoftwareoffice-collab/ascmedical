@@ -820,5 +820,51 @@ export const db = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    // ==================== CHATBOT QUESTIONS ====================
+    async getChatbotQuestions() {
+        const { data, error } = await supabase
+            .from('chatbot_questions')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
+        return data || [];
+    },
+
+    async addChatbotQuestion(question) {
+        const { data, error } = await supabase
+            .from('chatbot_questions')
+            .insert([question])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateChatbotQuestion(id, updates) {
+        const { data, error } = await supabase
+            .from('chatbot_questions')
+            .update({ ...updates, updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteChatbotQuestion(id) {
+        const { error } = await supabase
+            .from('chatbot_questions')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
     }
 };
