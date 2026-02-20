@@ -133,7 +133,9 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         return surgeons.find(s => s.name === formData.doctorName);
     }, [surgeons, formData.doctorName]);
 
-    const isCosmeticSurgeon = selectedSurgeon?.is_cosmetic_surgeon || selectedSurgeon?.specialty === 'Plastic' || selectedSurgeon?.specialty === 'Plastic/Cosmetic' || selectedSurgeon?.specialty === 'Plastic / Cosmetic';
+    const isCosmeticSurgeon = selectedSurgeon?.is_cosmetic_surgeon ||
+        selectedSurgeon?.specialty?.toLowerCase().includes('plastic') ||
+        selectedSurgeon?.specialty?.toLowerCase().includes('cosmetic');
 
     // Group surgeons by availability on selected date
     const { availableSurgeons, otherSurgeons } = useMemo(() => {
@@ -353,7 +355,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             let suggestedDuration = totalDuration > 0 ? totalDuration : 60;
             if (newSelectedCodes.length > 0 && totalDuration === 0) suggestedDuration = 60;
 
-            const newIsPlastic = selectedSurgeon?.specialty === 'Plastic' || selectedSurgeon?.specialty === 'Plastic/Cosmetic' || selectedSurgeon?.specialty === 'Plastic / Cosmetic';
+            const newIsPlastic = selectedSurgeon?.specialty?.toLowerCase().includes('plastic');
             const fees = calculateCosmeticFees(suggestedDuration, newIsPlastic);
 
             return {
@@ -1202,7 +1204,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
                                                 // Calculate fees based on new surgeon
                                                 const newSurgeon = surgeons.find(s => s.name === newDoctorName);
-                                                const isPlastic = newSurgeon?.specialty === 'Plastic' || newSurgeon?.specialty === 'Plastic/Cosmetic' || newSurgeon?.specialty === 'Plastic / Cosmetic';
+                                                const isPlastic = newSurgeon?.specialty?.toLowerCase().includes('plastic');
                                                 const fees = calculateCosmeticFees(formData.durationMinutes, isPlastic);
 
                                                 setFormData({
@@ -1292,7 +1294,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         value={formData.durationMinutes}
                                         onChange={(e) => {
                                             const duration = parseInt(e.target.value);
-                                            const isPlastic = selectedSurgeon?.specialty === 'Plastic' || selectedSurgeon?.specialty === 'Plastic/Cosmetic' || selectedSurgeon?.specialty === 'Plastic / Cosmetic';
+                                            const isPlastic = selectedSurgeon?.specialty?.toLowerCase().includes('plastic');
                                             const fees = calculateCosmeticFees(duration, isPlastic);
                                             setFormData({
                                                 ...formData,
@@ -1335,7 +1337,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                         {formatCurrency(formData.cosmeticFacilityFee)}
                                                     </div>
                                                 </div>
-                                                {!selectedSurgeon?.specialty || (selectedSurgeon.specialty !== 'Plastic' && selectedSurgeon.specialty !== 'Plastic/Cosmetic' && selectedSurgeon.specialty !== 'Plastic / Cosmetic') ? (
+                                                {!selectedSurgeon?.specialty?.toLowerCase().includes('plastic') ? (
                                                     <div>
                                                         <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Quantum Anesthesia:</div>
                                                         <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0369a1' }}>
@@ -1727,7 +1729,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                 )}
 
                                 {/* Profitability Guardrails */}
-                                {!isCosmeticSurgeon && formData.selectedCptCodes.length > 0 && (
+                                {(formData.selectedCptCodes.length > 0 || isCosmeticSurgeon) && (
                                     <div style={{
                                         marginTop: '2rem',
                                         padding: '1.5rem',
@@ -1779,7 +1781,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                 internalFacilityCost + // Facility Fee (Internal)
                                                                 calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)) + // Labor Cost
                                                                 ((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) + // Supplies
-                                                                (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0) // Self-Pay Anesthesia
+                                                                (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0) + // Self-Pay Anesthesia
+                                                                (isCosmeticSurgeon ? (formData.cosmeticAnesthesiaFee || 0) : 0) // Cosmetic Anesthesia (Pass-through)
                                                             )}
                                                         </span>
                                                     </div>

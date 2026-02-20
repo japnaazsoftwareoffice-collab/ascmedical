@@ -130,7 +130,7 @@ export const calculateCosmeticFees = (durationMinutes, isPlastic = false) => {
 
     return {
         facilityFee: facilityRates[lookupDuration] || 0,
-        anesthesiaFee: isPlastic ? 0 : (anesthesiaRates[lookupDuration] || 0)
+        anesthesiaFee: anesthesiaRates[lookupDuration] || 0
     };
 };
 
@@ -153,7 +153,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
     let laborCost = 0;
     let totalValue = 0;
     let netProfit = 0;
-    let anesthesiaExtra = 0;
+    let anesthesiaRevenue = 0;
 
     // 1. Calculate Supply Costs with fallback for old records
     let supplyCosts = (parseFloat(surgery.supplies_cost) || 0) +
@@ -185,8 +185,8 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         let anesthesiaFee = 0;
 
         if (surgery.notes) {
-            const facilityMatch = surgery.notes.match(/(?:Facility |Cosmetic )?Fee:?\s*\$?\s*([\d,.]+)/i);
-            const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([\d,.]+)/i);
+            const facilityMatch = surgery.notes.match(/(?:Facility|Cosmetic|CSC)\s+Fee:?\s*\$?\s*([\d,.]+)/i);
+            const anesthesiaMatch = surgery.notes.match(/(?:Anesthesia|Quantum)\s*(?:Fee)?:\s*\$?\s*([\d,.]+)/i);
             facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
             anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
         }
@@ -198,11 +198,13 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
             anesthesiaFee = defaults.anesthesiaFee;
         }
 
-        orCost = facilityFee + anesthesiaFee;
+        orCost = facilityFee;
+        anesthesiaRevenue = anesthesiaFee;
         internalRoomCost = calculateORCost(duration + turnover);
         laborCost = calculateLaborCost(duration + turnover);
-        totalValue = orCost + supplyCosts;
-        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts);
+        totalValue = facilityFee + anesthesiaRevenue + supplyCosts;
+        // Anesthesia is a pass-through cost
+        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
     } else {
         cptTotal = calculateMedicareRevenue(surgery.cpt_codes || surgery.cptCodes || [], cptCodes, settings?.apply_medicare_mppr || false);
         orCost = calculateORCost(duration); // Billable duration only
@@ -211,18 +213,20 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
             const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
             if (match) {
-                anesthesiaExtra = parseFloat(match[2].replace(/,/g, ''));
+                anesthesiaRevenue = parseFloat(match[2].replace(/,/g, ''));
             }
         }
-        orCost += anesthesiaExtra;
+        orCost += anesthesiaRevenue;
         laborCost = calculateLaborCost(duration + turnover);
         totalValue = cptTotal + orCost + supplyCosts;
-        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaExtra);
+        // Anesthesia is a pass-through cost
+        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
     }
 
     return {
         cptRevenue: cptTotal,
         facilityRevenue: orCost,
+        anesthesiaRevenue: anesthesiaRevenue,
         totalRevenue: totalValue,
         netProfit,
         supplyCosts,
