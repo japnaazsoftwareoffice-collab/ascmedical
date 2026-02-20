@@ -13,12 +13,54 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
     });
     const [editingId, setEditingId] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [errors, setErrors] = useState({});
+
+    const validateForm = () => {
+        const newErrors = {};
+
+        // Full Name validation: Required, alphabets only, max 20 chars
+        if (!formData.full_name || !formData.full_name.trim()) {
+            newErrors.full_name = 'Full Name is required';
+        } else if (!/^[A-Za-z\s]+$/.test(formData.full_name)) {
+            newErrors.full_name = 'Name must contain only alphabets';
+        } else if (formData.full_name.trim().length > 20) {
+            newErrors.full_name = 'Name must be 20 characters or less';
+        }
+
+        // Email validation: Required, valid format (excluding numbers in domain name as per strict format)
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z.-]+\.[a-zA-Z]{2,}$/;
+        if (!formData.email || !formData.email.trim()) {
+            newErrors.email = 'Email is required';
+        } else if (!emailRegex.test(formData.email)) {
+            newErrors.email = 'Please enter a valid email address';
+        }
+
+        // Password validation: Required (for new users), min 8 chars
+        if (!editingId && (!formData.password || !formData.password.trim())) {
+            newErrors.password = 'Password is required';
+        } else if (formData.password && formData.password.length < 8) {
+            newErrors.password = 'Password must be at least 8 characters';
+        }
+
+        // Role validation
+        if (!formData.role) {
+            newErrors.role = 'Role is required';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!formData.email || !formData.password || !formData.full_name) {
-            Swal.fire('Error', 'Please fill in all required fields', 'error');
+        if (!validateForm()) {
+            Swal.fire({
+                title: 'Validation Error',
+                text: 'Please check the form for missing or invalid fields.',
+                icon: 'error',
+                confirmButtonColor: '#3b82f6'
+            });
             return;
         }
 
@@ -39,6 +81,7 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
                 Swal.fire('Success', 'User added successfully', 'success');
             }
             setFormData({ email: '', password: '', full_name: '', role: 'admin', patient_id: null, surgeon_id: null });
+            setErrors({});
         } catch (error) {
             console.error('Error saving user:', error);
             Swal.fire('Error', 'Failed to save user', 'error');
@@ -55,6 +98,7 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
             surgeon_id: user.surgeon_id || null
         });
         setEditingId(user.id);
+        setErrors({});
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -84,6 +128,7 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
             patient_id: null,
             surgeon_id: null
         });
+        if (errors.role) setErrors({ ...errors, role: null });
     };
 
     return (
@@ -100,37 +145,46 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
                     </div>
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
-                            <label>Full Name</label>
+                            <label>Full Name <span className="required-star">*</span></label>
                             <input
                                 type="text"
-                                className="form-input"
+                                className={`form-input ${errors.full_name ? 'error-border' : ''}`}
                                 value={formData.full_name}
-                                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, full_name: e.target.value });
+                                    if (errors.full_name) setErrors({ ...errors, full_name: null });
+                                }}
                                 placeholder="e.g. John Doe"
-                                required
+                                maxLength={20}
                             />
+                            {errors.full_name && <span className="error-text">{errors.full_name}</span>}
                         </div>
                         <div className="form-group">
-                            <label>Email (Login ID)</label>
+                            <label>Email (Login ID) <span className="required-star">*</span></label>
                             <input
                                 type="email"
-                                className="form-input"
+                                className={`form-input ${errors.email ? 'error-border' : ''}`}
                                 value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, email: e.target.value });
+                                    if (errors.email) setErrors({ ...errors, email: null });
+                                }}
                                 placeholder="user@hospital.com"
-                                required
                             />
+                            {errors.email && <span className="error-text">{errors.email}</span>}
                         </div>
                         <div className="form-group">
-                            <label>Password</label>
+                            <label>Password <span className="required-star">*</span></label>
                             <div style={{ position: 'relative' }}>
                                 <input
                                     type={showPassword ? "text" : "password"}
-                                    className="form-input"
+                                    className={`form-input ${errors.password ? 'error-border' : ''}`}
                                     value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, password: e.target.value });
+                                        if (errors.password) setErrors({ ...errors, password: null });
+                                    }}
                                     placeholder="Enter password"
-                                    required
                                 />
                                 <button
                                     type="button"
@@ -149,18 +203,21 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
                                     {showPassword ? '👁️' : '👁️‍🗨️'}
                                 </button>
                             </div>
+                            {errors.password && <span className="error-text">{errors.password}</span>}
                         </div>
                         <div className="form-group">
-                            <label>Role</label>
+                            <label>Role <span className="required-star">*</span></label>
                             <select
-                                className="form-input"
+                                className={`form-input ${errors.role ? 'error-border' : ''}`}
                                 value={formData.role}
                                 onChange={handleRoleChange}
                             >
+                                <option value="">Select Role...</option>
                                 <option value="admin">Admin</option>
                                 <option value="surgeon">Surgeon</option>
                                 <option value="patient">Patient</option>
                             </select>
+                            {errors.role && <span className="error-text">{errors.role}</span>}
                         </div>
 
                         {/* Conditional Dropdowns based on Role */}
@@ -225,6 +282,7 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
                                     onClick={() => {
                                         setEditingId(null);
                                         setFormData({ email: '', password: '', full_name: '', role: 'admin', patient_id: null, surgeon_id: null });
+                                        setErrors({});
                                     }}
                                     style={{ marginTop: '1rem' }}
                                 >

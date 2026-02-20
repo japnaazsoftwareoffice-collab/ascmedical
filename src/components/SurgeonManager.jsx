@@ -9,15 +9,53 @@ const SurgeonManager = ({ surgeons, onAddSurgeon }) => {
         email: '',
         phone: ''
     });
+    const [errors, setErrors] = useState({});
+
+    const validateForm = () => {
+        const newErrors = {};
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z.-]+\.[a-zA-Z]{2,}$/;
+
+        // Name: Required, max 20
+        if (!formData.name || !formData.name.trim()) {
+            newErrors.name = 'Full Name is required';
+        } else if (formData.name.trim().length > 20) {
+            newErrors.name = 'Name must be 20 characters or less';
+        }
+
+        // Specialty: Required
+        if (!formData.specialty || !formData.specialty.trim()) {
+            newErrors.specialty = 'Specialty is required';
+        }
+
+        // License Number: Required
+        if (!formData.licenseNumber || !formData.licenseNumber.trim()) {
+            newErrors.licenseNumber = 'License Number is required';
+        }
+
+        // Phone: 10 numeric
+        if (!formData.phone || formData.phone.length !== 10) {
+            newErrors.phone = 'Phone must be exactly 10 digits';
+        }
+
+        // Email: Required, proper mail format
+        if (!formData.email || !formData.email.trim()) {
+            newErrors.email = 'Email is required';
+        } else if (!emailRegex.test(formData.email)) {
+            newErrors.email = 'Invalid email format (no numbers in domain name)';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        if (!formData.name || !formData.specialty) {
+        if (!validateForm()) {
             Swal.fire({
-                title: 'Missing Fields',
-                text: 'Please fill in required fields (Name and Specialty)',
-                icon: 'warning',
+                title: 'Validation Error',
+                text: 'Please check the form for missing or invalid fields.',
+                icon: 'error',
                 confirmButtonColor: '#3b82f6'
             });
             return;
@@ -30,6 +68,7 @@ const SurgeonManager = ({ surgeons, onAddSurgeon }) => {
 
         onAddSurgeon(newSurgeon);
         setFormData({ name: '', specialty: '', licenseNumber: '', email: '', phone: '' });
+        setErrors({});
         Swal.fire({
             title: 'Success!',
             text: 'Surgeon added successfully',
@@ -51,24 +90,30 @@ const SurgeonManager = ({ surgeons, onAddSurgeon }) => {
                     </div>
                     <form onSubmit={handleSubmit} className="cpt-form">
                         <div className="form-group">
-                            <label>FULL NAME *</label>
+                            <label>FULL NAME <span className="required-star">*</span></label>
                             <input
                                 type="text"
-                                className="form-input"
+                                className={`form-input ${errors.name ? 'error-border' : ''}`}
                                 placeholder="Dr. John Smith"
                                 value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                required
+                                onChange={(e) => {
+                                    setFormData({ ...formData, name: e.target.value });
+                                    if (errors.name) setErrors({ ...errors, name: null });
+                                }}
+                                maxLength={20}
                             />
+                            {errors.name && <span className="error-text">{errors.name}</span>}
                         </div>
 
                         <div className="form-group">
-                            <label>SPECIALTY *</label>
+                            <label>SPECIALTY <span className="required-star">*</span></label>
                             <select
-                                className="form-input"
+                                className={`form-input ${errors.specialty ? 'error-border' : ''}`}
                                 value={formData.specialty}
-                                onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                                required
+                                onChange={(e) => {
+                                    setFormData({ ...formData, specialty: e.target.value });
+                                    if (errors.specialty) setErrors({ ...errors, specialty: null });
+                                }}
                             >
                                 <option value="">Select Specialty...</option>
                                 <option value="Orthopedics">Orthopedics</option>
@@ -80,39 +125,53 @@ const SurgeonManager = ({ surgeons, onAddSurgeon }) => {
                                 <option value="Oncology">Oncology</option>
                                 <option value="Other">Other</option>
                             </select>
+                            {errors.specialty && <span className="error-text">{errors.specialty}</span>}
                         </div>
 
                         <div className="form-group">
-                            <label>LICENSE NUMBER</label>
+                            <label>LICENSE NUMBER <span className="required-star">*</span></label>
                             <input
                                 type="text"
-                                className="form-input"
+                                className={`form-input ${errors.licenseNumber ? 'error-border' : ''}`}
                                 placeholder="e.g. MD-12345"
                                 value={formData.licenseNumber}
-                                onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, licenseNumber: e.target.value });
+                                    if (errors.licenseNumber) setErrors({ ...errors, licenseNumber: null });
+                                }}
                             />
+                            {errors.licenseNumber && <span className="error-text">{errors.licenseNumber}</span>}
                         </div>
 
                         <div className="form-group">
-                            <label>EMAIL</label>
+                            <label>EMAIL <span className="required-star">*</span></label>
                             <input
                                 type="email"
-                                className="form-input"
+                                className={`form-input ${errors.email ? 'error-border' : ''}`}
                                 placeholder="doctor@hospital.com"
                                 value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, email: e.target.value });
+                                    if (errors.email) setErrors({ ...errors, email: null });
+                                }}
                             />
+                            {errors.email && <span className="error-text">{errors.email}</span>}
                         </div>
 
                         <div className="form-group">
-                            <label>PHONE</label>
+                            <label>PHONE <span className="required-star">*</span></label>
                             <input
                                 type="tel"
-                                className="form-input"
-                                placeholder="(555) 123-4567"
+                                className={`form-input ${errors.phone ? 'error-border' : ''}`}
+                                placeholder="1234567890"
                                 value={formData.phone}
-                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                    setFormData({ ...formData, phone: val });
+                                    if (errors.phone) setErrors({ ...errors, phone: null });
+                                }}
                             />
+                            {errors.phone && <span className="error-text">{errors.phone}</span>}
                         </div>
 
                         <button type="submit" className="btn-submit full-width">

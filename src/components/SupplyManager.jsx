@@ -22,6 +22,7 @@ const SupplyManager = ({
     const [pgEditingId, setPgEditingId] = useState(null);
     const [pgSearchQuery, setPgSearchQuery] = useState('');
     const [pgFilterGroup, setPgFilterGroup] = useState('All Groups');
+    const [errors, setErrors] = useState({});
 
     // Pagination State
     const [pgCurrentPage, setPgCurrentPage] = useState(1);
@@ -34,17 +35,65 @@ const SupplyManager = ({
     }, [procedureGroupItems]);
 
     // === PROCEDURE GROUP ITEM HANDLERS ===
+    const validateForm = () => {
+        const newErrors = {};
+        if (!pgFormData.procedure_group || !pgFormData.procedure_group.trim()) {
+            newErrors.procedure_group = 'Procedure Group is required';
+        }
+        if (!pgFormData.item_name || !pgFormData.item_name.trim()) {
+            newErrors.item_name = 'Item Name is required';
+        }
+        if (!pgFormData.item_type) {
+            newErrors.item_type = 'Item Type is required';
+        }
+
+        const price = parseFloat(pgFormData.unit_price);
+        if (pgFormData.unit_price === '' || isNaN(price) || price < 0) {
+            newErrors.unit_price = 'Price must be 0 or greater';
+        }
+
+        const qty = parseInt(pgFormData.quantity_per_case);
+        if (pgFormData.quantity_per_case === '' || isNaN(qty) || qty < 1) {
+            newErrors.quantity_per_case = 'Quantity must be 1 or greater';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handlePgSubmit = async (e) => {
         e.preventDefault();
 
-        if (!pgFormData.procedure_group || !pgFormData.item_name || !pgFormData.item_type) {
+        if (!validateForm()) {
             Swal.fire({
-                title: 'Missing Fields',
-                text: 'Please fill in required fields (Group, Item Name, Type)',
-                icon: 'warning',
+                title: 'Validation Error',
+                text: 'Please check the form for missing or invalid fields.',
+                icon: 'error',
                 confirmButtonColor: '#3b82f6'
             });
             return;
+        }
+
+        // Check for duplicates (same name in same group)
+        const isDuplicate = procedureGroupItems.some(item =>
+            item.id !== pgEditingId &&
+            item.procedure_group.toLowerCase() === pgFormData.procedure_group.toLowerCase().trim() &&
+            item.item_name.toLowerCase() === pgFormData.item_name.toLowerCase().trim()
+        );
+
+        if (isDuplicate) {
+            const confirmDuplicate = await Swal.fire({
+                title: 'Duplicate Item?',
+                text: `An item named "${pgFormData.item_name}" already exists in "${pgFormData.procedure_group}". Do you want to add it anyway?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, add it',
+                cancelButtonText: 'No, cancel',
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#64748b'
+            });
+
+            if (!confirmDuplicate.isConfirmed) return;
         }
 
         const itemData = {
@@ -78,6 +127,7 @@ const SupplyManager = ({
             });
         }
 
+        setErrors({});
         setPgFormData({
             procedure_group: '',
             item_name: '',
@@ -100,6 +150,7 @@ const SupplyManager = ({
             unit_price: item.unit_price
         });
         setPgEditingId(item.id);
+        setErrors({});
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -130,6 +181,7 @@ const SupplyManager = ({
             unit_price: ''
         });
         setPgEditingId(null);
+        setErrors({});
     };
 
     // Filter procedure group items
@@ -177,17 +229,20 @@ const SupplyManager = ({
                     <form onSubmit={handlePgSubmit} className="cpt-form-grid">
                         <div className="form-row-grid">
                             <div className="form-group">
-                                <label>Procedure Group *</label>
+                                <label>Procedure Group <span className="required-star">*</span></label>
                                 <div className="input-with-action">
                                     <input
                                         type="text"
-                                        className="form-input"
+                                        className={`form-input ${errors.procedure_group ? 'error-border' : ''}`}
                                         value={pgFormData.procedure_group}
-                                        onChange={e => setPgFormData({ ...pgFormData, procedure_group: e.target.value })}
+                                        onChange={e => {
+                                            setPgFormData({ ...pgFormData, procedure_group: e.target.value });
+                                            if (errors.procedure_group) setErrors({ ...errors, procedure_group: null });
+                                        }}
                                         placeholder="e.g. Cataract Surgery"
                                         list="procedure-groups"
-                                        required
                                     />
+                                    {errors.procedure_group && <span className="error-text">{errors.procedure_group}</span>}
                                     <datalist id="procedure-groups">
                                         {uniqueProcedureGroups.slice(1).map(g => (
                                             <option key={g} value={g} />
@@ -196,54 +251,74 @@ const SupplyManager = ({
                                 </div>
                             </div>
                             <div className="form-group">
-                                <label>Item Name *</label>
+                                <label>Item Name <span className="required-star">*</span></label>
                                 <input
                                     type="text"
-                                    className="form-input"
+                                    className={`form-input ${errors.item_name ? 'error-border' : ''}`}
                                     value={pgFormData.item_name}
-                                    onChange={e => setPgFormData({ ...pgFormData, item_name: e.target.value })}
+                                    onChange={e => {
+                                        setPgFormData({ ...pgFormData, item_name: e.target.value });
+                                        if (errors.item_name) setErrors({ ...errors, item_name: null });
+                                    }}
                                     placeholder="e.g. Scalpel #11"
-                                    required
                                 />
+                                {errors.item_name && <span className="error-text">{errors.item_name}</span>}
                             </div>
 
                             <div className="form-group">
-                                <label>Type *</label>
+                                <label>Type <span className="required-star">*</span></label>
                                 <select
-                                    className="form-select"
+                                    className={`form-select ${errors.item_type ? 'error-border' : ''}`}
                                     value={pgFormData.item_type}
-                                    onChange={e => setPgFormData({ ...pgFormData, item_type: e.target.value })}
+                                    onChange={e => {
+                                        const newType = e.target.value;
+                                        setPgFormData({
+                                            ...pgFormData,
+                                            item_type: newType,
+                                            is_high_cost: newType === 'High Cost' ? true : pgFormData.is_high_cost
+                                        });
+                                        if (errors.item_type) setErrors({ ...errors, item_type: null });
+                                    }}
                                 >
                                     <option value="Supply">Supply</option>
                                     <option value="Tool">Tool</option>
                                     <option value="High Cost">High Cost</option>
                                 </select>
+                                {errors.item_type && <span className="error-text">{errors.item_type}</span>}
                             </div>
 
                             <div className="form-group">
-                                <label>Unit Price ($)</label>
+                                <label>Unit Price ($) <span className="required-star">*</span></label>
                                 <div className="currency-input">
                                     <span className="unit">$</span>
                                     <input
                                         type="number"
-                                        className="form-input"
+                                        className={`form-input ${errors.unit_price ? 'error-border' : ''}`}
                                         step="0.01"
                                         value={pgFormData.unit_price}
-                                        onChange={e => setPgFormData({ ...pgFormData, unit_price: e.target.value })}
+                                        onChange={e => {
+                                            setPgFormData({ ...pgFormData, unit_price: e.target.value });
+                                            if (errors.unit_price) setErrors({ ...errors, unit_price: null });
+                                        }}
                                         placeholder="0.00"
                                     />
                                 </div>
+                                {errors.unit_price && <span className="error-text">{errors.unit_price}</span>}
                             </div>
 
                             <div className="form-group">
-                                <label>Qty Per Case</label>
+                                <label>Qty Per Case <span className="required-star">*</span></label>
                                 <input
                                     type="number"
-                                    className="form-input"
+                                    className={`form-input ${errors.quantity_per_case ? 'error-border' : ''}`}
                                     value={pgFormData.quantity_per_case}
-                                    onChange={e => setPgFormData({ ...pgFormData, quantity_per_case: e.target.value })}
+                                    onChange={e => {
+                                        setPgFormData({ ...pgFormData, quantity_per_case: e.target.value });
+                                        if (errors.quantity_per_case) setErrors({ ...errors, quantity_per_case: null });
+                                    }}
                                     min="1"
                                 />
+                                {errors.quantity_per_case && <span className="error-text">{errors.quantity_per_case}</span>}
                             </div>
 
                             {/* Checkboxes styled as toggle buttons or similar */}

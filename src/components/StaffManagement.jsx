@@ -15,6 +15,7 @@ const StaffManagement = ({ staff, onUpdate, onDelete, onAdd }) => {
         email: '',
         countryCode: '+1'
     });
+    const [errors, setErrors] = useState({});
 
     const roles = [
         'Registered Nurse (RN)',
@@ -41,6 +42,7 @@ const StaffManagement = ({ staff, onUpdate, onDelete, onAdd }) => {
             email: '',
             countryCode: '+1'
         });
+        setErrors({});
         setIsModalOpen(true);
     };
 
@@ -77,6 +79,7 @@ const StaffManagement = ({ staff, onUpdate, onDelete, onAdd }) => {
             email: member.email || '',
             countryCode: countryCode
         });
+        setErrors({});
         setIsModalOpen(true);
     };
 
@@ -108,11 +111,60 @@ const StaffManagement = ({ staff, onUpdate, onDelete, onAdd }) => {
         }
     };
 
+    const validateForm = () => {
+        const newErrors = {};
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z.-]+\.[a-zA-Z]{2,}$/;
+
+        // First Name: Required, max 20
+        if (!formData.firstname || !formData.firstname.trim()) {
+            newErrors.firstname = 'First Name is required';
+        } else if (formData.firstname.length > 20) {
+            newErrors.firstname = 'Max 20 characters';
+        }
+
+        // Last Name: Required, max 20
+        if (!formData.lastname || !formData.lastname.trim()) {
+            newErrors.lastname = 'Last Name is required';
+        } else if (formData.lastname.length > 20) {
+            newErrors.lastname = 'Max 20 characters';
+        }
+
+        // Role: Required
+        if (!formData.role) {
+            newErrors.role = 'Role is required';
+        }
+
+        // License: Required
+        if (!formData.license_number || !formData.license_number.trim()) {
+            newErrors.license_number = 'License/ID is required';
+        }
+
+        // Phone: 10 numeric
+        if (!formData.phone || formData.phone.length !== 10) {
+            newErrors.phone = 'Phone must be exactly 10 digits';
+        }
+
+        // Email: Required, proper mail format
+        if (!formData.email || !formData.email.trim()) {
+            newErrors.email = 'Email is required';
+        } else if (!emailRegex.test(formData.email)) {
+            newErrors.email = 'Invalid email format (no numbers in domain name)';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
     const handleSave = async (e) => {
         e.preventDefault();
 
-        if (formData.phone && formData.phone.length !== 10) {
-            Swal.fire('Invalid Phone', 'Phone number must be 10 digits', 'warning');
+        if (!validateForm()) {
+            Swal.fire({
+                title: 'Validation Error',
+                text: 'Please check the form for missing or invalid fields.',
+                icon: 'error',
+                confirmButtonColor: '#3b82f6'
+            });
             return;
         }
 
@@ -143,7 +195,11 @@ const StaffManagement = ({ staff, onUpdate, onDelete, onAdd }) => {
     };
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+        if (errors[name]) {
+            setErrors({ ...errors, [name]: null });
+        }
     };
 
     return (
@@ -210,26 +266,29 @@ const StaffManagement = ({ staff, onUpdate, onDelete, onAdd }) => {
                     <div className="modal-content">
                         <div className="modal-header">
                             <h3>{editingStaff ? 'Edit Staff Member' : 'Add Staff Member'}</h3>
-                            <button className="btn-close" onClick={() => setIsModalOpen(false)}>×</button>
+                            <button className="btn-close" onClick={() => { setIsModalOpen(false); setErrors({}); }}>×</button>
                         </div>
                         <form onSubmit={handleSave}>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>First Name</label>
-                                    <input type="text" name="firstname" value={formData.firstname} onChange={handleChange} className="form-input" required />
+                                    <label>First Name <span className="required-star">*</span></label>
+                                    <input type="text" name="firstname" value={formData.firstname} onChange={handleChange} className={`form-input ${errors.firstname ? 'error-border' : ''}`} maxLength={20} />
+                                    {errors.firstname && <span className="error-text">{errors.firstname}</span>}
                                 </div>
                                 <div className="form-group">
-                                    <label>Last Name</label>
-                                    <input type="text" name="lastname" value={formData.lastname} onChange={handleChange} className="form-input" required />
+                                    <label>Last Name <span className="required-star">*</span></label>
+                                    <input type="text" name="lastname" value={formData.lastname} onChange={handleChange} className={`form-input ${errors.lastname ? 'error-border' : ''}`} maxLength={20} />
+                                    {errors.lastname && <span className="error-text">{errors.lastname}</span>}
                                 </div>
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Role</label>
-                                    <select name="role" value={formData.role} onChange={handleChange} className="form-input" required>
+                                    <label>Role <span className="required-star">*</span></label>
+                                    <select name="role" value={formData.role} onChange={handleChange} className={`form-input ${errors.role ? 'error-border' : ''}`}>
                                         <option value="">Select Role</option>
                                         {roles.map(r => <option key={r} value={r}>{r}</option>)}
                                     </select>
+                                    {errors.role && <span className="error-text">{errors.role}</span>}
                                 </div>
                                 <div className="form-group">
                                     <label>Specialty</label>
@@ -238,29 +297,36 @@ const StaffManagement = ({ staff, onUpdate, onDelete, onAdd }) => {
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>License / ID Number</label>
-                                    <input type="text" name="license_number" value={formData.license_number} onChange={handleChange} className="form-input" />
+                                    <label>License / ID Number <span className="required-star">*</span></label>
+                                    <input type="text" name="license_number" value={formData.license_number} onChange={handleChange} className={`form-input ${errors.license_number ? 'error-border' : ''}`} />
+                                    {errors.license_number && <span className="error-text">{errors.license_number}</span>}
                                 </div>
                                 <div className="form-group">
-                                    <label>Phone</label>
+                                    <label>Phone <span className="required-star">*</span></label>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                         <select name="countryCode" value={formData.countryCode} onChange={handleChange} className="form-input" style={{ width: '90px' }}>
                                             <option value="+1">+1</option>
                                             <option value="+44">+44</option>
                                             <option value="+91">+91</option>
                                         </select>
-                                        <input type="tel" name="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} className="form-input" placeholder="1234567890" style={{ flex: 1 }} />
+                                        <input type="tel" name="phone" value={formData.phone} onChange={(e) => {
+                                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                            setFormData({ ...formData, phone: val });
+                                            if (errors.phone) setErrors({ ...errors, phone: null });
+                                        }} className={`form-input ${errors.phone ? 'error-border' : ''}`} placeholder="1234567890" style={{ flex: 1 }} />
                                     </div>
+                                    {errors.phone && <span className="error-text">{errors.phone}</span>}
                                 </div>
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Email</label>
-                                    <input type="email" name="email" value={formData.email} onChange={handleChange} className="form-input" />
+                                    <label>Email <span className="required-star">*</span></label>
+                                    <input type="email" name="email" value={formData.email} onChange={handleChange} className={`form-input ${errors.email ? 'error-border' : ''}`} />
+                                    {errors.email && <span className="error-text">{errors.email}</span>}
                                 </div>
                             </div>
                             <div className="modal-actions">
-                                <button type="button" className="btn-cancel" onClick={() => setIsModalOpen(false)}>Cancel</button>
+                                <button type="button" className="btn-cancel" onClick={() => { setIsModalOpen(false); setErrors({}); }}>Cancel</button>
                                 <button type="submit" className="btn-save">Save Member</button>
                             </div>
                         </form>
