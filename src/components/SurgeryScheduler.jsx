@@ -355,8 +355,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             let suggestedDuration = totalDuration > 0 ? totalDuration : 60;
             if (newSelectedCodes.length > 0 && totalDuration === 0) suggestedDuration = 60;
 
-            const newIsPlastic = selectedSurgeon?.specialty?.toLowerCase().includes('plastic');
-            const fees = calculateCosmeticFees(suggestedDuration, newIsPlastic);
+            const fees = calculateCosmeticFees(suggestedDuration);
 
             return {
                 ...prev,
@@ -1037,7 +1036,23 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                         color: netProfit >= 0 ? '#059669' : '#dc2626',
                                                                         fontSize: '1.05rem'
                                                                     }}>
-                                                                        {formatCurrency(netProfit)}
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                                                            {formatCurrency(netProfit)}
+                                                                            {isCosmeticSurgery && (
+                                                                                <span style={{
+                                                                                    fontSize: '0.65rem',
+                                                                                    background: '#ecfdf5',
+                                                                                    color: '#047857',
+                                                                                    padding: '1px 6px',
+                                                                                    borderRadius: '4px',
+                                                                                    marginTop: '2px',
+                                                                                    border: '1px solid #10b981',
+                                                                                    fontWeight: '600'
+                                                                                }}>
+                                                                                    ✨ Fixed Profit
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </td>
                                                                     <td>
                                                                         <span className={`status-badge status-${surgery.status}`} style={{ textTransform: 'capitalize' }}>
@@ -1203,9 +1218,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 }
 
                                                 // Calculate fees based on new surgeon
-                                                const newSurgeon = surgeons.find(s => s.name === newDoctorName);
-                                                const isPlastic = newSurgeon?.specialty?.toLowerCase().includes('plastic');
-                                                const fees = calculateCosmeticFees(formData.durationMinutes, isPlastic);
+                                                const fees = calculateCosmeticFees(formData.durationMinutes);
 
                                                 setFormData({
                                                     ...formData,
@@ -1294,8 +1307,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         value={formData.durationMinutes}
                                         onChange={(e) => {
                                             const duration = parseInt(e.target.value);
-                                            const isPlastic = selectedSurgeon?.specialty?.toLowerCase().includes('plastic');
-                                            const fees = calculateCosmeticFees(duration, isPlastic);
+                                            const fees = calculateCosmeticFees(duration);
                                             setFormData({
                                                 ...formData,
                                                 durationMinutes: duration,
@@ -1733,88 +1745,122 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                     <div style={{
                                         marginTop: '2rem',
                                         padding: '1.5rem',
-                                        background: projectedMargin < 0 ? '#fee2e2' : '#f0fdf4',
-                                        border: `2px solid ${projectedMargin < 0 ? '#dc2626' : '#059669'}`,
+                                        background: isCosmeticSurgeon ? '#eff6ff' : (projectedMargin < 0 ? '#fee2e2' : '#f0fdf4'),
+                                        border: `2px solid ${isCosmeticSurgeon ? '#3b82f6' : (projectedMargin < 0 ? '#dc2626' : '#059669')}`,
                                         borderRadius: '12px'
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                                            <div>
-                                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', color: '#64748b' }}>
-                                                    📊 Financial Projection
+                                            <div style={{ flex: 1 }}>
+                                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem', color: isCosmeticSurgeon ? '#1e40af' : '#64748b', fontWeight: '700' }}>
+                                                    {isCosmeticSurgeon ? '💰 Cosmetic Fee Breakdown' : '📊 Financial Projection'}
                                                 </h4>
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginTop: '0.75rem' }}>
-                                                    <div>
-                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee+Supplies): </span>
-                                                        <span style={{ fontWeight: '600', color: '#059669', fontSize: '1.05rem' }}>
-                                                            {formatCurrency(projectedRevenue)}
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Internal Room Cost: </span>
-                                                        <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
-                                                            {formatCurrency(internalFacilityCost)}
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Est. Labor: </span>
-                                                        <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
-                                                            {formatCurrency(calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)))}
-                                                        </span>
-                                                    </div>
-                                                    {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
-                                                        <div>
-                                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Supplies: </span>
-                                                            <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
-                                                                {formatCurrency((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0))}
-                                                            </span>
-                                                        </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', marginTop: '1rem' }}>
+                                                    {isCosmeticSurgeon ? (
+                                                        <>
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '2px' }}>CSC Faculty Fee:</span>
+                                                                <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '1.2rem' }}>
+                                                                    {formatCurrency(formData.cosmeticFacilityFee || 0)}
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '2px' }}>Anesthesia Fee:</span>
+                                                                <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '1.2rem' }}>
+                                                                    + {formatCurrency(formData.cosmeticAnesthesiaFee || 0)}
+                                                                </span>
+                                                            </div>
+                                                            {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
+                                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                    <span style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '2px' }}>Supplies:</span>
+                                                                    <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '1.2rem' }}>
+                                                                        + {formatCurrency((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0))}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee+Supplies): </span>
+                                                                <span style={{ fontWeight: '600', color: '#059669', fontSize: '1.05rem' }}>
+                                                                    {formatCurrency(projectedRevenue)}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Internal Room Cost: </span>
+                                                                <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
+                                                                    {formatCurrency(internalFacilityCost)}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Est. Labor: </span>
+                                                                <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
+                                                                    {formatCurrency(calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)))}
+                                                                </span>
+                                                            </div>
+                                                            {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
+                                                                <div>
+                                                                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Supplies: </span>
+                                                                    <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
+                                                                        {formatCurrency((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0))}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </>
                                                     )}
                                                     <div style={{
                                                         gridColumn: '1 / -1',
-                                                        borderTop: '2px solid #e2e8f0',
-                                                        paddingTop: '0.75rem',
-                                                        marginTop: '0.5rem'
+                                                        borderTop: `2px solid ${isCosmeticSurgeon ? '#bfdbfe' : '#e2e8f0'}`,
+                                                        paddingTop: '1rem',
+                                                        marginTop: '0.5rem',
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center'
                                                     }}>
-                                                        <span style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: '600' }}>Total Internal Cost: </span>
-                                                        <span style={{ fontWeight: '700', color: '#dc2626', fontSize: '1.2rem' }}>
-                                                            {formatCurrency(
-                                                                internalFacilityCost + // Facility Fee (Internal)
-                                                                calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)) + // Labor Cost
-                                                                ((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) + // Supplies
-                                                                (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0) + // Self-Pay Anesthesia
-                                                                (isCosmeticSurgeon ? (formData.cosmeticAnesthesiaFee || 0) : 0) // Cosmetic Anesthesia (Pass-through)
-                                                            )}
-                                                        </span>
-                                                    </div>
-
-                                                    <div>
-                                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Cost Tier: </span>
-                                                        <span style={{
-                                                            fontWeight: '600',
-                                                            color: costTier.color,
-                                                            fontSize: '0.9rem'
-                                                        }}>
-                                                            {costTier.name}
-                                                        </span>
+                                                        <div>
+                                                            <span style={{ fontSize: '1rem', color: isCosmeticSurgeon ? '#1e40af' : '#1e293b', fontWeight: '700' }}>
+                                                                {isCosmeticSurgeon ? 'Total Fees Paid by User:' : 'Total Internal Cost: '}
+                                                            </span>
+                                                            <span style={{ fontWeight: '800', color: isCosmeticSurgeon ? '#1d4ed8' : '#dc2626', fontSize: '1.5rem', marginLeft: '0.75rem' }}>
+                                                                {formatCurrency(
+                                                                    isCosmeticSurgeon ?
+                                                                        (projectedRevenue) :
+                                                                        (internalFacilityCost +
+                                                                            calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)) +
+                                                                            ((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) +
+                                                                            (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0))
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                        {!isCosmeticSurgeon && (
+                                                            <div>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Cost Tier: </span>
+                                                                <span style={{ fontWeight: '600', color: costTier.color, fontSize: '0.9rem' }}>
+                                                                    {costTier.name}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div style={{ textAlign: 'right' }}>
-                                                <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                                                    Projected Margin
+                                            {!isCosmeticSurgeon && (
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
+                                                        Projected Margin
+                                                    </div>
+                                                    <div style={{
+                                                        fontSize: '2rem',
+                                                        fontWeight: '700',
+                                                        color: projectedMargin < 0 ? '#dc2626' : '#059669'
+                                                    }}>
+                                                        {formatCurrency(projectedMargin)}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>
+                                                        {projectedRevenue > 0 ? ((projectedMargin / projectedRevenue) * 100).toFixed(1) : 0}% margin
+                                                    </div>
                                                 </div>
-                                                <div style={{
-                                                    fontSize: '2rem',
-                                                    fontWeight: '700',
-                                                    color: projectedMargin < 0 ? '#dc2626' : '#059669'
-                                                }}>
-                                                    {formatCurrency(projectedMargin)}
-                                                </div>
-                                                <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.25rem' }}>
-                                                    {projectedRevenue > 0 ? ((projectedMargin / projectedRevenue) * 100).toFixed(1) : 0}% margin
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
 
                                         {/* High Tier Cost Alert */}

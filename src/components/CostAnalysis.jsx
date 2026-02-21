@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { calculateORCost, formatCurrency } from '../utils/hospitalUtils';
+import { calculateORCost, formatCurrency, getSurgeryMetrics } from '../utils/hospitalUtils';
 import './CostAnalysis.css';
 
 const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
@@ -40,45 +40,16 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
         let regularRevenue = 0;
 
         filteredSurgeries.forEach(surgery => {
-            const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
+            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []); // We don't have settings/groupItems here but getSurgeryMetrics handles defaults
 
-            if (isCosmeticSurgery) {
-                // Parse cosmetic fees from notes
-                if (surgery.notes) {
-                    const facilityMatch = surgery.notes.match(/Facility Fee: \$([\d,]+)/);
-                    const anesthesiaMatch = surgery.notes.match(/Anesthesia: \$([\d,]+)/);
-                    const facilityFee = facilityMatch ? parseInt(facilityMatch[1].replace(/,/g, '')) : 0;
-                    const anesthesiaFee = anesthesiaMatch ? parseInt(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                    const cosmeticTotal = facilityFee + anesthesiaFee;
-                    cosmeticRevenue += cosmeticTotal;
-                    totalRevenue += cosmeticTotal;
-                }
+            totalRevenue += metrics.totalRevenue;
+            totalCost += metrics.laborCost + metrics.supplyCosts;
+            totalORCost += metrics.internalRoomCost;
+
+            if (metrics.isCosmetic) {
+                cosmeticRevenue += metrics.totalRevenue;
             } else {
-                // Regular surgery with CPT codes
-                surgery.cpt_codes?.forEach(code => {
-                    const cpt = cptCodes.find(c => c.code === code);
-                    if (cpt) {
-                        totalRevenue += parseFloat(cpt.reimbursement || 0);
-                        totalCost += parseFloat(cpt.cost || 0);
-                    }
-                });
-
-                // Add OR cost
-                const orCost = calculateORCost(surgery.duration_minutes || 0);
-                totalORCost += orCost;
-
-                // Check for Self-Pay Anesthesia
-                if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-                    const match = surgery.notes.match(/Self-Pay Anesthesia: \$([\d,]+)/);
-                    if (match) {
-                        totalORCost += parseFloat(match[1].replace(/,/g, ''));
-                    }
-                }
-
-                regularRevenue += surgery.cpt_codes?.reduce((sum, code) => {
-                    const cpt = cptCodes.find(c => c.code === code);
-                    return sum + (cpt?.reimbursement || 0);
-                }, 0) || 0;
+                regularRevenue += metrics.cptRevenue + metrics.facilityRevenue;
             }
         });
 
@@ -138,7 +109,9 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
         const surgeonMap = {};
 
         surgeries.forEach(surgery => {
-            const surgeonName = surgery.doctor_name;
+            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []);
+            const surgeonName = surgery.doctor_name || (surgery.surgeons?.name ? `Dr. ${surgery.surgeons.name}` : 'Unknown');
+
             if (!surgeonMap[surgeonName]) {
                 const surgeonData = surgeons.find(s => s.name === surgeonName);
                 surgeonMap[surgeonName] = {
@@ -150,22 +123,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
                 };
             }
 
-            const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
-
-            if (isCosmeticSurgery && surgery.notes) {
-                const facilityMatch = surgery.notes.match(/Facility Fee: \$([\d,]+)/);
-                const anesthesiaMatch = surgery.notes.match(/Anesthesia: \$([\d,]+)/);
-                const facilityFee = facilityMatch ? parseInt(facilityMatch[1].replace(/,/g, '')) : 0;
-                const anesthesiaFee = anesthesiaMatch ? parseInt(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                surgeonMap[surgeonName].revenue += facilityFee + anesthesiaFee;
-            } else {
-                surgery.cpt_codes?.forEach(code => {
-                    const cpt = cptCodes.find(c => c.code === code);
-                    if (cpt) {
-                        surgeonMap[surgeonName].revenue += parseFloat(cpt.reimbursement || 0);
-                    }
-                });
-            }
+            surgeonMap[surgeonName].revenue += metrics.totalRevenue;
             surgeonMap[surgeonName].surgeryCount += 1;
         });
 
@@ -184,6 +142,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
         const monthMap = {};
 
         surgeries.forEach(surgery => {
+            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []);
             const date = new Date(surgery.date);
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
@@ -195,22 +154,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
                 };
             }
 
-            const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
-
-            if (isCosmeticSurgery && surgery.notes) {
-                const facilityMatch = surgery.notes.match(/Facility Fee: \$([\d,]+)/);
-                const anesthesiaMatch = surgery.notes.match(/Anesthesia: \$([\d,]+)/);
-                const facilityFee = facilityMatch ? parseInt(facilityMatch[1].replace(/,/g, '')) : 0;
-                const anesthesiaFee = anesthesiaMatch ? parseInt(anesthesiaMatch[1].replace(/,/g, '')) : 0;
-                monthMap[monthKey].revenue += facilityFee + anesthesiaFee;
-            } else {
-                surgery.cpt_codes?.forEach(code => {
-                    const cpt = cptCodes.find(c => c.code === code);
-                    if (cpt) {
-                        monthMap[monthKey].revenue += parseFloat(cpt.reimbursement || 0);
-                    }
-                });
-            }
+            monthMap[monthKey].revenue += metrics.totalRevenue;
             monthMap[monthKey].count += 1;
         });
 

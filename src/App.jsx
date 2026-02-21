@@ -965,13 +965,23 @@ function App() {
     };
 
     try {
-      // Calculate costs based on finalized duration
       const duration = parseInt(surgery.duration_minutes || 0);
       const turnover = parseInt(surgery.turnover_time || 0);
 
-      // Calculate Labor Cost - use ACTUAL anesthesia costs from notes if available
+      // 1. Calculate INTERNAL Room Cost (Hospital cost for duration + turnover)
+      const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
+
+      // Internal costs are benchmarking tools for insurance but treated as $0 cost for fixed-fee cosmetic cases
+      const internalRoomCost = isCosmeticSurgery ? 0 : calculateORCost(duration + turnover);
+
+      // 2. Calculate BILLABLE Facility Fee (Patient pays for duration only)
+      const billableFacilityFee = calculateORCost(duration);
+
+      // Calculate Labor Cost - regular surgeries use 30% estimate or self-pay rates
+      // Cosmetic surgeries have zero labor cost (inclusive in facility fee)
       let actualLaborCost = 0;
-      let laborCostSource = 'Estimated';
+      let laborCostSource = isCosmeticSurgery ? 'Inclusive' : 'Estimated';
+      let cosmeticAnesthesiaFee = 0;
 
       if (surgery.notes) {
         // Check for Self-Pay Anesthesia
@@ -983,23 +993,16 @@ function App() {
 
         // Check for Cosmetic Surgery with Quantum Anesthesia
         const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
-        if (cosmeticAnesthesiaMatch && surgery.notes.includes('Cosmetic Surgery')) {
-          actualLaborCost = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
-          laborCostSource = 'Quantum Anesthesia';
+        if (cosmeticAnesthesiaMatch && isCosmeticSurgery) {
+          cosmeticAnesthesiaFee = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
         }
       }
 
-      // If no actual anesthesia cost found, use calculated estimate
-      if (actualLaborCost === 0) {
+      // If no actual anesthesia cost found and NOT cosmetic, use calculated estimate
+      if (actualLaborCost === 0 && !isCosmeticSurgery) {
         actualLaborCost = calculateLaborCost(duration + turnover);
         laborCostSource = 'Calculated Estimate';
       }
-
-      // 1. Calculate INTERNAL Room Cost (Hospital cost for duration + turnover)
-      const internalRoomCost = calculateORCost(duration + turnover);
-
-      // 2. Calculate BILLABLE Facility Fee (Patient pays for duration only)
-      const billableFacilityFee = calculateORCost(duration);
 
       // 3. Get total supplies costs
       const suppliesCost = parseFloat(surgery.supplies_cost || 0);
@@ -1011,17 +1014,13 @@ function App() {
       let expectedReimbursement = 0;
       let reimbursementSource = '';
 
-      const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
-
       if (isCosmeticSurgery && surgery.notes) {
         // Parse cosmetic fees from notes
-        const facilityMatch = surgery.notes.match(/Facility Fee:\s*\$?\s*([0-9,.]+)/i);
-        const anesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,.]+)/i);
+        const facilityMatch = surgery.notes.match(/(?:Facility|Cosmetic|CSC|Faculty)\s+Fee:?\s*\$?\s*([\d,.]+)/i);
         const cscFacilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-        const cscAnesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
 
         // Revenue = Cosmetic Fees + Supplies
-        expectedReimbursement = cscFacilityFee + cscAnesthesiaFee + totalSuppliesCost;
+        expectedReimbursement = cscFacilityFee + cosmeticAnesthesiaFee + totalSuppliesCost;
         reimbursementSource = 'CSC Fees + Supplies';
       } else if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
         // Regular surgery: Revenue = CPT + Facility Fee + Supplies + Anesthesia Extra
@@ -1039,8 +1038,8 @@ function App() {
       }
 
       // 5. Calculate Net Margin (Revenue - Total Internal Costs)
-      // Internal costs = Internal Room Cost + Labor Cost + Supplies Cost
-      const totalInternalCosts = internalRoomCost + actualLaborCost + totalSuppliesCost;
+      // Internal costs = Internal Room Cost + Labor Cost + Supplies Cost + Anesthesia (pass-through)
+      const totalInternalCosts = internalRoomCost + actualLaborCost + totalSuppliesCost + cosmeticAnesthesiaFee;
       const netMargin = expectedReimbursement - totalInternalCosts;
 
       // Update local storage/state surgery reference for the summary display
@@ -1088,6 +1087,15 @@ function App() {
               <div style="font-size: 0.75rem; color: #94a3b8; margin-top: -0.25rem; padding-left: 0.5rem;">
                 ✓ ${laborCostSource}
               </div>
+              ${cosmeticAnesthesiaFee > 0 ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #64748b;">Anesthesia Cost:</span>
+                  <strong style="color: #dc2626;">-$${cosmeticAnesthesiaFee.toLocaleString()}</strong>
+                </div>
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: -0.25rem; padding-left: 0.5rem;">
+                  ✓ Quantum (Pass-through)
+                </div>
+              ` : ''}
               ${totalSuppliesCost > 0 ? `
                 <div style="display: flex; justify-content: space-between;">
                   <span style="color: #64748b;">Supplies Cost:</span>

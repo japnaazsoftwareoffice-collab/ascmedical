@@ -110,7 +110,7 @@ export const calculateLaborCost = (durationMinutes) => {
 };
 
 // Cosmetic fee calculator based on duration
-export const calculateCosmeticFees = (durationMinutes, isPlastic = false) => {
+export const calculateCosmeticFees = (durationMinutes) => {
     // CSC Facility Fee rates
     const facilityRates = {
         30: 750, 60: 1500, 90: 1800, 120: 2100, 150: 2500,
@@ -185,7 +185,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         let anesthesiaFee = 0;
 
         if (surgery.notes) {
-            const facilityMatch = surgery.notes.match(/(?:Facility|Cosmetic|CSC)\s+Fee:?\s*\$?\s*([\d,.]+)/i);
+            const facilityMatch = surgery.notes.match(/(?:Facility|Cosmetic|CSC|Faculty)\s+Fee:?\s*\$?\s*([\d,.]+)/i);
             const anesthesiaMatch = surgery.notes.match(/(?:Anesthesia|Quantum)\s*(?:Fee)?:\s*\$?\s*([\d,.]+)/i);
             facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
             anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
@@ -200,11 +200,11 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
 
         orCost = facilityFee;
         anesthesiaRevenue = anesthesiaFee;
-        internalRoomCost = calculateORCost(duration + turnover);
-        laborCost = calculateLaborCost(duration + turnover);
+        internalRoomCost = 0; // Benchmarked cost is ignored for cosmetic as fee is the margin
+        laborCost = 0; // Labor cost is inclusive in cosmetic facility fees
         totalValue = facilityFee + anesthesiaRevenue + supplyCosts;
-        // Anesthesia is a pass-through cost
-        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
+        // Anesthesia and Supplies are pass-through
+        netProfit = totalValue - (laborCost + supplyCosts + anesthesiaRevenue);
     } else {
         cptTotal = calculateMedicareRevenue(surgery.cpt_codes || surgery.cptCodes || [], cptCodes, settings?.apply_medicare_mppr || false);
         orCost = calculateORCost(duration); // Billable duration only
