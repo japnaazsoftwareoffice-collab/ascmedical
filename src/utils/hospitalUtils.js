@@ -170,7 +170,8 @@ export const formatCurrency = (amount) => {
 
 // Calculate all metrics for a surgery consistently across the app
 export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGroupItems = []) => {
-    const isCosmetic = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
+    const isCosmetic = (!surgery.cpt_codes || surgery.cpt_codes.length === 0) ||
+        (surgery.notes && surgery.notes.includes('Fixed Facility Fee Case'));
     let cptTotal = 0;
     let orCost = 0; // Billable Facility Fee
     let internalRoomCost = 0;

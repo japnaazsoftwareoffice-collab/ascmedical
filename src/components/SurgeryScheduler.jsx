@@ -38,7 +38,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         turnoverTime: 0,
         actualStartTime: '',
         actualEndTime: '',
-        actualDurationMinutes: 0
+        actualDurationMinutes: 0,
+        applyFixedCosmeticFee: false
     });
 
     // Rescheduling Modal State
@@ -140,6 +141,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const isCosmeticSurgeon = selectedSurgeon?.is_cosmetic_surgeon ||
         selectedSurgeon?.specialty?.toLowerCase().includes('plastic') ||
         selectedSurgeon?.specialty?.toLowerCase().includes('cosmetic');
+
+    // Effect to auto-toggle fixed fee when surgeon defaults to cosmetic
+    useEffect(() => {
+        if (isCosmeticSurgeon && !editingSurgery) {
+            setFormData(prev => ({ ...prev, applyFixedCosmeticFee: true }));
+        }
+    }, [isCosmeticSurgeon, editingSurgery]);
 
     // Group surgeons by availability on selected date
     const { availableSurgeons, otherSurgeons } = useMemo(() => {
@@ -401,7 +409,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             start_time: formData.startTime,
             duration_minutes: formData.durationMinutes,
             turnover_time: formData.turnoverTime || 0,
-            cpt_codes: isCosmeticSurgeon ? [] : formData.selectedCptCodes,
+            cpt_codes: formData.selectedCptCodes,
             status: editingSurgery ? editingSurgery.status : 'scheduled',
             supplies_cost: formData.suppliesCost || 0,
             implants_cost: formData.implantsCost || 0,
@@ -411,11 +419,11 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             actual_duration_minutes: formData.actualDurationMinutes || null
         };
 
-        // Add notes for cosmetic surgeries or self-pay anesthesia
-        let notes = '';
-        if (isCosmeticSurgeon) {
-            notes = `Cosmetic Surgery - Facility Fee: $${formData.cosmeticFacilityFee.toLocaleString()}, Anesthesia: $${formData.cosmeticAnesthesiaFee.toLocaleString()}`;
+        // Note generation logic for fixed fee vs CPT
+        if (formData.applyFixedCosmeticFee) {
+            notes = `Fixed Facility Fee Case - Facility: $${formData.cosmeticFacilityFee.toLocaleString()}, Anesthesia: $${formData.cosmeticAnesthesiaFee.toLocaleString()}`;
         }
+
         if (formData.isSelfPayAnesthesia && formData.anesthesiaFee > 0) {
             const rateName = formData.selfPayRateName ? ` (${formData.selfPayRateName})` : '';
             const anesthesiaNote = `Self-Pay Anesthesia${rateName}: $${formData.anesthesiaFee.toLocaleString()}`;
@@ -448,7 +456,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                     ...surgeryData,
                     id: Date.now(),
                     patientId: parseInt(formData.patientId),
-                    selectedCptCodes: isCosmeticSurgeon ? [] : formData.selectedCptCodes
+                    selectedCptCodes: formData.selectedCptCodes
                 });
                 await Swal.fire({
                     title: 'Scheduled!',
@@ -563,7 +571,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             })(),
             actualStartTime: surgery.actual_start_time || '',
             actualEndTime: surgery.actual_end_time || '',
-            actualDurationMinutes: surgery.actual_duration_minutes || 0
+            actualDurationMinutes: surgery.actual_duration_minutes || 0,
+            applyFixedCosmeticFee: surgery.notes ? surgery.notes.includes('Fixed Facility Fee Case') : false
         });
 
         setIsFormOpen(true);
@@ -590,7 +599,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             anesthesiaFee: 0,
             isSelfPayAnesthesia: false,
             selfPayRateName: '',
-            turnoverTime: 60
+            turnoverTime: 60,
+            applyFixedCosmeticFee: false
         });
     };
 
@@ -731,16 +741,25 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     // Calculate current form metrics for display
     const formMetrics = useMemo(() => {
         // Construct a dummy surgery object from form data for consistent metrics calculation
+        // Build notes for dummy surgery to trigger correct logic in getSurgeryMetrics
+        let dummyNotes = '';
+        if (formData.applyFixedCosmeticFee) {
+            dummyNotes = 'Fixed Facility Fee Case ';
+            dummyNotes += `Facility Fee: $${formData.cosmeticFacilityFee}, Anesthesia: $${formData.cosmeticAnesthesiaFee}`;
+        }
+        if (formData.isSelfPayAnesthesia) {
+            dummyNotes += `; Self-Pay Anesthesia: $${formData.anesthesiaFee}`;
+        }
+
         const dummySurgery = {
             duration_minutes: formData.durationMinutes,
             turnover_time: formData.turnoverTime,
-            cpt_codes: isCosmeticSurgeon ? [] : formData.selectedCptCodes,
+            cpt_codes: formData.selectedCptCodes,
             supplies_cost: formData.suppliesCost,
             implants_cost: formData.implantsCost,
             medications_cost: formData.medicationsCost,
             actual_duration_minutes: formData.actualDurationMinutes,
-            notes: (isCosmeticSurgeon ? `Cosmetic Surgery - Facility Fee: $${formData.cosmeticFacilityFee}, Anesthesia: $${formData.cosmeticAnesthesiaFee}` : '') +
-                (formData.isSelfPayAnesthesia ? `; Self-Pay Anesthesia: $${formData.anesthesiaFee}` : '')
+            notes: dummyNotes
         };
 
         const metrics = getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
@@ -1469,35 +1488,11 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         </p>
                                     </div>
 
-                                    {isCosmeticSurgeon && (
-                                        <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '0.5rem' }}>
-                                                <div>
-                                                    <div style={{ fontSize: '0.85rem', color: '#64748b' }}>CSC Facility Fee:</div>
-                                                    <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0369a1' }}>
-                                                        {formatCurrency(formData.cosmeticFacilityFee)}
-                                                    </div>
-                                                </div>
-                                                {!selectedSurgeon?.specialty?.toLowerCase().includes('plastic') ? (
-                                                    <div>
-                                                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Quantum Anesthesia:</div>
-                                                        <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0369a1' }}>
-                                                            {formatCurrency(formData.cosmeticAnesthesiaFee)}
-                                                        </div>
-                                                    </div>
-                                                ) : <div></div>}
-                                            </div>
-                                            <div style={{ borderTop: '1px solid #bae6fd', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                                                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Total Cosmetic Fee:</div>
-                                                <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#0c4a6e' }}>
-                                                    {formatCurrency(formData.cosmeticFacilityFee + formData.cosmeticAnesthesiaFee)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+
                                 </div>
 
-                                {!isCosmeticSurgeon && (
+                                {/* Always show CPT Selection - enabled for Cosmetic/Plastics as well now */}
+                                {true && (
                                     <div className="form-group">
                                         <label>Select CPT Codes</label>
 
@@ -1746,17 +1741,50 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                     </div>
                                 )}
 
-                                {isCosmeticSurgeon && (
-                                    <div style={{ padding: '1.5rem', background: '#fef3c7', borderRadius: '8px', border: '2px solid #fbbf24', marginTop: '1rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                            <span style={{ fontSize: '1.5rem' }}>✨</span>
-                                            <strong style={{ color: '#92400e' }}>Cosmetic Surgery</strong>
-                                        </div>
-                                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#78350f' }}>
-                                            Fees are calculated based on procedure duration. No CPT codes required for cosmetic procedures.
-                                        </p>
+                                {/* Explicit Fixed Fee Toggle */}
+                                <div style={{
+                                    marginTop: '1.5rem',
+                                    padding: '1.25rem',
+                                    background: formData.applyFixedCosmeticFee ? '#fff7ed' : '#f8fafc',
+                                    borderRadius: '12px',
+                                    border: `2px solid ${formData.applyFixedCosmeticFee ? '#fb923c' : '#e2e8f0'}`,
+                                    transition: 'all 0.2s ease'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            id="applyFixedFee"
+                                            checked={formData.applyFixedCosmeticFee}
+                                            onChange={(e) => setFormData({ ...formData, applyFixedCosmeticFee: e.target.checked })}
+                                            style={{ width: '1.3rem', height: '1.3rem', cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="applyFixedFee" style={{ fontSize: '1.05rem', fontWeight: '700', cursor: 'pointer', color: '#9a3412' }}>
+                                            Apply Fixed Facility Fee (Cosmetic/Plastics)
+                                        </label>
                                     </div>
-                                )}
+                                    <p style={{ margin: '0.5rem 0 0 2rem', fontSize: '0.85rem', color: '#b45309' }}>
+                                        When enabled, the surgery will be billed as a flat-rate cosmetic case based on duration, ignoring CPT reimbursements for facility revenue.
+                                    </p>
+
+                                    {formData.applyFixedCosmeticFee && (
+                                        <div className="fade-in" style={{
+                                            marginTop: '1rem',
+                                            marginLeft: '2rem',
+                                            display: 'grid',
+                                            gridTemplateColumns: '1fr 1fr',
+                                            gap: '1rem'
+                                        }}>
+                                            <div style={{ background: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #ffedd5' }}>
+                                                <div style={{ fontSize: '0.75rem', color: '#9a3412', textTransform: 'uppercase', fontWeight: '700' }}>Est. Facility Fee</div>
+                                                <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ea580c' }}>{formatCurrency(formData.cosmeticFacilityFee)}</div>
+                                            </div>
+                                            <div style={{ background: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #ffedd5' }}>
+                                                <div style={{ fontSize: '0.75rem', color: '#9a3412', textTransform: 'uppercase', fontWeight: '700' }}>Est. Anesthesia</div>
+                                                <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ea580c' }}>{formatCurrency(formData.cosmeticAnesthesiaFee)}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Supplies Cost Tracking */}
                                 {!isCosmeticSurgeon && (
@@ -1870,21 +1898,21 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                 )}
 
                                 {/* Profitability Guardrails */}
-                                {(formData.selectedCptCodes.length > 0 || isCosmeticSurgeon) && (
+                                {(formData.selectedCptCodes.length > 0 || formData.applyFixedCosmeticFee) && (
                                     <div style={{
                                         marginTop: '2rem',
                                         padding: '1.5rem',
-                                        background: isCosmeticSurgeon ? '#eff6ff' : (projectedMargin < 0 ? '#fee2e2' : '#f0fdf4'),
-                                        border: `2px solid ${isCosmeticSurgeon ? '#3b82f6' : (projectedMargin < 0 ? '#dc2626' : '#059669')}`,
+                                        background: formData.applyFixedCosmeticFee ? '#eff6ff' : (projectedMargin < 0 ? '#fee2e2' : '#f0fdf4'),
+                                        border: `2px solid ${formData.applyFixedCosmeticFee ? '#3b82f6' : (projectedMargin < 0 ? '#dc2626' : '#059669')}`,
                                         borderRadius: '12px'
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', color: isCosmeticSurgeon ? '#1e40af' : '#64748b', fontWeight: '700' }}>
-                                                        {isCosmeticSurgeon ? '💰 Cosmetic Fee Breakdown' : '📊 Financial Projection'}
+                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', color: formData.applyFixedCosmeticFee ? '#1e40af' : '#64748b', fontWeight: '700' }}>
+                                                        {formData.applyFixedCosmeticFee ? '💰 Cosmetic Fee Breakdown' : '📊 Financial Projection'}
                                                     </h4>
-                                                    {!isCosmeticSurgeon && (
+                                                    {!formData.applyFixedCosmeticFee && (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                             <input
                                                                 type="checkbox"
@@ -1900,7 +1928,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     )}
                                                 </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', marginTop: '1rem' }}>
-                                                    {isCosmeticSurgeon ? (
+                                                    {formData.applyFixedCosmeticFee ? (
                                                         <>
                                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                 <span style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '2px' }}>CSC Faculty Fee:</span>
