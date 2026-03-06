@@ -2,9 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { calculateORCost, calculateMedicareRevenue, formatCurrency } from '../utils/hospitalUtils';
 import './Management.css';
 
-const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings }) => {
+const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGroupItems = [] }) => {
     const [sortBy, setSortBy] = useState('netMargin'); // netMargin, cases, efficiency, breaches
     const [sortOrder, setSortOrder] = useState('desc');
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
 
     // Calculate scorecard data
     const scorecardData = useMemo(() => {
@@ -37,33 +38,30 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings }) => {
             stats.totalCases++;
             stats.surgeries.push(surgery);
 
-            // Calculate revenue (use snapshot if available, otherwise calculate)
-            let revenue = 0;
-            if (surgery.expected_reimbursement) {
-                revenue = surgery.expected_reimbursement;
-            } else if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
-                revenue = calculateMedicareRevenue(surgery.cpt_codes, cptCodes, settings?.apply_medicare_mppr || false);
+            // Use unified metrics calculation for consistency
+            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+
+            if (!includeLaborSupplies) {
+                // Logic for Room + CPT only
+                metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+                metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
+                metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+                metrics.laborCost = 0;
+                metrics.supplyCosts = 0;
+                metrics.internalRoomCost = 0;
             }
-            stats.totalRevenue += revenue;
 
-            // Calculate OR cost (use snapshot if available, otherwise calculate)
-            const orCost = surgery.actual_room_cost || calculateORCost(surgery.duration_minutes || 0);
-            stats.totalORCost += orCost;
-
-            // Labor cost - use actual if available, otherwise default to 30% of OR cost
-            const laborCost = surgery.actual_labor_cost || (orCost * 0.3);
-            stats.totalLaborCost += laborCost;
-
-            // Supplies cost
-            stats.totalSuppliesCost += (surgery.supplies_cost || 0) +
-                (surgery.implants_cost || 0) +
-                (surgery.medications_cost || 0);
+            stats.totalRevenue += metrics.totalRevenue;
+            stats.totalORCost += metrics.internalRoomCost;
+            stats.totalLaborCost += metrics.laborCost;
+            stats.totalSuppliesCost += metrics.supplyCosts;
 
             // Track minutes
-            stats.totalMinutes += surgery.duration_minutes || 0;
+            const surgeryDuration = surgery.actual_duration_minutes || surgery.duration_minutes || 0;
+            stats.totalMinutes += surgeryDuration;
 
             // Count tier breaches (> 60 minutes)
-            if (surgery.duration_minutes > 60) {
+            if (surgeryDuration > 60) {
                 stats.tierBreaches++;
             }
         });
@@ -107,7 +105,7 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings }) => {
 
         return scorecard;
 
-    }, [surgeries, surgeons, cptCodes, sortBy, sortOrder, settings?.apply_medicare_mppr]);
+    }, [surgeries, surgeons, cptCodes, sortBy, sortOrder, settings, procedureGroupItems, includeLaborSupplies]);
 
     const handleSort = (column) => {
         if (sortBy === column) {
@@ -140,6 +138,18 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings }) => {
                 <div>
                     <h2 className="management-title">Surgeon Scorecard</h2>
                     <p className="card-subtitle">Performance analytics for completed surgeries with financial intelligence</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    <input
+                        type="checkbox"
+                        id="scorecard-toggle-costs"
+                        checked={includeLaborSupplies}
+                        onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="scorecard-toggle-costs" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                        Include Labor/Supplies
+                    </label>
                 </div>
             </div>
 

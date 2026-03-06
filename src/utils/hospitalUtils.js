@@ -1,3 +1,21 @@
+// Helper to compare dates consistently as "YYYY-MM-DD" strings to avoid timezone shifts
+export const isDateInRange = (dateStr, startStr, endStr) => {
+    if (!dateStr) return false;
+
+    // Normalize to YYYY-MM-DD
+    const normalize = (d) => {
+        if (!d) return '';
+        if (d.includes('T')) return d.split('T')[0];
+        return d;
+    };
+
+    const d = normalize(dateStr);
+    const s = normalize(startStr);
+    const e = normalize(endStr);
+
+    return d >= s && d <= e;
+};
+
 // Utility function to format surgeon name as "Dr. LastName FirstName"
 export const formatSurgeonName = (surgeon) => {
     if (!surgeon) return 'Unknown';
@@ -72,26 +90,32 @@ export const calculateMedicareRevenue = (cptCodesArray, cptDatabase, applyMPPR =
 
     if (cptObjects.length === 0) return 0;
 
+    // Helper to get the best price (Gross Charge if available, else Reimbursement)
+    const getPrice = (cpt) => {
+        // Preference: gross_charge (350% rate requested by user)
+        // Fallback: reimbursement (Original Medicare rate)
+        return parseFloat(cpt.gross_charge || cpt.reimbursement || 0);
+    };
+
     // If MPPR is disabled, return simple sum
     if (!applyMPPR) {
-        return cptObjects.reduce((sum, cpt) => sum + (cpt.reimbursement || 0), 0);
+        return cptObjects.reduce((sum, cpt) => sum + getPrice(cpt), 0);
     }
 
-    // Sort by reimbursement value (highest first) for MPPR
-    const sortedCpts = [...cptObjects].sort((a, b) =>
-        (b.reimbursement || 0) - (a.reimbursement || 0)
-    );
+    // Sort by price (highest first) for MPPR
+    const sortedCpts = [...cptObjects].sort((a, b) => getPrice(b) - getPrice(a));
 
     // Calculate total with MPPR
     let totalRevenue = 0;
 
     sortedCpts.forEach((cpt, index) => {
+        const price = getPrice(cpt);
         if (index === 0) {
             // First (highest value) code gets 100%
-            totalRevenue += cpt.reimbursement || 0;
+            totalRevenue += price;
         } else {
             // All subsequent codes get 50%
-            totalRevenue += (cpt.reimbursement || 0) * 0.5;
+            totalRevenue += price * 0.5;
         }
     });
 
@@ -176,7 +200,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         }
     }
 
-    const duration = parseInt(surgery.duration_minutes || surgery.durationMinutes || 0);
+    const duration = parseInt(surgery.actual_duration_minutes || surgery.duration_minutes || surgery.durationMinutes || 0);
     const turnover = parseInt(surgery.turnover_time || surgery.turnoverTime || 0);
 
     if (isCosmetic) {
@@ -207,7 +231,6 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         netProfit = totalValue - (laborCost + supplyCosts + anesthesiaRevenue);
     } else {
         cptTotal = calculateMedicareRevenue(surgery.cpt_codes || surgery.cptCodes || [], cptCodes, settings?.apply_medicare_mppr || false);
-        orCost = calculateORCost(duration); // Billable duration only
         internalRoomCost = calculateORCost(duration + turnover); // Full room usage cost
 
         if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
@@ -216,10 +239,16 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
                 anesthesiaRevenue = parseFloat(match[2].replace(/,/g, ''));
             }
         }
-        orCost += anesthesiaRevenue;
         laborCost = calculateLaborCost(duration + turnover);
-        totalValue = cptTotal + orCost + supplyCosts;
-        // Anesthesia is a pass-through cost
+
+        // For non-cosmetic (Insurance), revenue is the CPT reimbursement + pass-throughs
+        // We DO NOT add a theoretical 'orCost' facility fee on top of CPTs
+        totalValue = cptTotal + anesthesiaRevenue + supplyCosts;
+
+        // orCost is unused for revenue in insurance cases, so set to 0 to avoid confusion
+        orCost = 0;
+
+        // Anesthesia and supplies are pass-through costs
         netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
     }
 

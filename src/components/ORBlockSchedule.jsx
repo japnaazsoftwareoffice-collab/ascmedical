@@ -490,7 +490,11 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                                                 <div className="cell-provider" style={{ color: '#1e293b' }}>
                                                                                     {block.provider_name}
                                                                                 </div>
-                                                                                <div className="cell-time">{block.start_time}-{block.end_time}</div>
+                                                                                <div className="cell-time" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                                                                                    {block.start_time && block.end_time
+                                                                                        ? `${toInputTime(block.start_time)} - ${toInputTime(block.end_time)}`
+                                                                                        : 'All Day Block'}
+                                                                                </div>
                                                                             </div>
                                                                         </React.Fragment>
                                                                     );
@@ -540,7 +544,11 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                     >
                                                         <div className="modal-block-info">
                                                             <h4 style={{ color: '#1e293b' }}>{block.provider_name}</h4>
-                                                            <p>{toInputTime(block.start_time)} - {toInputTime(block.end_time)}</p>
+                                                            <p>
+                                                                {block.start_time && block.end_time
+                                                                    ? `${toInputTime(block.start_time)} - ${toInputTime(block.end_time)}`
+                                                                    : <span style={{ fontStyle: 'italic', color: '#64748b' }}>Full Day Block (Untimed)</span>}
+                                                            </p>
                                                         </div>
                                                         <div className="modal-block-actions">
                                                             <button
@@ -604,7 +612,6 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                 value={formData.start_time}
                                                 onChange={handleChange}
                                                 className="form-input"
-                                                required
                                             />
                                         </div>
                                         <div className="form-group">
@@ -615,7 +622,6 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                 value={formData.end_time}
                                                 onChange={handleChange}
                                                 className="form-input"
-                                                required
                                             />
                                             {formData.start_time && formData.end_time && (
                                                 <div style={{ fontSize: '0.75rem', marginTop: '4px', color: calcDuration(formData.start_time, formData.end_time) > 720 ? '#ef4444' : '#64748b' }}>

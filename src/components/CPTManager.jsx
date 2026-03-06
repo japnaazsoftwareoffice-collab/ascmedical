@@ -40,6 +40,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
         average_duration: '',
         turnover_time: '',
         procedure_group: '',
+        gross_charge: '',
         is_active: true
     });
     const [filterCategory, setFilterCategory] = useState('All Categories');
@@ -117,6 +118,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             average_duration: parseInt(formData.average_duration) || 0,
             turnover_time: parseInt(formData.turnover_time) || 0,
             procedure_group: formData.procedure_group,
+            gross_charge: parseFloat(formData.gross_charge) || 0,
             is_active: formData.is_active
         };
 
@@ -156,6 +158,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             average_duration: cpt.average_duration || '',
             turnover_time: cpt.turnover_time || '',
             procedure_group: cpt.procedure_group || '',
+            gross_charge: cpt.gross_charge || '',
             is_active: cpt.is_active !== false
         });
         setEditingId(cpt.id);
@@ -194,6 +197,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
             average_duration: '',
             turnover_time: '',
             procedure_group: '',
+            gross_charge: '',
             is_active: true
         });
         setEditingId(null);
@@ -573,6 +577,20 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                 {errors.reimbursement && <span className="error-text">{errors.reimbursement}</span>}
                             </div>
 
+                            <div className="form-group">
+                                <label>Gross Charge (350%)</label>
+                                <div className="currency-input">
+                                    <span className="unit">$</span>
+                                    <input
+                                        type="number"
+                                        className="form-input"
+                                        step="0.01"
+                                        value={formData.gross_charge}
+                                        onChange={(e) => setFormData({ ...formData, gross_charge: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
                             <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '1.5rem' }}>
                                 <label className="checkbox-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                                     <input
@@ -716,7 +734,8 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                     <th>Body Part</th>
                                     <th>Duration</th>
                                     <th>Turnover</th>
-                                    <th>Reimbursement</th>
+                                    <th>Medicare Rate</th>
+                                    <th>Gross (350%)</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -741,6 +760,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                                             <td>{cpt.average_duration ? `${cpt.average_duration} min` : '-'}</td>
                                             <td>{cpt.turnover_time ? `${cpt.turnover_time} min` : '-'}</td>
                                             <td style={{ fontWeight: 600, color: '#10b981' }}>{formatCurrency(cpt.reimbursement)}</td>
+                                            <td style={{ fontWeight: 600, color: '#3b82f6' }}>{formatCurrency(cpt.gross_charge || 0)}</td>
                                             <td>
                                                 <div className="actions-cell">
                                                     <button
@@ -807,139 +827,145 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
                         </div>
                     )}
                 </div>
-            </div>
+            </div >
 
             {/* Category Management Modal */}
-            {showCategoryModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content" style={{ maxWidth: '500px' }}>
-                        <div className="modal-header">
-                            <h3>Manage Categories</h3>
-                            <button className="btn-close" onClick={() => setShowCategoryModal(false)}>×</button>
-                        </div>
-                        <div className="modal-body" style={{ padding: '1.5rem' }}>
-                            <div className="category-list-manage" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto' }}>
-                                {uniqueCategories.map(cat => (
-                                    <div key={cat} className="category-item-manage" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        {editingCategory === cat ? (
-                                            <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
-                                                <input
-                                                    type="text"
-                                                    className="form-input"
-                                                    value={newCategoryName}
-                                                    onChange={(e) => setNewCategoryName(e.target.value)}
-                                                    autoFocus
-                                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.9rem' }}
-                                                />
-                                                <button className="btn-save" onClick={() => handleUpdateCategory(cat)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Save</button>
-                                                <button className="btn-cancel" onClick={() => setEditingCategory(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Cancel</button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <span style={{ fontWeight: '500', color: '#334155' }}>{cat}</span>
-                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                    <button
-                                                        className="btn-icon"
-                                                        onClick={() => {
-                                                            setEditingCategory(cat);
-                                                            setNewCategoryName(cat);
-                                                        }}
-                                                        title="Rename"
-                                                        style={{ color: '#3b82f6' }}
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                                    </button>
-                                                    <button
-                                                        className="btn-icon"
-                                                        onClick={() => handleDeleteCategory(cat)}
-                                                        title="Delete"
-                                                        style={{ color: '#ef4444' }}
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                                    </button>
+            {
+                showCategoryModal && (
+                    <div className="modal-overlay">
+                        <div className="modal-content" style={{ maxWidth: '500px' }}>
+                            <div className="modal-header">
+                                <h3>Manage Categories</h3>
+                                <button className="btn-close" onClick={() => setShowCategoryModal(false)}>×</button>
+                            </div>
+                            <div className="modal-body" style={{ padding: '1.5rem' }}>
+                                <div className="category-list-manage" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto' }}>
+                                    {uniqueCategories.map(cat => (
+                                        <div key={cat} className="category-item-manage" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            {editingCategory === cat ? (
+                                                <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
+                                                    <input
+                                                        type="text"
+                                                        className="form-input"
+                                                        value={newCategoryName}
+                                                        onChange={(e) => setNewCategoryName(e.target.value)}
+                                                        autoFocus
+                                                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.9rem' }}
+                                                    />
+                                                    <button className="btn-save" onClick={() => handleUpdateCategory(cat)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Save</button>
+                                                    <button className="btn-cancel" onClick={() => setEditingCategory(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Cancel</button>
                                                 </div>
-                                            </>
-                                        )}
-                                    </div>
-                                ))}
+                                            ) : (
+                                                <>
+                                                    <span style={{ fontWeight: '500', color: '#334155' }}>{cat}</span>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button
+                                                            className="btn-icon"
+                                                            onClick={() => {
+                                                                setEditingCategory(cat);
+                                                                setNewCategoryName(cat);
+                                                            }}
+                                                            title="Rename"
+                                                            style={{ color: '#3b82f6' }}
+                                                        >
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                        </button>
+                                                        <button
+                                                            className="btn-icon"
+                                                            onClick={() => handleDeleteCategory(cat)}
+                                                            title="Delete"
+                                                            style={{ color: '#ef4444' }}
+                                                        >
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Procedure Group Management Modal */}
-            {showGroupModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content" style={{ maxWidth: '500px' }}>
-                        <div className="modal-header">
-                            <h3>Manage Procedure Groups</h3>
-                            <button className="btn-close" onClick={() => setShowGroupModal(false)}>×</button>
-                        </div>
-                        <div className="modal-body" style={{ padding: '1.5rem' }}>
-                            <div className="category-list-manage" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto' }}>
-                                {uniqueProcedureGroups.map(group => (
-                                    <div key={group} className="category-item-manage" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        {editingGroup === group ? (
-                                            <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
-                                                <input
-                                                    type="text"
-                                                    className="form-input"
-                                                    value={newGroupName}
-                                                    onChange={(e) => setNewGroupName(e.target.value)}
-                                                    autoFocus
-                                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.9rem' }}
-                                                />
-                                                <button className="btn-save" onClick={() => handleUpdateGroup(group)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Save</button>
-                                                <button className="btn-cancel" onClick={() => setEditingGroup(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Cancel</button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <span style={{ fontWeight: '500', color: '#334155' }}>{group}</span>
-                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                    <button
-                                                        className="btn-icon"
-                                                        onClick={() => {
-                                                            setEditingGroup(group);
-                                                            setNewGroupName(group);
-                                                        }}
-                                                        title="Rename"
-                                                        style={{ color: '#3b82f6' }}
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                                    </button>
-                                                    <button
-                                                        className="btn-icon"
-                                                        onClick={() => handleDeleteGroup(group)}
-                                                        title="Delete"
-                                                        style={{ color: '#ef4444' }}
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                                    </button>
+            {
+                showGroupModal && (
+                    <div className="modal-overlay">
+                        <div className="modal-content" style={{ maxWidth: '500px' }}>
+                            <div className="modal-header">
+                                <h3>Manage Procedure Groups</h3>
+                                <button className="btn-close" onClick={() => setShowGroupModal(false)}>×</button>
+                            </div>
+                            <div className="modal-body" style={{ padding: '1.5rem' }}>
+                                <div className="category-list-manage" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto' }}>
+                                    {uniqueProcedureGroups.map(group => (
+                                        <div key={group} className="category-item-manage" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            {editingGroup === group ? (
+                                                <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
+                                                    <input
+                                                        type="text"
+                                                        className="form-input"
+                                                        value={newGroupName}
+                                                        onChange={(e) => setNewGroupName(e.target.value)}
+                                                        autoFocus
+                                                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.9rem' }}
+                                                    />
+                                                    <button className="btn-save" onClick={() => handleUpdateGroup(group)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Save</button>
+                                                    <button className="btn-cancel" onClick={() => setEditingGroup(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}>Cancel</button>
                                                 </div>
-                                            </>
-                                        )}
-                                    </div>
-                                ))}
+                                            ) : (
+                                                <>
+                                                    <span style={{ fontWeight: '500', color: '#334155' }}>{group}</span>
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button
+                                                            className="btn-icon"
+                                                            onClick={() => {
+                                                                setEditingGroup(group);
+                                                                setNewGroupName(group);
+                                                            }}
+                                                            title="Rename"
+                                                            style={{ color: '#3b82f6' }}
+                                                        >
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                                        </button>
+                                                        <button
+                                                            className="btn-icon"
+                                                            onClick={() => handleDeleteGroup(group)}
+                                                            title="Delete"
+                                                            style={{ color: '#ef4444' }}
+                                                        >
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* AI Duration Updater Modal */}
-            {showDurationUpdater && (
-                <CPTDurationUpdater
-                    cptCodes={cptCodes}
-                    onClose={() => {
-                        setShowDurationUpdater(false);
-                        if (onRefreshCPTCodes) {
-                            onRefreshCPTCodes();
-                        }
-                    }}
-                />
-            )}
-        </div>
+            {
+                showDurationUpdater && (
+                    <CPTDurationUpdater
+                        cptCodes={cptCodes}
+                        onClose={() => {
+                            setShowDurationUpdater(false);
+                            if (onRefreshCPTCodes) {
+                                onRefreshCPTCodes();
+                            }
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 };
 

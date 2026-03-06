@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency, getSurgeryMetrics } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, getSurgeryMetrics, isDateInRange } from '../utils/hospitalUtils';
 import AIAnalystModal from './AIAnalystModal';
 import './Dashboard.css';
 import { jsPDF } from 'jspdf';
@@ -35,8 +35,10 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         monthly: null
     });
     const [utilizationData, setUtilizationData] = useState([]);
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
 
     const [isExporting, setIsExporting] = useState(false);
+
 
     // Outcome Analysis State
     const [outcomeData, setOutcomeData] = useState({
@@ -47,13 +49,6 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         total: 0
     });
 
-    // Block Schedule State
-    const [blockSchedule, setBlockSchedule] = useState([]);
-    const [blockStats, setBlockStats] = useState([]); // [{name, value, percentage, color}]
-    const [selectedRoom, setSelectedRoom] = useState('All'); // 'All' or specific room name
-    const ROOMS = ['OR 1', 'OR 2', 'OR 3', 'OR 4', 'Procedure Room'];
-    const DAILY_CAPACITY_PER_ROOM = 480; // 8 hours (07:00 - 15:00)
-
 
     // Email Modal State
     const [showEmailModal, setShowEmailModal] = useState(false);
@@ -63,17 +58,6 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
     useEffect(() => {
         // Initialize EmailJS
         emailjs.init(EMAILJS_PUBLIC_KEY);
-
-        // Fetch Block Schedule
-        const fetchBlockSchedule = async () => {
-            try {
-                const data = await db.getORBlockSchedule();
-                setBlockSchedule(data || []);
-            } catch (err) {
-                console.error('Failed to load block schedule', err);
-            }
-        };
-        fetchBlockSchedule();
     }, []);
 
     useEffect(() => {
@@ -85,6 +69,16 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
 
             filteredSurgeries.forEach(surgery => {
                 const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+
+                if (!includeLaborSupplies) {
+                    // Logic for Room + CPT only
+                    metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+                    metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
+                    metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+                    metrics.laborCost = 0;
+                    metrics.supplyCosts = 0;
+                    metrics.internalRoomCost = 0;
+                }
 
                 totalRevenue += metrics.totalRevenue;
                 totalCost += (metrics.internalRoomCost + metrics.laborCost + metrics.supplyCosts);
@@ -142,22 +136,19 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
         }
 
-        // Filter Surgeries
+        // Filter Surgeries using string-based comparison to avoid timezone issues
         const currentSurgeries = surgeries.filter(s => {
-            const d = new Date(s.date);
-            // Reset times for accurate date comparison
-            d.setHours(0, 0, 0, 0);
-            const start = new Date(currentStart); start.setHours(0, 0, 0, 0);
-            const end = new Date(currentEnd); end.setHours(23, 59, 59, 999);
-            return d >= start && d <= end;
+            return isDateInRange(s.date,
+                currentStart.toISOString().split('T')[0],
+                currentEnd.toISOString().split('T')[0]
+            );
         });
 
         const prevSurgeries = surgeries.filter(s => {
-            const d = new Date(s.date);
-            d.setHours(0, 0, 0, 0);
-            const start = new Date(prevStart); start.setHours(0, 0, 0, 0);
-            const end = new Date(prevEnd); end.setHours(23, 59, 59, 999);
-            return d >= start && d <= end;
+            return isDateInRange(s.date,
+                prevStart.toISOString().split('T')[0],
+                prevEnd.toISOString().split('T')[0]
+            );
         });
 
         // Calculate Stats
@@ -210,6 +201,12 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             subset.forEach(s => {
                 const name = s.doctor_name || 'Unknown';
                 const metrics = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems);
+
+                if (!includeLaborSupplies) {
+                    metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+                    metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
+                }
+
                 profits[name] = (profits[name] || 0) + metrics.netProfit;
             });
 
@@ -238,22 +235,15 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         const mStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1); mStart.setHours(0, 0, 0, 0);
         const mEnd = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0); mEnd.setHours(23, 59, 59, 999);
 
-        const dailySurgs = surgeries.filter(s => {
-            const d = new Date(s.date);
-            // Reset time for comparison
-            const dCheck = new Date(d); dCheck.setHours(0, 0, 0, 0);
-            return dCheck >= dStart && dCheck <= dEnd;
-        });
-        const weeklySurgs = surgeries.filter(s => {
-            const d = new Date(s.date);
-            const dCheck = new Date(d); dCheck.setHours(0, 0, 0, 0);
-            return dCheck >= wStart && dCheck <= wEnd;
-        });
-        const monthlySurgs = surgeries.filter(s => {
-            const d = new Date(s.date);
-            const dCheck = new Date(d); dCheck.setHours(0, 0, 0, 0);
-            return dCheck >= mStart && dCheck <= mEnd;
-        });
+        const dailySurgs = surgeries.filter(s => isDateInRange(s.date, selectedDate, selectedDate));
+        const weeklySurgs = surgeries.filter(s => isDateInRange(s.date,
+            wStart.toISOString().split('T')[0],
+            wEnd.toISOString().split('T')[0]
+        ));
+        const monthlySurgs = surgeries.filter(s => isDateInRange(s.date,
+            mStart.toISOString().split('T')[0],
+            mEnd.toISOString().split('T')[0]
+        ));
 
         setTopSurgeons({
             daily: calculateTopSurgeon(dailySurgs),
@@ -264,10 +254,13 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         // Calculate Utilization for Pie Chart (Current View)
         const calculateUtilization = (subset) => {
             const util = {};
+            const counts = {};
             let totalMinutes = 0;
-            subset.forEach(s => {
+
+            subset.filter(s => s.status !== 'cancelled').forEach(s => {
                 const name = s.doctor_name || 'Unknown';
-                const duration = parseFloat(s.duration_minutes || s.durationMinutes || 0);
+                // Prioritize actual duration logged after completion
+                const duration = parseFloat(s.actual_duration_minutes || s.duration_minutes || s.durationMinutes || 0);
 
                 let turnover = parseFloat(s.turnover_time || s.turnoverTime || 0);
                 // Fallback: Calculate turnover from CPT codes if not stored on surgery
@@ -285,12 +278,14 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
 
                 const totalDuration = duration + turnover;
                 util[name] = (util[name] || 0) + totalDuration;
+                counts[name] = (counts[name] || 0) + 1;
                 totalMinutes += totalDuration;
             });
 
             return Object.entries(util).map(([name, minutes]) => ({
                 name,
                 value: minutes,
+                count: counts[name],
                 percentage: totalMinutes > 0 ? (minutes / totalMinutes) * 100 : 0,
                 color: generateColor(name) // Helper to generate consistent colors
             })).sort((a, b) => b.value - a.value);
@@ -298,91 +293,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
 
         setUtilizationData(calculateUtilization(currentSurgeries));
 
-        // --- Calculate Block Schedule Stats (Surgeons vs Gap) ---
-        const calcDuration = (start, end) => {
-            if (!start || !end) return 0;
-            const sH = parseInt(start.substring(0, 2));
-            const sM = parseInt(start.substring(2, 4));
-            const eH = parseInt(end.substring(0, 2));
-            const eM = parseInt(end.substring(2, 4));
-            let diff = (eH * 60 + eM) - (sH * 60 + sM);
-            if (diff < 0) diff += 1440; // Handle overnight/next-day wrap
-            return diff;
-        };
-
-        const calculateBlockStats = () => {
-            // 1. Filter Blocks by Timeframe AND Selected Room
-            const relevantBlocks = blockSchedule.filter(b => {
-                const d = new Date(b.date);
-                d.setHours(0, 0, 0, 0);
-
-                const start = new Date(currentStart); start.setHours(0, 0, 0, 0);
-                const end = new Date(currentEnd); end.setHours(23, 59, 59, 999);
-
-                const timeMatch = d >= start && d <= end;
-                const roomMatch = selectedRoom === 'All' ? true : b.room_name === selectedRoom;
-
-                return timeMatch && roomMatch;
-            });
-
-            // 2. Aggregate Allocated Time per Surgeon
-            const surgeonAllocations = {};
-            let totalAllocatedMinutes = 0;
-
-            relevantBlocks.forEach(block => {
-                const duration = calcDuration(block.start_time, block.end_time);
-                const name = block.provider_name || 'Unknown';
-                surgeonAllocations[name] = (surgeonAllocations[name] || 0) + duration;
-                totalAllocatedMinutes += duration;
-            });
-
-            // 3. Calculate Total Capacity & Gap
-            let businessDays = 0;
-            let loopDate = new Date(currentStart);
-            while (loopDate <= currentEnd) {
-                const day = loopDate.getDay();
-                if (day !== 0 && day !== 6) businessDays++; // Exclude Sun, Sat
-                loopDate.setDate(loopDate.getDate() + 1);
-            }
-            if (businessDays === 0 && timeframe === 'daily') {
-                const d = currentStart.getDay();
-                if (d === 0 || d === 6) businessDays = 0;
-            }
-
-            const multiplier = selectedRoom === 'All' ? ROOMS.length : 1;
-            const totalCapacity = businessDays * multiplier * DAILY_CAPACITY_PER_ROOM;
-            const gapMinutes = Math.max(0, totalCapacity - totalAllocatedMinutes);
-
-            // 4. Transform to Chart Data
-            const stats = Object.entries(surgeonAllocations).map(([name, mins]) => ({
-                name,
-                value: mins,
-                percentage: 0,
-                color: generateColor(name)
-            }));
-
-            if (gapMinutes > 0) {
-                stats.push({
-                    name: 'Gap / Unused',
-                    value: gapMinutes,
-                    percentage: 0,
-                    color: '#e2e8f0' // Grey for gap
-                });
-            }
-
-            const grandTotal = totalAllocatedMinutes + gapMinutes;
-            stats.forEach(s => {
-                s.percentage = grandTotal > 0 ? (s.value / grandTotal) * 100 : 0;
-            });
-
-            return stats.sort((a, b) => b.value - a.value);
-        };
-
-        if (blockSchedule.length > 0 || selectedRoom) {
-            setBlockStats(calculateBlockStats());
-        }
-
-    }, [surgeries, selectedDate, cptCodes, timeframe, blockSchedule, selectedRoom, outcomeView]);
+    }, [surgeries, selectedDate, cptCodes, timeframe, outcomeView, includeLaborSupplies]);
 
     // Helper for consistent colors
     const generateColor = (str) => {
@@ -580,6 +491,18 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                             className="date-input"
                         />
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '1rem', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <input
+                            type="checkbox"
+                            id="dashboard-toggle-costs"
+                            checked={includeLaborSupplies}
+                            onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="dashboard-toggle-costs" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                            Include Labor/Supplies
+                        </label>
+                    </div>
                 </div>
                 <div className="header-actions">
                     <button className="btn-action" onClick={handleExport} disabled={isExporting}>
@@ -636,7 +559,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                         <div className="mini-stat-card">
                             <div className="mini-stat-icon cases">🏥</div>
                             <div className="mini-stat-info">
-                                <span className="mini-stat-label">Cases Today</span>
+                                <span className="mini-stat-label">Cases {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}</span>
                                 <span className="mini-stat-value">{stats.totalSurgeries}</span>
                             </div>
                         </div>
@@ -822,58 +745,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                                                 <span className="legend-dot" style={{ background: item.color }}></span>
                                                 <div className="legend-info">
                                                     <span className="legend-name">{item.name}</span>
-                                                    <span className="legend-val">{Math.round(item.percentage)}% ({item.value} mins)</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* OR Block Schedule Allocation Chart */}
-                    <div className="chart-card utilization-chart-card">
-                        <div className="chart-header">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                                <h3>OR Block Schedule ({timeframe})</h3>
-                                {/* Room Selector */}
-                                <select
-                                    className="filter-select"
-                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
-                                    value={selectedRoom}
-                                    onChange={(e) => setSelectedRoom(e.target.value)}
-                                >
-                                    <option value="All">All Rooms</option>
-                                    {ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                        <div className="utilization-chart-container">
-                            {blockStats.length === 0 ? (
-                                <div className="empty-chart-state">No block data for this period</div>
-                            ) : (
-                                <div className="pie-chart-wrapper">
-                                    <div
-                                        className="pie-chart"
-                                        style={{
-                                            background: `conic-gradient(${blockStats.reduce((acc, item, index) => {
-                                                const prevPerc = index === 0 ? 0 : blockStats.slice(0, index).reduce((p, i) => p + i.percentage, 0);
-                                                return `${acc}${index > 0 ? ',' : ''} ${item.color} ${prevPerc}% ${prevPerc + item.percentage}%`;
-                                            }, '')
-                                                })`
-                                        }}
-                                    >
-                                        {/* Optional Center Text for Donut effect */}
-                                        <div className="donut-hole" style={{ width: '50%', height: '50%', background: '#fff', borderRadius: '50%', position: 'absolute', top: '50%', left: '50%' }}></div>
-                                    </div>
-                                    <div className="chart-legend-grid">
-                                        {blockStats.map((item, index) => (
-                                            <div key={index} className="legend-item">
-                                                <span className="legend-dot" style={{ background: item.color }}></span>
-                                                <div className="legend-info">
-                                                    <span className="legend-name">{item.name}</span>
-                                                    <span className="legend-val">{Math.round(item.percentage)}% ({Math.round(item.value / 60)} hrs)</span>
+                                                    <span className="legend-val">{Math.round(item.percentage)}% ({item.value} mins | {item.count} {item.count === 1 ? 'case' : 'cases'})</span>
                                                 </div>
                                             </div>
                                         ))}

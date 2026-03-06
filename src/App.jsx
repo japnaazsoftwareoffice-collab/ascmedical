@@ -925,30 +925,65 @@ function App() {
 
   // Complete Surgery with Financial Snapshot
   const handleCompleteSurgery = async (surgeryId) => {
-    let surgery = surgeries.find(s => s.id === surgeryId);
+    const surgery = surgeries.find(s => s.id === surgeryId);
     if (!surgery) return;
 
-    // Prompt for actual values to ensure accurate financial reporting
+    // Prompt for actual timing and supplies
     const { value: formValues } = await Swal.fire({
       title: 'Finalize Surgery Case',
       html: `
-            <div style="text-align: left;">
-                <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1.5rem;">Please confirm the actual case details for accurate financial reporting.</p>
-                <div style="margin-bottom: 1rem;">
-                    <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual Duration (Minutes)</label>
-                    <input id="swal-duration" type="number" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.duration_minutes || 0}">
-                </div>
-                <div style="margin-bottom: 0;">
-                    <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Total Supplies Cost ($)</label>
-                    <input id="swal-supplies" type="number" step="0.01" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.supplies_cost || 0}">
-                </div>
+        <div style="text-align: left;">
+          <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1.5rem;">
+            Please enter actual times and costs for final reporting.
+          </p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual Start</label>
+              <input id="swal-start" type="time" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.start_time || '07:30'}">
             </div>
-        `,
+            <div>
+              <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual End</label>
+              <input id="swal-end" type="time" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}">
+            </div>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual Duration (Auto-calc/Override)</label>
+            <input id="swal-duration" type="number" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.duration_minutes || 60}">
+          </div>
+          <div style="margin-bottom: 0;">
+            <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Total Supplies Cost ($)</label>
+            <input id="swal-supplies" type="number" step="0.01" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.supplies_cost || 0}">
+          </div>
+        </div>
+      `,
+      didOpen: () => {
+        const startInput = document.getElementById('swal-start');
+        const endInput = document.getElementById('swal-end');
+        const durInput = document.getElementById('swal-duration');
+
+        const updateDuration = () => {
+          const start = startInput.value;
+          const end = endInput.value;
+          if (start && end) {
+            const [sH, sM] = start.split(':').map(Number);
+            const [eH, eM] = end.split(':').map(Number);
+            let diff = (eH * 60 + eM) - (sH * 60 + sM);
+            if (diff < 0) diff += 1440; // Next day
+            durInput.value = diff;
+          }
+        };
+
+        startInput.addEventListener('change', updateDuration);
+        endInput.addEventListener('change', updateDuration);
+        updateDuration();
+      },
       showCancelButton: true,
       confirmButtonText: 'Calculate & Complete',
       confirmButtonColor: '#3b82f6',
       preConfirm: () => {
         return {
+          start: document.getElementById('swal-start').value,
+          end: document.getElementById('swal-end').value,
           duration: document.getElementById('swal-duration').value,
           supplies: document.getElementById('swal-supplies').value
         };
@@ -957,104 +992,36 @@ function App() {
 
     if (!formValues) return;
 
-    // Update surgery object with confirmed values for calculation
-    surgery = {
-      ...surgery,
-      duration_minutes: parseInt(formValues.duration) || 0,
-      supplies_cost: parseFloat(formValues.supplies) || 0
-    };
-
     try {
-      const duration = parseInt(surgery.duration_minutes || 0);
-      const turnover = parseInt(surgery.turnover_time || 0);
+      const actualDuration = parseInt(formValues.duration) || 0;
 
-      // 1. Calculate INTERNAL Room Cost (Hospital cost for duration + turnover)
-      const isCosmeticSurgery = !surgery.cpt_codes || surgery.cpt_codes.length === 0;
+      // Calculate metrics with actual values
+      const metrics = getSurgeryMetrics({
+        ...surgery,
+        actual_duration_minutes: actualDuration,
+        supplies_cost: parseFloat(formValues.supplies) || 0
+      }, cptCodes, settings, procedureGroupItems);
 
-      // Internal costs are benchmarking tools for insurance but treated as $0 cost for fixed-fee cosmetic cases
-      const internalRoomCost = isCosmeticSurgery ? 0 : calculateORCost(duration + turnover);
+      const actualRoomCost = metrics.internalRoomCost;
+      const actualLaborCost = metrics.laborCost;
+      const suppliesCost = metrics.supplyCosts;
+      const expectedReimbursement = metrics.totalRevenue;
+      const netMargin = metrics.netProfit;
+      const reimbursementSource = metrics.isCosmetic ? 'Cosmetic Facility' : 'Insurance/CPT';
+      const laborCostSource = 'ASC Standard (30% Facility)';
 
-      // 2. Calculate BILLABLE Facility Fee (Patient pays for duration only)
-      const billableFacilityFee = calculateORCost(duration);
-
-      // Calculate Labor Cost - regular surgeries use 30% estimate or self-pay rates
-      // Cosmetic surgeries have zero labor cost (inclusive in facility fee)
-      let actualLaborCost = 0;
-      let laborCostSource = isCosmeticSurgery ? 'Inclusive' : 'Estimated';
-      let cosmeticAnesthesiaFee = 0;
-
-      if (surgery.notes) {
-        // Check for Self-Pay Anesthesia
-        const selfPayMatch = surgery.notes.match(/Self-Pay Anesthesia(?:\s*\([^)]+\))?\s*:\s*\$?\s*([0-9,]+)/i);
-        if (selfPayMatch) {
-          actualLaborCost = parseFloat(selfPayMatch[1].replace(/,/g, ''));
-          laborCostSource = 'Self-Pay Anesthesia';
-        }
-
-        // Check for Cosmetic Surgery with Quantum Anesthesia
-        const cosmeticAnesthesiaMatch = surgery.notes.match(/Anesthesia:\s*\$?\s*([0-9,]+)/i);
-        if (cosmeticAnesthesiaMatch && isCosmeticSurgery) {
-          cosmeticAnesthesiaFee = parseFloat(cosmeticAnesthesiaMatch[1].replace(/,/g, ''));
-        }
-      }
-
-      // If no actual anesthesia cost found and NOT cosmetic, use calculated estimate
-      if (actualLaborCost === 0 && !isCosmeticSurgery) {
-        actualLaborCost = calculateLaborCost(duration + turnover);
-        laborCostSource = 'Calculated Estimate';
-      }
-
-      // 3. Get total supplies costs
-      const suppliesCost = parseFloat(surgery.supplies_cost || 0);
-      const implantsCost = parseFloat(surgery.implants_cost || 0);
-      const medicationsCost = parseFloat(surgery.medications_cost || 0);
-      const totalSuppliesCost = suppliesCost + implantsCost + medicationsCost;
-
-      // 4. Calculate expected reimbursement (Revenue)
-      let expectedReimbursement = 0;
-      let reimbursementSource = '';
-
-      if (isCosmeticSurgery && surgery.notes) {
-        // Parse cosmetic fees from notes
-        const facilityMatch = surgery.notes.match(/(?:Facility|Cosmetic|CSC|Faculty)\s+Fee:?\s*\$?\s*([\d,.]+)/i);
-        const cscFacilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
-
-        // Revenue = Cosmetic Fees + Supplies
-        expectedReimbursement = cscFacilityFee + cosmeticAnesthesiaFee + totalSuppliesCost;
-        reimbursementSource = 'CSC Fees + Supplies';
-      } else if (surgery.cpt_codes && surgery.cpt_codes.length > 0) {
-        // Regular surgery: Revenue = CPT + Facility Fee + Supplies + Anesthesia Extra
-        const cptRevenue = calculateMedicareRevenue(surgery.cpt_codes, cptCodes, settings?.apply_medicare_mppr || false);
-
-        let anesthesiaExtra = 0;
-        if (surgery.notes && surgery.notes.includes('Self-Pay Anesthesia')) {
-          const match = surgery.notes.match(/Self-Pay Anesthesia(?: \(([^)]+)\))?:?\s*\$?\s*([\d,]+)/i);
-          if (match) anesthesiaExtra = parseFloat(match[2].replace(/,/g, ''));
-        }
-
-        // Total Revenue matching the "Rev (CPT+Fee+Supplies)" logic
-        expectedReimbursement = cptRevenue + billableFacilityFee + totalSuppliesCost + anesthesiaExtra;
-        reimbursementSource = 'CPT + Facility + Supplies';
-      }
-
-      // 5. Calculate Net Margin (Revenue - Total Internal Costs)
-      // Internal costs = Internal Room Cost + Labor Cost + Supplies Cost + Anesthesia (pass-through)
-      const totalInternalCosts = internalRoomCost + actualLaborCost + totalSuppliesCost + cosmeticAnesthesiaFee;
-      const netMargin = expectedReimbursement - totalInternalCosts;
-
-      // Update local storage/state surgery reference for the summary display
-      const actualRoomCost = internalRoomCost; // For display compatibility with existing UI
-
-      // Update surgery with financial snapshot
+      // Update surgery with actual times and financial snapshot
       const updates = {
         status: 'completed',
-        duration_minutes: surgery.duration_minutes,
-        supplies_cost: suppliesCost,
+        actual_start_time: formValues.start,
+        actual_end_time: formValues.end,
+        actual_duration_minutes: actualDuration,
+        supplies_cost: parseFloat(formValues.supplies) || 0,
         actual_room_cost: actualRoomCost,
         actual_labor_cost: actualLaborCost,
         expected_reimbursement: expectedReimbursement,
         financial_snapshot_date: new Date().toISOString(),
-        calculation_version: 'v1.1'
+        calculation_version: 'v1.2'
       };
 
       await handleUpdateSurgery(surgeryId, updates);
@@ -1294,7 +1261,7 @@ function App() {
 
     if (view === 'instruction-panel' && hasPerm('manage_chatbot')) return <InstructionPanel />;
 
-    if (view === 'settings' && hasPerm('manage_settings')) return <Settings />;
+    if (view === 'settings' && hasPerm('manage_settings')) return <Settings onUpdate={loadAllData} />;
 
     // 2. Role-specific views (Surgeon/Patient)
     // Surgeon

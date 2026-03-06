@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { calculateORCost, formatCurrency, getSurgeryMetrics } from '../utils/hospitalUtils';
+import { calculateORCost, formatCurrency, getSurgeryMetrics, isDateInRange } from '../utils/hospitalUtils';
 import './CostAnalysis.css';
 
-const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
+const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupItems = [] }) => {
     const [timeframe, setTimeframe] = useState('month');
     const [selectedCategory, setSelectedCategory] = useState('all');
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
 
     // Calculate comprehensive analytics
     const analytics = useMemo(() => {
@@ -21,16 +22,20 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
             regularRevenue: 0
         };
 
-        const now = new Date();
         const filteredSurgeries = surgeries.filter(surgery => {
-            const surgeryDate = new Date(surgery.date);
-            const daysDiff = (now - surgeryDate) / (1000 * 60 * 60 * 24);
+            const now = new Date();
+            let start = new Date();
 
-            if (timeframe === 'week') return daysDiff <= 7;
-            if (timeframe === 'month') return daysDiff <= 30;
-            if (timeframe === 'quarter') return daysDiff <= 90;
-            if (timeframe === 'year') return daysDiff <= 365;
-            return true;
+            if (timeframe === 'week') start.setDate(now.getDate() - 7);
+            else if (timeframe === 'month') start.setDate(now.getDate() - 30);
+            else if (timeframe === 'quarter') start.setDate(now.getDate() - 90);
+            else if (timeframe === 'year') start.setDate(now.getDate() - 365);
+            else return true;
+
+            const startStr = start.toISOString().split('T')[0];
+            const endStr = now.toISOString().split('T')[0];
+
+            return isDateInRange(surgery.date, startStr, endStr);
         });
 
         let totalRevenue = 0;
@@ -40,7 +45,15 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
         let regularRevenue = 0;
 
         filteredSurgeries.forEach(surgery => {
-            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []); // We don't have settings/groupItems here but getSurgeryMetrics handles defaults
+            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+
+            if (!includeLaborSupplies) {
+                // Logic for Room + CPT only
+                metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+                metrics.laborCost = 0;
+                metrics.supplyCosts = 0;
+                metrics.internalRoomCost = 0;
+            }
 
             totalRevenue += metrics.totalRevenue;
             totalCost += metrics.laborCost + metrics.supplyCosts;
@@ -70,7 +83,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
             cosmeticRevenue,
             regularRevenue
         };
-    }, [surgeries, cptCodes, timeframe]);
+    }, [surgeries, cptCodes, timeframe, includeLaborSupplies, settings, procedureGroupItems]);
 
     // Category breakdown
     const categoryBreakdown = useMemo(() => {
@@ -79,24 +92,43 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
         const categoryMap = {};
 
         surgeries.forEach(surgery => {
-            surgery.cpt_codes?.forEach(code => {
-                const cpt = cptCodes.find(c => c.code === code);
-                if (cpt) {
-                    if (!categoryMap[cpt.category]) {
-                        categoryMap[cpt.category] = {
-                            category: cpt.category,
-                            revenue: 0,
-                            cost: 0,
-                            count: 0,
-                            profit: 0
-                        };
-                    }
-                    categoryMap[cpt.category].revenue += parseFloat(cpt.reimbursement || 0);
-                    categoryMap[cpt.category].cost += parseFloat(cpt.cost || 0);
-                    categoryMap[cpt.category].count += 1;
-                    categoryMap[cpt.category].profit += parseFloat(cpt.reimbursement || 0) - parseFloat(cpt.cost || 0);
+            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []);
+
+            if (metrics.isCosmetic) {
+                if (!categoryMap['Cosmetic']) {
+                    categoryMap['Cosmetic'] = {
+                        category: 'Cosmetic',
+                        revenue: 0,
+                        cost: 0,
+                        count: 0,
+                        profit: 0
+                    };
                 }
-            });
+                categoryMap['Cosmetic'].revenue += metrics.totalRevenue;
+                categoryMap['Cosmetic'].cost += metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+                categoryMap['Cosmetic'].count += 1;
+                categoryMap['Cosmetic'].profit += metrics.netProfit;
+            } else {
+                surgery.cpt_codes?.forEach(code => {
+                    const cpt = cptCodes.find(c => c.code === code);
+                    if (cpt) {
+                        if (!categoryMap[cpt.category]) {
+                            categoryMap[cpt.category] = {
+                                category: cpt.category,
+                                revenue: 0,
+                                cost: 0,
+                                count: 0,
+                                profit: 0
+                            };
+                        }
+                        // Use metrics-based values for consistency
+                        categoryMap[cpt.category].revenue += parseFloat(cpt.reimbursement || 0);
+                        categoryMap[cpt.category].count += 1;
+                        // Approximate cost for category breakdown
+                        categoryMap[cpt.category].profit += parseFloat(cpt.reimbursement || 0) - parseFloat(cpt.cost || 0);
+                    }
+                });
+            }
         });
 
         return Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue);
@@ -167,6 +199,18 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons }) => {
                 <div>
                     <h2 className="page-title">Financial Analytics</h2>
                     <p className="page-subtitle">Comprehensive revenue, cost, and performance insights</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', marginLeft: '1rem' }}>
+                    <input
+                        type="checkbox"
+                        id="cost-analysis-toggle-costs"
+                        checked={includeLaborSupplies}
+                        onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="cost-analysis-toggle-costs" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                        Include Labor/Supplies
+                    </label>
                 </div>
                 <div className="timeframe-selector">
                     <button

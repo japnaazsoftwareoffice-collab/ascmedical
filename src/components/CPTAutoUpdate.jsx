@@ -77,6 +77,7 @@ const CPTAutoUpdate = () => {
     const [hasDownloaded, setHasDownloaded] = useState(false);
     const [processedFiles, setProcessedFiles] = useState([]);
     const [selectedFiles, setSelectedFiles] = useState([]); // NEW: Store raw files
+    const [surgicalMode, setSurgicalMode] = useState(true); // NEW: Preserve existing data mode
 
     const log = (msg) => {
         setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -223,7 +224,8 @@ const CPTAutoUpdate = () => {
                 let colIdx = {
                     code: -1, desc: -1, payment: -1, indicator: -1,
                     longDesc: -1, discounting: -1, category: -1,
-                    bodyPart: -1, duration: -1, turnover: -1, group: -1
+                    bodyPart: -1, duration: -1, turnover: -1, group: -1,
+                    grossCharge: -1
                 };
 
                 for (let i = 0; i < Math.min(aoa.length, 25); i++) {
@@ -239,30 +241,33 @@ const CPTAutoUpdate = () => {
                         const row = (aoa[i] || []).map(c => String(c).toLowerCase().trim());
 
                         // CODE
-                        colIdx.code = row.findIndex(c => (c.includes('hcpcs') || c.includes('cpt') || c.includes('code')) && !c.includes('desc'));
+                        colIdx.code = row.findIndex(c => c && (c.includes('hcpcs') || c.includes('cpt') || c.includes('code')) && !c.includes('desc'));
 
                         // DESCRIPTION
-                        colIdx.desc = row.findIndex(c => c.includes('short descriptor') || c.includes('short desc'));
-                        if (colIdx.desc === -1) colIdx.desc = row.findIndex(c => (c.includes('description') || c.includes('desc')) && !c.includes('long') && !c.includes('code'));
+                        colIdx.desc = row.findIndex(c => c && (c.includes('short descriptor') || c.includes('short desc')));
+                        if (colIdx.desc === -1) colIdx.desc = row.findIndex(c => c && (c.includes('description') || c.includes('desc')) && !c.includes('long') && !c.includes('code'));
 
-                        colIdx.longDesc = row.findIndex(c => c.includes('long descriptor') || c.includes('long desc'));
+                        colIdx.longDesc = row.findIndex(c => c && (c.includes('long descriptor') || c.includes('long desc')));
 
                         // PAYMENT
-                        colIdx.payment = row.findIndex(c => (c.includes('payment') && c.includes('rate')) || (c.includes('allowed') && c.includes('amount')));
-                        if (colIdx.payment === -1) colIdx.payment = row.findIndex(c => c === 'rate' || (c.includes('rate') && !c.includes('wage') && !c.includes('weight')));
+                        colIdx.payment = row.findIndex(c => c && ((c.includes('payment') && c.includes('rate')) || (c.includes('allowed') && c.includes('amount'))));
+                        if (colIdx.payment === -1) colIdx.payment = row.findIndex(c => c && (c === 'rate' || (c.includes('rate') && !c.includes('wage') && !c.includes('weight'))));
 
                         // INDICATOR
-                        colIdx.indicator = row.findIndex(c => c.includes('payment indicator') || c.includes('pi') || c.includes('indicator'));
+                        colIdx.indicator = row.findIndex(c => c && (c.includes('payment indicator') || c.includes('pi') || c.includes('indicator')));
 
                         // DISCOUNTING
-                        colIdx.discounting = row.findIndex(c => c.includes('multiple procedure') || c.includes('discounting'));
+                        colIdx.discounting = row.findIndex(c => c && (c.includes('multiple procedure') || c.includes('discounting')));
 
                         // EXTENDED FIELDS
-                        colIdx.category = row.findIndex(c => c.includes('category') && !c.includes('body'));
-                        colIdx.bodyPart = row.findIndex(c => c.includes('body') && c.includes('part'));
-                        colIdx.duration = row.findIndex(c => c.includes('duration'));
-                        colIdx.turnover = row.findIndex(c => c.includes('turnover'));
-                        colIdx.group = row.findIndex(c => c.includes('group') && !c.includes('payment'));
+                        colIdx.category = row.findIndex(c => c && c.includes('category') && !c.includes('body'));
+                        colIdx.bodyPart = row.findIndex(c => c && c.includes('body') && c.includes('part'));
+                        colIdx.duration = row.findIndex(c => c && c.includes('duration'));
+                        colIdx.turnover = row.findIndex(c => c && c.includes('turnover'));
+                        colIdx.group = row.findIndex(c => c && c.includes('group') && !c.includes('payment'));
+
+                        // GROSS CHARGE (350% of Medicare)
+                        colIdx.grossCharge = row.findIndex(c => c && (c.includes('gross charge') || c.includes('350%')));
 
                         // LOGGING
                         log(`   🎯 Headers found on row ${i + 1}.`);
@@ -294,6 +299,7 @@ const CPTAutoUpdate = () => {
                             short_descriptor: desc,
                             long_descriptor: longDesc || desc, // Fallback
                             reimbursement: parseFloat(val(colIdx.payment).replace(/[$,]/g, '')) || 0,
+                            gross_charge: parseFloat(val(colIdx.grossCharge).replace(/[$,]/g, '')) || 0,
                             payment_indicator: val(colIdx.indicator),
                             discounting: val(colIdx.discounting),
                             category: val(colIdx.category) || autoMapping.category,
@@ -351,7 +357,7 @@ const CPTAutoUpdate = () => {
                 uniqueRecords.push({
                     ...last, // Keep latest data
                     status: status,
-                    effective_date: new Date(last.year, 0, 1).toISOString(),
+                    effective_date: last.effective_date || new Date(last.year, 0, 1).toISOString(),
                     version_year: last.year
                 });
             });
@@ -374,28 +380,81 @@ const CPTAutoUpdate = () => {
         if (!mergedMasterData) return;
         setUploading(true);
         log(`💾 Syncing ${mergedMasterData.length} records with Database...`);
+        if (surgicalMode) log('🛡️ Surgical Mode: Preserving existing Category/Description/Duration data.');
 
         let totalUpserted = 0;
         try {
+            // --- STEP 1: FETCH EXISTING DATA FOR MERGING ---
+            const existingMap = new Map();
+            if (surgicalMode) {
+                log('🔍 Fetching current database state for merging...');
+                let allExisting = [];
+                let page = 0;
+                const pageSize = 1000;
+                let hasMore = true;
+
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('cpt_codes')
+                        .select('code, description, reimbursement, category, procedure_group, body_part, average_duration, turnover_time, is_active')
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                    if (error) throw error;
+                    if (data && data.length > 0) {
+                        allExisting = [...allExisting, ...data];
+                        if (data.length < pageSize) hasMore = false;
+                        else page++;
+                    } else {
+                        hasMore = false;
+                    }
+                }
+                allExisting.forEach(row => existingMap.set(row.code, row));
+                log(`   ✅ Loaded ${existingMap.size} existing codes for protection.`);
+            }
+
             const CHUNK_SIZE = 1000;
             for (let i = 0; i < mergedMasterData.length; i += CHUNK_SIZE) {
                 const chunk = mergedMasterData.slice(i, i + CHUNK_SIZE);
 
                 // IMPORTANT: Filter out CSV-only fields before sending to DB
                 // Only send columns that actually exist in the 'cpt_codes' table
-                const dbPayload = chunk.map(row => ({
-                    code: row.code,
-                    description: row.short_descriptor, // Map short_descriptor to DB 'description'
-                    reimbursement: row.reimbursement,
-                    procedure_indicator: row.payment_indicator, // Map payment_indicator to DB 'procedure_indicator'
-                    category: row.category,
-                    procedure_group: row.procedure_group, // NEW: Include procedure_group
-                    body_part: row.body_part, // Include body_part in DB update
-                    average_duration: row.average_duration,
-                    turnover_time: row.turnover_time,
-                    is_active: row.is_active
-                    // cost: Omitted to preserve existing cost data in DB
-                }));
+                const dbPayload = chunk.map(row => {
+                    const existing = existingMap.get(row.code);
+
+                    if (surgicalMode && existing) {
+                        // PRESERVE MODE: Only update prices, keep everything else from DB
+                        return {
+                            code: row.code,
+                            gross_charge: row.gross_charge,
+                            // Omit reimbursement if the user only wants gross charges, 
+                            // BUT they previously said "payment rate is column same".
+                            // I will update reimbursement too as it's a "fee", but keep metadata.
+                            reimbursement: row.reimbursement,
+                            description: existing.description,
+                            category: existing.category,
+                            procedure_group: existing.procedure_group,
+                            body_part: existing.body_part,
+                            average_duration: existing.average_duration,
+                            turnover_time: existing.turnover_time,
+                            is_active: existing.is_active !== null ? existing.is_active : true
+                        };
+                    }
+
+                    // DEFAULT MODE: Full overwrite with file data
+                    return {
+                        code: row.code,
+                        description: row.short_descriptor, // Map short_descriptor to DB 'description'
+                        reimbursement: row.reimbursement,
+                        gross_charge: row.gross_charge,
+                        procedure_indicator: row.payment_indicator, // Map payment_indicator to DB 'procedure_indicator'
+                        category: row.category,
+                        procedure_group: row.procedure_group, // NEW: Include procedure_group
+                        body_part: row.body_part, // Include body_part in DB update
+                        average_duration: row.average_duration,
+                        turnover_time: row.turnover_time,
+                        is_active: true // By default all active
+                    };
+                });
 
                 const { error } = await supabase
                     .from('cpt_codes')
@@ -437,6 +496,7 @@ const CPTAutoUpdate = () => {
             'Short Descriptor': record.short_descriptor,
             'Long Descriptor': record.long_descriptor,
             'Payment Rate': record.reimbursement,
+            'Gross Charge (350%)': record.gross_charge || 0,
             'Payment Indicator': record.payment_indicator,
             'Multiple Procedure Discounting': record.discounting, // ADDED
             'Procedure Group': record.procedure_group || '', // NEW
@@ -550,6 +610,7 @@ Generated by ASC Manager
                 'Short Descriptor': record.short_descriptor || record.description || '',
                 'Long Descriptor': record.long_descriptor || '',
                 'Payment Rate': record.reimbursement,
+                'Gross Charge (350%)': record.gross_charge || 0,
                 'Payment Indicator': record.payment_indicator || '',
                 'Procedure Group': record.procedure_group || '', // Added field
                 'Effective Date': record.effective_date || '',
@@ -619,43 +680,45 @@ Generated by ASC Manager
                     duration: -1,
                     turnover: -1,
                     group: -1,
-                    active: -1
+                    active: -1,
+                    grossCharge: -1
                 };
 
                 // Scan first 25 lines for a header row
                 for (let i = 0; i < Math.min(aoa.length, 25); i++) {
-                    const row = (aoa[i] || []).map(c => String(c).toLowerCase().trim());
+                    const row = (aoa[i] || []).map(c => String(c || '').toLowerCase().trim());
 
                     // Heuristic: Must have "code" AND ("category" OR "rate" OR "payment")
-                    if (row.some(c => c.includes('code') || c.includes('cpt')) &&
-                        row.some(c => c.includes('category') || c.includes('rate') || c.includes('payment') || c.includes('short'))) {
+                    if (row.some(c => c && (c.includes('code') || c.includes('cpt'))) &&
+                        row.some(c => c && (c.includes('category') || c.includes('rate') || c.includes('payment') || c.includes('short')))) {
 
                         headerIdx = i;
 
-                        colIdx.code = row.findIndex(c => c.includes('cpt') || c.includes('hcpcs') || (c.includes('code') && !c.includes('desc')));
+                        colIdx.code = row.findIndex(c => c && (c.includes('cpt') || c.includes('hcpcs') || (c.includes('code') && !c.includes('desc'))));
 
-                        colIdx.desc = row.findIndex(c => c.includes('short') || (c.includes('desc') && !c.includes('long')));
-                        if (colIdx.desc === -1) colIdx.desc = row.findIndex(c => c.includes('description'));
+                        colIdx.desc = row.findIndex(c => c && (c.includes('short') || (c.includes('desc') && !c.includes('long'))));
+                        if (colIdx.desc === -1) colIdx.desc = row.findIndex(c => c && c.includes('description'));
 
-                        colIdx.longDesc = row.findIndex(c => c.includes('long'));
+                        colIdx.longDesc = row.findIndex(c => c && c.includes('long'));
 
-                        colIdx.payment = row.findIndex(c => c.includes('rate') || (c.includes('payment') && !c.includes('indicator')));
+                        colIdx.payment = row.findIndex(c => c && (c.includes('rate') || (c.includes('payment') && !c.includes('indicator'))));
 
-                        colIdx.indicator = row.findIndex(c => c.includes('indicator') || c === 'pi');
+                        colIdx.indicator = row.findIndex(c => c && (c.includes('indicator') || c === 'pi'));
 
                         // Ensure we don't confuse category with body part
-                        colIdx.category = row.findIndex(c => c.includes('category') && !c.includes('body'));
+                        colIdx.category = row.findIndex(c => c && c.includes('category') && !c.includes('body'));
 
-                        colIdx.bodyPart = row.findIndex(c => c.includes('body') && c.includes('part'));
+                        colIdx.bodyPart = row.findIndex(c => c && c.includes('body') && c.includes('part'));
 
-                        colIdx.discounting = row.findIndex(c => c.includes('discount') || c.includes('multiple'));
+                        colIdx.discounting = row.findIndex(c => c && (c.includes('discount') || c.includes('multiple')));
 
-                        colIdx.year = row.findIndex(c => c.includes('year'));
-                        colIdx.effDate = row.findIndex(c => c.includes('effective'));
-                        colIdx.duration = row.findIndex(c => c.includes('duration'));
-                        colIdx.turnover = row.findIndex(c => c.includes('turnover'));
-                        colIdx.group = row.findIndex(c => c.includes('group') && !c.includes('payment')); // Avoid confusion with 'payment group' if any
-                        colIdx.active = row.findIndex(c => c.includes('active') || c.includes('status'));
+                        colIdx.year = row.findIndex(c => c && c.includes('year'));
+                        colIdx.effDate = row.findIndex(c => c && c.includes('effective'));
+                        colIdx.duration = row.findIndex(c => c && c.includes('duration'));
+                        colIdx.turnover = row.findIndex(c => c && c.includes('turnover'));
+                        colIdx.group = row.findIndex(c => c && c.includes('group') && !c.includes('payment')); // Avoid confusion with 'payment group' if any
+                        colIdx.active = row.findIndex(c => c && (c.includes('active') || c.includes('status')));
+                        colIdx.grossCharge = row.findIndex(c => c && (c.includes('gross charge') || c.includes('350%')));
 
                         log(`   🎯 Enriched Headers found on row ${i + 1}`);
                         break;
@@ -668,11 +731,11 @@ Generated by ASC Manager
                     log('⚠️ Could not auto-detect headers. Assuming Row 1.');
                     headerIdx = 0;
                     // Try to map assuming row 1
-                    const row = (aoa[0] || []).map(c => String(c).toLowerCase().trim());
-                    colIdx.code = row.findIndex(c => c.includes('code'));
-                    colIdx.desc = row.findIndex(c => c.includes('desc'));
-                    colIdx.payment = row.findIndex(c => c.includes('rate'));
-                    colIdx.category = row.findIndex(c => c.includes('cat'));
+                    const row = (aoa[0] || []).map(c => String(c || '').toLowerCase().trim());
+                    colIdx.code = row.findIndex(c => c && c.includes('code'));
+                    colIdx.desc = row.findIndex(c => c && c.includes('desc'));
+                    colIdx.payment = row.findIndex(c => c && c.includes('rate'));
+                    colIdx.category = row.findIndex(c => c && c.includes('cat'));
                 }
 
                 const enrichedData = [];
@@ -693,6 +756,7 @@ Generated by ASC Manager
                             short_descriptor: val(colIdx.desc) || 'No Description',
                             long_descriptor: val(colIdx.longDesc) || val(colIdx.desc) || '',
                             reimbursement: reimbursement,
+                            gross_charge: parseFloat(val(colIdx.grossCharge).replace(/[$,]/g, '')) || 0,
                             payment_indicator: val(colIdx.indicator),
                             category: val(colIdx.category) || 'General',
                             procedure_group: val(colIdx.group),
@@ -905,6 +969,23 @@ Generated by ASC Manager
                                             Found {mergedMasterData.length} unique CPT codes.
                                         </div>
                                     </div>
+                                    <div className="surgical-mode-card" style={{ marginBottom: '1rem', background: '#e0f2fe', padding: '12px', borderRadius: '8px', border: '1px solid #bae6fd' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', margin: 0 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={surgicalMode}
+                                                onChange={(e) => setSurgicalMode(e.target.checked)}
+                                                style={{ width: '18px', height: '18px' }}
+                                            />
+                                            <div style={{ flex: 1 }}>
+                                                <strong style={{ fontSize: '0.95rem', color: '#0369a1' }}>🛡️ Surgical Mode (Safety)</strong>
+                                                <p style={{ fontSize: '0.8rem', color: '#075985', margin: '2px 0 0 0' }}>
+                                                    Only update prices/fees. Protects your existing Categories and Descriptions from being overwritten by the file.
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </div>
+
                                     <div className="action-buttons" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                                         <button
                                             className="btn-primary"

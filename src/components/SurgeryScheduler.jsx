@@ -35,7 +35,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         suppliesCost: 0,
         implantsCost: 0,
         medicationsCost: 0,
-        turnoverTime: 0
+        turnoverTime: 0,
+        actualStartTime: '',
+        actualEndTime: '',
+        actualDurationMinutes: 0
     });
 
     // Rescheduling Modal State
@@ -58,6 +61,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const [expandedMonths, setExpandedMonths] = useState(new Set([new Date().toISOString().slice(0, 7)]));
     const [selectedProcedureGroup, setSelectedProcedureGroup] = useState('');
     const [cptSearchQuery, setCptSearchQuery] = useState('');
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
 
     // Extract unique procedure groups
     const uniqueProcedureGroups = useMemo(() => {
@@ -256,6 +260,20 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     // Unified metrics calculation for consistent financial reporting
     const calculateSurgeryFinancials = (surgery) => {
         const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+
+        // Adjust metrics based on whether we include Labor & Supplies
+        if (!includeLaborSupplies) {
+            // Remove labor/supplies and facility cost from profit calculation
+            metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+            // Subtract supply revenue to show only Room + CPT
+            metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
+            metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+            // Zero out values for display consistency
+            metrics.laborCost = 0;
+            metrics.supplyCosts = 0;
+            metrics.internalRoomCost = 0;
+        }
+
         return {
             cptTotal: metrics.cptRevenue,
             orCost: metrics.facilityRevenue,
@@ -384,10 +402,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             duration_minutes: formData.durationMinutes,
             turnover_time: formData.turnoverTime || 0,
             cpt_codes: isCosmeticSurgeon ? [] : formData.selectedCptCodes,
-            status: 'scheduled',
+            status: editingSurgery ? editingSurgery.status : 'scheduled',
             supplies_cost: formData.suppliesCost || 0,
             implants_cost: formData.implantsCost || 0,
-            medications_cost: formData.medicationsCost || 0
+            medications_cost: formData.medicationsCost || 0,
+            actual_start_time: formData.actualStartTime || null,
+            actual_end_time: formData.actualEndTime || null,
+            actual_duration_minutes: formData.actualDurationMinutes || null
         };
 
         // Add notes for cosmetic surgeries or self-pay anesthesia
@@ -539,7 +560,10 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                     });
                 }
                 return t;
-            })()
+            })(),
+            actualStartTime: surgery.actual_start_time || '',
+            actualEndTime: surgery.actual_end_time || '',
+            actualDurationMinutes: surgery.actual_duration_minutes || 0
         });
 
         setIsFormOpen(true);
@@ -714,21 +738,41 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             supplies_cost: formData.suppliesCost,
             implants_cost: formData.implantsCost,
             medications_cost: formData.medicationsCost,
+            actual_duration_minutes: formData.actualDurationMinutes,
             notes: (isCosmeticSurgeon ? `Cosmetic Surgery - Facility Fee: $${formData.cosmeticFacilityFee}, Anesthesia: $${formData.cosmeticAnesthesiaFee}` : '') +
                 (formData.isSelfPayAnesthesia ? `; Self-Pay Anesthesia: $${formData.anesthesiaFee}` : '')
         };
 
-        return getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
-    }, [formData, isCosmeticSurgeon, cptCodes, settings, procedureGroupItems]);
+        const metrics = getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
+
+        // If user wants to exclude Labor & Supplies from the calculation
+        if (!includeLaborSupplies) {
+            // 1. Remove labor/supplies and facility cost from the cost side of profit
+            metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+
+            // 2. Remove supplies from the revenue side (user wants room + cpt only)
+            metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
+            metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+
+            // 3. Zero out the displayed costs
+            metrics.laborCost = 0;
+            metrics.supplyCosts = 0;
+            metrics.internalRoomCost = 0;
+        }
+
+        return metrics;
+    }, [formData, isCosmeticSurgeon, cptCodes, settings, procedureGroupItems, includeLaborSupplies]);
 
     const projectedRevenue = formMetrics.totalRevenue;
     const projectedMargin = formMetrics.netProfit;
     const internalFacilityCost = formMetrics.internalRoomCost;
     const billableFacilityFee = formMetrics.facilityRevenue;
 
+    const effectiveDuration = formData.actualDurationMinutes || formData.durationMinutes;
+
     // Determine cost tier
     const costTier = useMemo(() => {
-        const minutes = formData.durationMinutes;
+        const minutes = effectiveDuration;
         if (minutes <= 60) return { name: 'Standard', color: '#059669', level: 1 };
         if (minutes <= 120) return { name: 'Tier 2 (+$300/30min)', color: '#f59e0b', level: 2 };
         return { name: 'Tier 3 (+$400/30min)', color: '#dc2626', level: 3 };
@@ -831,9 +875,23 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                 {/* Surgery Log Table - will appear second with order: 2 */}
                 <div style={{ order: isFormOpen ? 2 : 1 }}>
                     <div className="content-card" style={{ marginBottom: '2rem' }}>
-                        <div className="card-header">
-                            <h3>Surgery Log</h3>
-                            <p className="card-subtitle">Recent and upcoming scheduled surgeries organized by month.</p>
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3>Surgery Log</h3>
+                                <p className="card-subtitle">Recent and upcoming scheduled surgeries organized by month.</p>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '8px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                <input
+                                    type="checkbox"
+                                    id="global-toggle-costs"
+                                    checked={includeLaborSupplies}
+                                    onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="global-toggle-costs" style={{ fontSize: '0.9rem', color: '#475569', cursor: 'pointer', fontWeight: '600' }}>
+                                    Include Labor/Supplies in Calculations
+                                </label>
+                            </div>
                         </div>
 
                         {availableMonths.length === 0 ? (
@@ -1340,6 +1398,77 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         </div>
                                     )}
 
+                                    {/* Actual Timing Section - for logging completed cases or manual overrides */}
+                                    <div style={{ marginTop: '1.5rem', padding: '1.25rem', background: '#fffbeb', borderRadius: '12px', border: '1px solid #fde68a' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
+                                                <circle cx="12" cy="12" r="10"></circle>
+                                                <polyline points="12 6 12 12 16 14"></polyline>
+                                            </svg>
+                                            <h4 style={{ margin: 0, color: '#92400e', fontSize: '1rem' }}>Actual Case Timing</h4>
+                                            <span style={{ fontSize: '0.75rem', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '12px', border: '1px solid #fcd34d' }}>Manual Log</span>
+                                        </div>
+
+                                        <div className="form-row" style={{ marginBottom: 0 }}>
+                                            <div className="form-group">
+                                                <label style={{ color: '#92400e' }}>Actual Start</label>
+                                                <input
+                                                    type="time"
+                                                    className="form-input"
+                                                    value={formData.actualStartTime}
+                                                    onChange={(e) => {
+                                                        const start = e.target.value;
+                                                        const end = formData.actualEndTime;
+                                                        let duration = formData.actualDurationMinutes;
+                                                        if (start && end) {
+                                                            const [sH, sM] = start.split(':').map(Number);
+                                                            const [eH, eM] = end.split(':').map(Number);
+                                                            duration = (eH * 60 + eM) - (sH * 60 + sM);
+                                                            if (duration < 0) duration += 1440;
+                                                        }
+                                                        setFormData({ ...formData, actualStartTime: start, actualDurationMinutes: duration });
+                                                    }}
+                                                    style={{ borderColor: '#fcd34d' }}
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <label style={{ color: '#92400e' }}>Actual End</label>
+                                                <input
+                                                    type="time"
+                                                    className="form-input"
+                                                    value={formData.actualEndTime}
+                                                    onChange={(e) => {
+                                                        const start = formData.actualStartTime;
+                                                        const end = e.target.value;
+                                                        let duration = formData.actualDurationMinutes;
+                                                        if (start && end) {
+                                                            const [sH, sM] = start.split(':').map(Number);
+                                                            const [eH, eM] = end.split(':').map(Number);
+                                                            duration = (eH * 60 + eM) - (sH * 60 + sM);
+                                                            if (duration < 0) duration += 1440;
+                                                        }
+                                                        setFormData({ ...formData, actualEndTime: end, actualDurationMinutes: duration });
+                                                    }}
+                                                    style={{ borderColor: '#fcd34d' }}
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <label style={{ color: '#92400e' }}>Actual Minutes</label>
+                                                <input
+                                                    type="number"
+                                                    className="form-input"
+                                                    placeholder="Auto-calculated"
+                                                    value={formData.actualDurationMinutes || ''}
+                                                    onChange={(e) => setFormData({ ...formData, actualDurationMinutes: parseInt(e.target.value) || 0 })}
+                                                    style={{ borderColor: '#fcd34d' }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p style={{ fontSize: '0.8rem', color: '#b45309', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                                            * Tracking actual times provides more accurate OR utilization and surgeon efficiency ratings.
+                                        </p>
+                                    </div>
+
                                     {isCosmeticSurgeon && (
                                         <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '0.5rem' }}>
@@ -1526,7 +1655,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                             >
                                                                                 <div className="cpt-card-header">
                                                                                     <span className="cpt-code-badge">{cpt.code}</span>
-                                                                                    <span className="cpt-price">{formatCurrency(cpt.reimbursement)}</span>
+                                                                                    <span className="cpt-price">{formatCurrency(cpt.gross_charge || cpt.reimbursement)}</span>
                                                                                 </div>
                                                                                 <div className="cpt-description">{cpt.description}</div>
                                                                             </div>
@@ -1751,9 +1880,25 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                             <div style={{ flex: 1 }}>
-                                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem', color: isCosmeticSurgeon ? '#1e40af' : '#64748b', fontWeight: '700' }}>
-                                                    {isCosmeticSurgeon ? '💰 Cosmetic Fee Breakdown' : '📊 Financial Projection'}
-                                                </h4>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', color: isCosmeticSurgeon ? '#1e40af' : '#64748b', fontWeight: '700' }}>
+                                                        {isCosmeticSurgeon ? '💰 Cosmetic Fee Breakdown' : '📊 Financial Projection'}
+                                                    </h4>
+                                                    {!isCosmeticSurgeon && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                id="toggle-costs"
+                                                                checked={includeLaborSupplies}
+                                                                onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
+                                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                                            />
+                                                            <label htmlFor="toggle-costs" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer', fontWeight: '600' }}>
+                                                                Include Labor/Supplies
+                                                            </label>
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', marginTop: '1rem' }}>
                                                     {isCosmeticSurgeon ? (
                                                         <>
@@ -1773,7 +1918,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                                     <span style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '2px' }}>Supplies:</span>
                                                                     <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '1.2rem' }}>
-                                                                        + {formatCurrency((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0))}
+                                                                        + {formatCurrency(formMetrics.supplyCosts)}
                                                                     </span>
                                                                 </div>
                                                             )}
@@ -1781,28 +1926,28 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     ) : (
                                                         <>
                                                             <div>
-                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee+Supplies): </span>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Rev (CPT+Fee{includeLaborSupplies ? '+Supplies' : ''}): </span>
                                                                 <span style={{ fontWeight: '600', color: '#059669', fontSize: '1.05rem' }}>
                                                                     {formatCurrency(projectedRevenue)}
                                                                 </span>
                                                             </div>
                                                             <div>
-                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Internal Room Cost: </span>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{formData.actualDurationMinutes > 0 ? 'Actual' : 'Est.'} Room Cost: </span>
                                                                 <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
                                                                     {formatCurrency(internalFacilityCost)}
                                                                 </span>
                                                             </div>
                                                             <div>
-                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Est. Labor: </span>
+                                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{formData.actualDurationMinutes > 0 ? 'Actual' : 'Est.'} Labor: </span>
                                                                 <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
-                                                                    {formatCurrency(calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)))}
+                                                                    {formatCurrency(formMetrics.laborCost)}
                                                                 </span>
                                                             </div>
                                                             {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
                                                                 <div>
                                                                     <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Supplies: </span>
                                                                     <span style={{ fontWeight: '600', color: '#dc2626', fontSize: '1.05rem' }}>
-                                                                        {formatCurrency((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0))}
+                                                                        {formatCurrency(formMetrics.supplyCosts)}
                                                                     </span>
                                                                 </div>
                                                             )}
@@ -1819,16 +1964,16 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     }}>
                                                         <div>
                                                             <span style={{ fontSize: '1rem', color: isCosmeticSurgeon ? '#1e40af' : '#1e293b', fontWeight: '700' }}>
-                                                                {isCosmeticSurgeon ? 'Total Fees Paid by User:' : 'Total Internal Cost: '}
+                                                                {isCosmeticSurgeon ? 'Total Fees Paid by User:' : `${formData.actualDurationMinutes > 0 ? 'Actual' : 'Total'} Internal Cost: `}
                                                             </span>
                                                             <span style={{ fontWeight: '800', color: isCosmeticSurgeon ? '#1d4ed8' : '#dc2626', fontSize: '1.5rem', marginLeft: '0.75rem' }}>
                                                                 {formatCurrency(
                                                                     isCosmeticSurgeon ?
                                                                         (projectedRevenue) :
-                                                                        (internalFacilityCost +
-                                                                            calculateLaborCost((formData.durationMinutes || 0) + (formData.turnoverTime || 0)) +
-                                                                            ((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) +
-                                                                            (formData.isSelfPayAnesthesia ? (formData.anesthesiaFee || 0) : 0))
+                                                                        (formMetrics.internalRoomCost +
+                                                                            formMetrics.laborCost +
+                                                                            formMetrics.supplyCosts +
+                                                                            (formMetrics.anesthesiaRevenue || 0))
                                                                 )}
                                                             </span>
                                                         </div>
@@ -1847,7 +1992,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                             {!isCosmeticSurgeon && (
                                                 <div style={{ textAlign: 'right' }}>
                                                     <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
-                                                        Projected Margin
+                                                        {formData.actualDurationMinutes > 0 ? 'Actual Margin' : 'Projected Margin'}
                                                     </div>
                                                     <div style={{
                                                         fontSize: '2rem',
@@ -1864,7 +2009,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         </div>
 
                                         {/* High Tier Cost Alert */}
-                                        {projectedMargin < 0 && formData.durationMinutes > 120 && (
+                                        {projectedMargin < 0 && effectiveDuration > 120 && (
                                             <div style={{
                                                 marginTop: '1rem',
                                                 padding: '1rem',
@@ -1882,7 +2027,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 </svg>
                                                 <div>
                                                     <div style={{ color: '#991b1b', fontSize: '1rem', fontWeight: '700', marginBottom: '0.25rem' }}>
-                                                        ⚠️ High Tier Cost Alert: Projected Margin is Negative
+                                                        ⚠️ High Tier Cost Alert: {formData.actualDurationMinutes > 0 ? 'Actual' : 'Projected'} Margin is Negative
                                                     </div>
                                                     <div style={{ color: '#7f1d1d', fontSize: '0.9rem' }}>
                                                         This case is in Tier 3 (${400}/30min surcharge) with a negative margin. Consider reducing duration or reviewing CPT codes.
@@ -1892,7 +2037,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                         )}
 
                                         {/* Tier Breach Warning */}
-                                        {formData.durationMinutes > 60 && projectedMargin >= 0 && (
+                                        {effectiveDuration > 60 && projectedMargin >= 0 && (
                                             <div style={{
                                                 marginTop: '1rem',
                                                 padding: '0.75rem 1rem',
@@ -1909,13 +2054,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                                                 </svg>
                                                 <span style={{ color: '#92400e', fontSize: '0.9rem' }}>
-                                                    Duration exceeds 60 minutes - Tier {formData.durationMinutes > 120 ? '3' : '2'} surcharge applies (${formData.durationMinutes > 120 ? '400' : '300'}/30min)
+                                                    Duration exceeds 60 minutes - Tier {effectiveDuration > 120 ? '3' : '2'} surcharge applies (${effectiveDuration > 120 ? '400' : '300'}/30min)
                                                 </span>
                                             </div>
                                         )}
 
                                         {/* Positive Margin Encouragement */}
-                                        {projectedMargin >= 0 && formData.durationMinutes <= 60 && (
+                                        {projectedMargin >= 0 && effectiveDuration <= 60 && (
                                             <div style={{
                                                 marginTop: '1rem',
                                                 padding: '0.75rem 1rem',

@@ -3,7 +3,7 @@ import Swal from 'sweetalert2';
 import { db } from '../lib/supabase';
 import './Management.css';
 
-const Settings = () => {
+const Settings = ({ onUpdate }) => {
     const [settings, setSettings] = useState({
         facility_name: '',
         facility_address: '',
@@ -57,6 +57,9 @@ const Settings = () => {
             const { id, ...settingsToUpdate } = settings;
 
             await db.updateSettings(settingsToUpdate);
+
+            // Refresh global state
+            if (onUpdate) await onUpdate();
 
             Swal.fire({
                 icon: 'success',

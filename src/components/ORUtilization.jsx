@@ -5,6 +5,7 @@ import './ORUtilization.css';
 const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedOR, setSelectedOR] = useState('all'); // 'all' or specific OR number
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
 
     // Constants
     const OR_COUNT = 4;
@@ -51,6 +52,16 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             // Use unified metrics calculation
             const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
 
+            // Adjust metrics based on whether we include Labor & Supplies
+            if (!includeLaborSupplies) {
+                // Remove supplies from the revenue side (user wants room + cpt only)
+                metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+                // Zero out the cost side for display
+                metrics.laborCost = 0;
+                metrics.supplyCosts = 0;
+                metrics.internalRoomCost = 0;
+            }
+
             const duration = parseInt(surgery.duration_minutes || surgery.durationMinutes || 0);
             const turnover = parseInt(surgery.turnover_time || surgery.turnoverTime || 0);
 
@@ -88,13 +99,15 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                     id: surgery.id,
                     patientName: patientName,
                     doctorName: doctorName,
-                    startTime: surgery.start_time,
+                    startTime: surgery.actual_start_time || surgery.start_time,
+                    endTime: surgery.actual_end_time,
                     duration: duration,
                     turnover: turnover,
                     revenue: metrics.totalRevenue,
                     cost: metrics.internalRoomCost,
                     laborCost: metrics.laborCost,
-                    suppliesCost: metrics.supplyCosts
+                    suppliesCost: metrics.supplyCosts,
+                    hasActualTimes: !!surgery.actual_duration_minutes
                 });
             }
         });
@@ -119,7 +132,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             totalLaborCost,
             totalSuppliesCost
         };
-    }, [surgeries, cptCodes, selectedDate]);
+    }, [surgeries, cptCodes, selectedDate, includeLaborSupplies]);
 
     // Calculate filtered metrics based on selected OR
     const filteredMetrics = useMemo(() => {
@@ -244,6 +257,18 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                             onChange={(e) => setSelectedDate(e.target.value)}
                             className="date-input"
                         />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <input
+                            type="checkbox"
+                            id="or-util-toggle-costs"
+                            checked={includeLaborSupplies}
+                            onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="or-util-toggle-costs" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                            Include Labor/Supplies
+                        </label>
                     </div>
                 </div>
             </div>
@@ -459,7 +484,12 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                                                 <div className="surgery-doctor">{surgery.doctorName}</div>
                                             </div>
                                             <div className="surgery-duration" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                                <span>{formatDuration(surgery.duration)}</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    {surgery.hasActualTimes && (
+                                                        <span title="Actual Logged Time" style={{ fontSize: '0.65rem', background: '#ecfdf5', color: '#059669', padding: '1px 5px', borderRadius: '4px', border: '1px solid #10b981', fontWeight: 'bold' }}>ACTUAL</span>
+                                                    )}
+                                                    <span>{formatDuration(surgery.duration)}</span>
+                                                </div>
                                                 {surgery.turnover > 0 && (
                                                     <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>
                                                         + {surgery.turnover}m turn
