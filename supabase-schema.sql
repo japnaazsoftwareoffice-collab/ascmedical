@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS surgeries (
   cpt_codes TEXT[] NOT NULL, -- Array of CPT code strings
   status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in-progress', 'completed', 'cancelled')),
   notes TEXT,
+  write_off DECIMAL(10, 2) DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

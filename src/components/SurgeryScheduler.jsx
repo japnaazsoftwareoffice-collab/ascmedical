@@ -39,7 +39,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         actualStartTime: '',
         actualEndTime: '',
         actualDurationMinutes: 0,
-        applyFixedCosmeticFee: false
+        applyFixedCosmeticFee: false,
+        writeOff: 0
     });
 
     // Rescheduling Modal State
@@ -196,8 +197,20 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         const selected = cptCodes.filter(c => formData.selectedCptCodes.includes(c.code));
 
         const cats = new Set([...codesToConsider, ...selected].map(c => c.category).filter(Boolean));
-        return [...cats].sort();
+        const sortedCats = [...cats].sort();
+
+        // If we have selected codes, prepend a virtual category for visibility
+        if (formData.selectedCptCodes.length > 0) {
+            return ['Current Selections', ...sortedCats];
+        }
+
+        return sortedCats;
     }, [cptCodes, selectedSurgeon, cptSearchQuery, formData.selectedCptCodes]);
+
+    const uniqueSelectedCodes = useMemo(() => {
+        const unique = [...new Set(formData.selectedCptCodes)];
+        return unique.map(code => cptCodes.find(c => String(c.code) === String(code))).filter(Boolean);
+    }, [formData.selectedCptCodes, cptCodes]);
 
     // Extract unique body parts from the CPT codes matching the surgeon's specialty
     const availableBodyParts = useMemo(() => {
@@ -356,14 +369,51 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         }
 
         setFormData(prev => {
-            const exists = prev.selectedCptCodes.includes(code);
-            let newSelectedCodes;
+            // Always add the code to allow duplicates
+            const newSelectedCodes = [...prev.selectedCptCodes, code];
 
-            if (exists) {
-                newSelectedCodes = prev.selectedCptCodes.filter(c => c !== code);
-            } else {
-                newSelectedCodes = [...prev.selectedCptCodes, code];
-            }
+            // Calculate auto-duration and turnover
+            let totalDuration = 0;
+            let totalTurnover = 0;
+
+            newSelectedCodes.forEach(selectedCode => {
+                const cpt = cptCodes.find(c => String(c.code) === String(selectedCode));
+                if (cpt) {
+                    totalDuration += parseInt(cpt.average_duration || 0);
+                    totalTurnover += parseInt(cpt.turnover_time || 0);
+                }
+            });
+
+            // Default behavior: if codes selected but 0 duration, default to 60.
+            let suggestedDuration = totalDuration > 0 ? totalDuration : 60;
+            if (newSelectedCodes.length > 0 && totalDuration === 0) suggestedDuration = 60;
+
+            const fees = calculateCosmeticFees(suggestedDuration);
+
+            return {
+                ...prev,
+                selectedCptCodes: newSelectedCodes,
+                durationMinutes: suggestedDuration,
+                turnoverTime: totalTurnover,
+                cosmeticFacilityFee: fees.facilityFee,
+                cosmeticAnesthesiaFee: fees.anesthesiaFee
+            };
+        });
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `Added Code: ${code}`,
+            showConfirmButton: false,
+            timer: 1000
+        });
+    };
+
+    const handleRemoveCptInstance = (index) => {
+        setFormData(prev => {
+            const newSelectedCodes = [...prev.selectedCptCodes];
+            newSelectedCodes.splice(index, 1);
 
             // Calculate auto-duration and turnover
             let totalDuration = 0;
@@ -420,6 +470,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         };
 
         // Note generation logic for fixed fee vs CPT
+        let notes = '';
         if (formData.applyFixedCosmeticFee) {
             notes = `Fixed Facility Fee Case - Facility: $${formData.cosmeticFacilityFee.toLocaleString()}, Anesthesia: $${formData.cosmeticAnesthesiaFee.toLocaleString()}`;
         }
@@ -432,6 +483,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         if (notes) {
             surgeryData.notes = notes;
         }
+
+        surgeryData.write_off = formData.writeOff || 0;
 
         try {
             if (editingSurgery) {
@@ -572,7 +625,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             actualStartTime: surgery.actual_start_time || '',
             actualEndTime: surgery.actual_end_time || '',
             actualDurationMinutes: surgery.actual_duration_minutes || 0,
-            applyFixedCosmeticFee: surgery.notes ? surgery.notes.includes('Fixed Facility Fee Case') : false
+            applyFixedCosmeticFee: surgery.notes ? surgery.notes.includes('Fixed Facility Fee Case') : false,
+            writeOff: surgery.write_off || 0
         });
 
         setIsFormOpen(true);
@@ -600,7 +654,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             isSelfPayAnesthesia: false,
             selfPayRateName: '',
             turnoverTime: 60,
-            applyFixedCosmeticFee: false
+            applyFixedCosmeticFee: false,
+            writeOff: 0
         });
     };
 
@@ -759,7 +814,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             implants_cost: formData.implantsCost,
             medications_cost: formData.medicationsCost,
             actual_duration_minutes: formData.actualDurationMinutes,
-            notes: dummyNotes
+            notes: dummyNotes,
+            write_off: formData.writeOff
         };
 
         const metrics = getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
@@ -1626,35 +1682,78 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                         </div>
                                                     ) : (
                                                         categories.map(category => {
-                                                            const categoryCodes = filteredCptCodes.filter(c => c.category === category);
+                                                             let categoryCodes;
+                                                             let categoryLabel = category;
+                                                             let isPriority = false;
+
+                                                             if (category === 'Current Selections') {
+                                                                 categoryCodes = uniqueSelectedCodes;
+                                                                 categoryLabel = 'Active Procedures';
+                                                                 isPriority = true;
+                                                             } else {
+                                                                 // Filter out already shown procedures from their base categories to prioritize top-view
+                                                                 categoryCodes = filteredCptCodes.filter(c => 
+                                                                     c.category === category && 
+                                                                     !formData.selectedCptCodes.includes(c.code)
+                                                                 );
+                                                             }
+
+                                                             // Hide regular category if all its codes are selected (moved to top)
+                                                             if (!isPriority && categoryCodes.length === 0) return null;
                                                             return (
-                                                                <div key={category} style={{ marginBottom: '1.5rem' }}>
+                                                                <div key={categoryLabel} style={{ marginBottom: '1.5rem' }}>
                                                                     <h4 style={{
-                                                                        fontSize: '0.95rem',
-                                                                        fontWeight: '600',
-                                                                        color: '#1e293b',
-                                                                        marginBottom: '0.75rem',
-                                                                        padding: '0.5rem',
-                                                                        background: '#f1f5f9',
-                                                                        borderRadius: '6px',
-                                                                        borderLeft: '4px solid #3b82f6'
-                                                                    }}>
-                                                                        {category}
+                                                                         fontSize: '0.95rem',
+                                                                         fontWeight: '600',
+                                                                         color: isPriority ? '#0ea5e9' : '#1e293b',
+                                                                         marginBottom: '0.75rem',
+                                                                         padding: '0.5rem',
+                                                                         background: isPriority ? '#f0f9ff' : '#f1f5f9',
+                                                                         borderRadius: '6px',
+                                                                         borderLeft: `4px solid ${isPriority ? '#0ea5e9' : '#3b82f6'}`
+                                                                     }}>
+                                                                         {categoryLabel}
                                                                     </h4>
                                                                     <div className="cpt-grid">
-                                                                        {categoryCodes.map(cpt => (
-                                                                            <div
-                                                                                key={cpt.code}
-                                                                                className={`cpt-card ${formData.selectedCptCodes.includes(cpt.code) ? 'selected' : ''}`}
-                                                                                onClick={() => handleCptToggle(cpt.code)}
-                                                                            >
-                                                                                <div className="cpt-card-header">
-                                                                                    <span className="cpt-code-badge">{cpt.code}</span>
-                                                                                    <span className="cpt-price">{formatCurrency(cpt.gross_charge || cpt.reimbursement)}</span>
-                                                                                </div>
-                                                                                <div className="cpt-description">{cpt.description}</div>
-                                                                            </div>
-                                                                        ))}
+                                                                        {categoryCodes.map(cpt => {
+                                                                             const selectionCount = formData.selectedCptCodes.filter(c => String(c) === String(cpt.code)).length;
+                                                                             return (
+                                                                                 <div
+                                                                                     key={cpt.code}
+                                                                                     className={'cpt-card ' + (selectionCount > 0 ? 'selected' : '')}
+                                                                                     onClick={() => handleCptToggle(cpt.code)}
+                                                                                     style={{ position: 'relative' }}
+                                                                                 >
+                                                                                     {selectionCount > 0 && (
+                                                                                         <div className="cpt-badge-count" style={{
+                                                                                             position: 'absolute',
+                                                                                             top: '-8px',
+                                                                                             right: '-8px',
+                                                                                             background: '#3b82f6',
+                                                                                             color: 'white',
+                                                                                             borderRadius: '50%',
+                                                                                             width: '24px',
+                                                                                             height: '24px',
+                                                                                             display: 'flex',
+                                                                                             alignItems: 'center',
+                                                                                             justifyContent: 'center',
+                                                                                             fontSize: '0.8rem',
+                                                                                             fontWeight: 'bold',
+                                                                                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                                                                             zIndex: 2,
+                                                                                             border: '2px solid white'
+                                                                                         }}>
+                                                                                             {selectionCount}
+                                                                                         </div>
+                                                                                     )}
+                                                                                     <div className="cpt-card-header">
+                                                                                         <span className="cpt-code-badge">{cpt.code}</span>
+                                                                                         <span className="cpt-price">{formatCurrency(cpt.gross_charge || cpt.reimbursement)}</span>
+                                                                                     </div>
+                                                                                     <div className="cpt-description">{cpt.description}</div>
+                                                                                 </div>
+                                                                             );
+                                                                         })}
                                                                     </div>
                                                                 </div>
                                                             );
@@ -1663,10 +1762,64 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 </div>
 
                                                 {formData.selectedCptCodes.length > 0 && (
-                                                    <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                                                        <strong>Selected Codes:</strong> {formData.selectedCptCodes.join(', ')}
-                                                    </div>
-                                                )}
+                                                     <div style={{ marginTop: '1.5rem', padding: '1.25rem', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                                                         <div style={{ fontWeight: '600', marginBottom: '1rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                 <path d="M9 11l3 3L22 4"></path>
+                                                                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                                                             </svg>
+                                                             Selected Procedures ({formData.selectedCptCodes.length}):
+                                                         </div>
+                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                                             {formData.selectedCptCodes.map((code, index) => {
+                                                                 const cpt = cptCodes.find(c => String(c.code) === String(code));
+                                                                 return (
+                                                                     <div key={code + '-' + index} style={{
+                                                                         background: 'white',
+                                                                         border: '1px solid #bbf7d0',
+                                                                         padding: '6px 10px',
+                                                                         borderRadius: '8px',
+                                                                         fontSize: '0.85rem',
+                                                                         display: 'flex',
+                                                                         alignItems: 'center',
+                                                                         gap: '8px',
+                                                                         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                                         transition: 'all 0.2s ease'
+                                                                     }}>
+                                                                         <span style={{ fontWeight: '700', color: '#3b82f6', background: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{code}</span>
+                                                                         <span style={{ color: '#475569', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={cpt ? cpt.description : ''}>
+                                                                             {cpt ? cpt.description : 'Procedure'}
+                                                                         </span>
+                                                                         <button
+                                                                             type="button"
+                                                                             onClick={(e) => {
+                                                                                 e.stopPropagation();
+                                                                                 handleRemoveCptInstance(index);
+                                                                             }}
+                                                                             style={{
+                                                                                 border: 'none',
+                                                                                 background: '#fee2e2',
+                                                                                 color: '#ef4444',
+                                                                                 cursor: 'pointer',
+                                                                                 padding: '4px',
+                                                                                 display: 'flex',
+                                                                                 alignItems: 'center',
+                                                                                 borderRadius: '4px',
+                                                                                 marginLeft: '4px'
+                                                                             }}
+                                                                             title="Remove"
+                                                                         >
+                                                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                                                 <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                                                 <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                                             </svg>
+                                                                         </button>
+                                                                     </div>
+                                                                 );
+                                                             })}
+                                                         </div>
+                                                     </div>
+                                                 )}
                                             </>
                                         ) : (
                                             <div style={{
@@ -1897,6 +2050,39 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                     </div>
                                 )}
 
+                                {/* Universal Financial Adjustments */}
+                                <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '2px dashed #cbd5e1' }}>
+                                    <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        📉 Financial Adjustments
+                                    </h4>
+                                    <div className="form-row">
+                                        <div className="form-group" style={{ maxWidth: '300px' }}>
+                                            <label style={{ fontWeight: '700', color: '#64748b' }}>Write-Off / Discount</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>$</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    className="form-input"
+                                                    style={{
+                                                        paddingLeft: '24px',
+                                                        background: formData.writeOff > 0 ? '#fff1f2' : 'white',
+                                                        borderColor: formData.writeOff > 0 ? '#f43f5e' : '#e2e8f0',
+                                                        fontWeight: formData.writeOff > 0 ? '700' : '400'
+                                                    }}
+                                                    value={formData.writeOff || ''}
+                                                    onChange={(e) => setFormData({ ...formData, writeOff: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                                                    placeholder="Charity, adjustments, etc."
+                                                />
+                                            </div>
+                                            <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>
+                                                Amount will be subtracted from total revenue.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Profitability Guardrails */}
                                 {(formData.selectedCptCodes.length > 0 || formData.applyFixedCosmeticFee) && (
                                     <div style={{
@@ -1950,6 +2136,14 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                     </span>
                                                                 </div>
                                                             )}
+                                                            {formData.writeOff > 0 && (
+                                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                    <span style={{ fontSize: '0.85rem', color: '#f43f5e', marginBottom: '2px' }}>Write-Off / Disc:</span>
+                                                                    <span style={{ fontWeight: '700', color: '#e11d48', fontSize: '1.2rem' }}>
+                                                                        - {formatCurrency(formData.writeOff)}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         </>
                                                     ) : (
                                                         <>
@@ -1971,6 +2165,14 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                     {formatCurrency(formMetrics.laborCost)}
                                                                 </span>
                                                             </div>
+                                                            {formData.writeOff > 0 && (
+                                                                <div>
+                                                                    <span style={{ fontSize: '0.85rem', color: '#f43f5e' }}>Write-Off / Disc: </span>
+                                                                    <span style={{ fontWeight: '600', color: '#e11d48', fontSize: '1.05rem' }}>
+                                                                        - {formatCurrency(formData.writeOff)}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                             {((formData.suppliesCost || 0) + (formData.implantsCost || 0) + (formData.medicationsCost || 0)) > 0 && (
                                                                 <div>
                                                                     <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Supplies: </span>
@@ -1983,7 +2185,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     )}
                                                     <div style={{
                                                         gridColumn: '1 / -1',
-                                                        borderTop: `2px solid ${isCosmeticSurgeon ? '#bfdbfe' : '#e2e8f0'}`,
+                                                        borderTop: `2px solid ${formData.applyFixedCosmeticFee ? '#bfdbfe' : '#e2e8f0'}`,
                                                         paddingTop: '1rem',
                                                         marginTop: '0.5rem',
                                                         display: 'flex',
@@ -1991,12 +2193,12 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                         alignItems: 'center'
                                                     }}>
                                                         <div>
-                                                            <span style={{ fontSize: '1rem', color: isCosmeticSurgeon ? '#1e40af' : '#1e293b', fontWeight: '700' }}>
-                                                                {isCosmeticSurgeon ? 'Total Fees Paid by User:' : `${formData.actualDurationMinutes > 0 ? 'Actual' : 'Total'} Internal Cost: `}
+                                                            <span style={{ fontSize: '1rem', color: formData.applyFixedCosmeticFee ? '#1e40af' : '#1e293b', fontWeight: '700' }}>
+                                                                {formData.applyFixedCosmeticFee ? 'Total Fees Paid by User:' : `${formData.actualDurationMinutes > 0 ? 'Actual' : 'Total'} Internal Cost: `}
                                                             </span>
-                                                            <span style={{ fontWeight: '800', color: isCosmeticSurgeon ? '#1d4ed8' : '#dc2626', fontSize: '1.5rem', marginLeft: '0.75rem' }}>
+                                                            <span style={{ fontWeight: '800', color: formData.applyFixedCosmeticFee ? '#1d4ed8' : '#dc2626', fontSize: '1.5rem', marginLeft: '0.75rem' }}>
                                                                 {formatCurrency(
-                                                                    isCosmeticSurgeon ?
+                                                                    formData.applyFixedCosmeticFee ?
                                                                         (projectedRevenue) :
                                                                         (formMetrics.internalRoomCost +
                                                                             formMetrics.laborCost +
@@ -2005,7 +2207,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                 )}
                                                             </span>
                                                         </div>
-                                                        {!isCosmeticSurgeon && (
+                                                        {!formData.applyFixedCosmeticFee && (
                                                             <div>
                                                                 <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Cost Tier: </span>
                                                                 <span style={{ fontWeight: '600', color: costTier.color, fontSize: '0.9rem' }}>
@@ -2017,7 +2219,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 </div>
                                             </div>
 
-                                            {!isCosmeticSurgeon && (
+                                            {!formData.applyFixedCosmeticFee && (
                                                 <div style={{ textAlign: 'right' }}>
                                                     <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.25rem' }}>
                                                         {formData.actualDurationMinutes > 0 ? 'Actual Margin' : 'Projected Margin'}

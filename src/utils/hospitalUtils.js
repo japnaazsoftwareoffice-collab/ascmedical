@@ -179,6 +179,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
     let totalValue = 0;
     let netProfit = 0;
     let anesthesiaRevenue = 0;
+    const writeOff = parseFloat(surgery.write_off || surgery.writeOff || 0);
 
     // 1. Calculate Supply Costs with fallback for old records
     let supplyCosts = (parseFloat(surgery.supplies_cost) || 0) +
@@ -227,7 +228,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         anesthesiaRevenue = anesthesiaFee;
         internalRoomCost = 0; // Benchmarked cost is ignored for cosmetic as fee is the margin
         laborCost = 0; // Labor cost is inclusive in cosmetic facility fees
-        totalValue = facilityFee + anesthesiaRevenue + supplyCosts;
+        totalValue = (facilityFee + anesthesiaRevenue + supplyCosts) - writeOff;
         // Anesthesia and Supplies are pass-through
         netProfit = totalValue - (laborCost + supplyCosts + anesthesiaRevenue);
     } else {
@@ -244,10 +245,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
 
         // For non-cosmetic (Insurance), revenue is the CPT reimbursement + pass-throughs
         // We DO NOT add a theoretical 'orCost' facility fee on top of CPTs
-        totalValue = cptTotal + anesthesiaRevenue + supplyCosts;
-
-        // orCost is unused for revenue in insurance cases, so set to 0 to avoid confusion
-        orCost = 0;
+        totalValue = (cptTotal + anesthesiaRevenue + supplyCosts) - writeOff;
 
         // Anesthesia and supplies are pass-through costs
         netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
@@ -262,6 +260,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         supplyCosts,
         internalRoomCost,
         laborCost,
+        writeOff,
         isCosmetic
     };
 };

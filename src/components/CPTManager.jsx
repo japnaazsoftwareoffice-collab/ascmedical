@@ -209,7 +209,7 @@ const CPTManager = ({ cptCodes, onAddCPT, onUpdateCPT, onDeleteCPT, onRefreshCPT
     const filteredCPTList = cptCodes.filter(cpt => {
         const matchesCategory = filterCategory === 'All Categories' || cpt.category === filterCategory;
         const matchesSearch = searchQuery === '' ||
-            (cpt.code && cpt.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (cpt.code && String(cpt.code).toLowerCase().includes(searchQuery.toLowerCase())) ||
             (cpt.description && cpt.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
         // Show only active codes unless "Show All" is enabled

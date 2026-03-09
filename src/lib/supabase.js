@@ -192,6 +192,7 @@ export const db = {
                 .from('cpt_codes')
                 .select('*')
                 .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
                 .range(page * pageSize, (page + 1) * pageSize - 1);
 
             if (error) {
