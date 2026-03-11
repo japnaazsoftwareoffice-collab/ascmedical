@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { db } from '../lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost, getSurgeryMetrics, calculateCosmeticFees } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, calculateLaborCost, getSurgeryMetrics, calculateCosmeticFees, normalizeDate, formatDateLocal } from '../utils/hospitalUtils';
 import ORBlockSchedule from './ORBlockSchedule';
 import './Management.css';
 
@@ -59,8 +59,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [showSchedule, setShowSchedule] = useState(false);
     const [orSchedule, setOrSchedule] = useState([]);
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
-    const [expandedMonths, setExpandedMonths] = useState(new Set([new Date().toISOString().slice(0, 7)]));
+    const [selectedMonth, setSelectedMonth] = useState(formatDateLocal(new Date()).slice(0, 7)); // YYYY-MM format
+    const [expandedMonths, setExpandedMonths] = useState(new Set([formatDateLocal(new Date()).slice(0, 7)]));
     const [selectedProcedureGroup, setSelectedProcedureGroup] = useState('');
     const [cptSearchQuery, setCptSearchQuery] = useState('');
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
@@ -143,12 +143,6 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         selectedSurgeon?.specialty?.toLowerCase().includes('plastic') ||
         selectedSurgeon?.specialty?.toLowerCase().includes('cosmetic');
 
-    // Effect to auto-toggle fixed fee when surgeon defaults to cosmetic
-    useEffect(() => {
-        if (isCosmeticSurgeon && !editingSurgery) {
-            setFormData(prev => ({ ...prev, applyFixedCosmeticFee: true }));
-        }
-    }, [isCosmeticSurgeon, editingSurgery]);
 
     // Group surgeons by availability on selected date
     const { availableSurgeons, otherSurgeons } = useMemo(() => {
@@ -258,7 +252,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const surgeriesByMonth = useMemo(() => {
         const grouped = {};
         surgeries.forEach(surgery => {
-            const monthKey = surgery.date.slice(0, 7); // YYYY-MM
+            const monthKey = normalizeDate(surgery.date).slice(0, 7); // YYYY-MM
             if (!grouped[monthKey]) {
                 grouped[monthKey] = [];
             }
@@ -464,7 +458,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             supplies_cost: formData.suppliesCost || 0,
             implants_cost: formData.implantsCost || 0,
             medications_cost: formData.medicationsCost || 0,
-            actual_start_time: formData.actualStartTime || null,
+            actual_start_time: formData.startTime || null,
             actual_end_time: formData.actualEndTime || null,
             actual_duration_minutes: formData.actualDurationMinutes || null
         };
@@ -547,6 +541,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     };
 
     const handleEdit = (surgery) => {
+        const formatTimeForInput = (time) => { if (!time) return ''; const t = String(time); if (t.includes(':')) { const parts = t.split(':'); return parts[0].padStart(2, '0') + ':' + parts[1].padStart(2, '0'); } if (t.length === 4 && !isNaN(t)) { return t.slice(0, 2) + ':' + t.slice(2); } return t; };
         setEditingSurgery(surgery);
 
         // Determine procedure group from CPT codes
@@ -601,7 +596,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             patientId: surgery.patient_id || '',
             doctorName: surgery.doctor_name || '',
             date: surgery.date || '',
-            startTime: surgery.start_time || '',
+            startTime: formatTimeForInput(surgery.start_time),
             durationMinutes: duration,
             selectedCptCodes: surgery.cpt_codes || [],
             cosmeticFacilityFee: fees.facilityFee,
@@ -622,8 +617,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                 }
                 return t;
             })(),
-            actualStartTime: surgery.actual_start_time || '',
-            actualEndTime: surgery.actual_end_time || '',
+            actualStartTime: formatTimeForInput(surgery.actual_start_time),
+            actualEndTime: formatTimeForInput(surgery.actual_end_time),
             actualDurationMinutes: surgery.actual_duration_minutes || 0,
             applyFixedCosmeticFee: surgery.notes ? surgery.notes.includes('Fixed Facility Fee Case') : false,
             writeOff: surgery.write_off || 0
@@ -1161,8 +1156,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                             );
                                                                         })()}
                                                                     </td>
-                                                                    <td style={{ fontWeight: '600', color: '#059669' }}>{formatCurrency(cptTotal)}</td>
-                                                                    <td style={{ fontWeight: '600', color: '#dc2626' }}>{formatCurrency(orCost)}</td>
+                                                                    <td style={{ fontWeight: '600', color: isCosmeticSurgery ? '#cbd5e1' : '#059669' }}>{isCosmeticSurgery ? '---' : formatCurrency(cptTotal)}</td>
+                                                                    <td style={{ fontWeight: '600', color: !isCosmeticSurgery ? '#cbd5e1' : '#059669' }}>{!isCosmeticSurgery ? '---' : formatCurrency(orCost)}</td>
                                                                     <td style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.05rem' }}>{formatCurrency(totalValue)}</td>
                                                                     <td style={{
                                                                         fontWeight: '700',
@@ -1486,34 +1481,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
                                         <div className="form-row" style={{ marginBottom: 0 }}>
                                             <div className="form-group">
-                                                <label style={{ color: '#92400e' }}>Actual Start</label>
-                                                <input
-                                                    type="time"
-                                                    className="form-input"
-                                                    value={formData.actualStartTime}
-                                                    onChange={(e) => {
-                                                        const start = e.target.value;
-                                                        const end = formData.actualEndTime;
-                                                        let duration = formData.actualDurationMinutes;
-                                                        if (start && end) {
-                                                            const [sH, sM] = start.split(':').map(Number);
-                                                            const [eH, eM] = end.split(':').map(Number);
-                                                            duration = (eH * 60 + eM) - (sH * 60 + sM);
-                                                            if (duration < 0) duration += 1440;
-                                                        }
-                                                        setFormData({ ...formData, actualStartTime: start, actualDurationMinutes: duration });
-                                                    }}
-                                                    style={{ borderColor: '#fcd34d' }}
-                                                />
-                                            </div>
-                                            <div className="form-group">
                                                 <label style={{ color: '#92400e' }}>Actual End</label>
                                                 <input
                                                     type="time"
                                                     className="form-input"
                                                     value={formData.actualEndTime}
                                                     onChange={(e) => {
-                                                        const start = formData.actualStartTime;
+                                                        const start = formData.startTime;
                                                         const end = e.target.value;
                                                         let duration = formData.actualDurationMinutes;
                                                         if (start && end) {
@@ -1895,6 +1869,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                 )}
 
                                 {/* Explicit Fixed Fee Toggle */}
+                                 {isCosmeticSurgeon && (
                                 <div style={{
                                     marginTop: '1.5rem',
                                     padding: '1.25rem',
@@ -1937,7 +1912,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                             </div>
                                         </div>
                                     )}
-                                </div>
+                                 </div>
+                                 )}
 
                                 {/* Supplies Cost Tracking */}
                                 {!isCosmeticSurgeon && (

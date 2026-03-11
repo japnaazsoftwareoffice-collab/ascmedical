@@ -2,10 +2,18 @@
 export const isDateInRange = (dateStr, startStr, endStr) => {
     if (!dateStr) return false;
 
-    // Normalize to YYYY-MM-DD
     const normalize = (d) => {
         if (!d) return '';
+        if (d instanceof Date) return formatDateLocal(d);
         if (d.includes('T')) return d.split('T')[0];
+        // Handle MM/DD/YYYY
+        if (d.includes('/')) {
+            const parts = d.split('/');
+            if (parts.length === 3) {
+                const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+                return `${year}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+            }
+        }
         return d;
     };
 
@@ -14,6 +22,30 @@ export const isDateInRange = (dateStr, startStr, endStr) => {
     const e = normalize(endStr);
 
     return d >= s && d <= e;
+};
+
+// Format Date object to YYYY-MM-DD in local time
+export const formatDateLocal = (date) => {
+    if (!date || isNaN(date.getTime())) return '';
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+// Normalize any date string to YYYY-MM-DD
+export const normalizeDate = (dateStr) => {
+    if (!dateStr) return '';
+    if (dateStr instanceof Date) return formatDateLocal(dateStr);
+    if (dateStr.includes('T')) return dateStr.split('T')[0];
+    if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+            return `${year}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+        }
+    }
+    return dateStr;
 };
 
 // Utility function to format surgeon name as "Dr. LastName FirstName"
@@ -170,8 +202,7 @@ export const formatCurrency = (amount) => {
 
 // Calculate all metrics for a surgery consistently across the app
 export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGroupItems = []) => {
-    const isCosmetic = (!surgery.cpt_codes || surgery.cpt_codes.length === 0) ||
-        (surgery.notes && surgery.notes.includes('Fixed Facility Fee Case'));
+    const isCosmetic = surgery.notes && surgery.notes.includes('Fixed Facility Fee Case');
     let cptTotal = 0;
     let orCost = 0; // Billable Facility Fee
     let internalRoomCost = 0;
@@ -226,11 +257,15 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
 
         orCost = facilityFee;
         anesthesiaRevenue = anesthesiaFee;
-        internalRoomCost = 0; // Benchmarked cost is ignored for cosmetic as fee is the margin
-        laborCost = 0; // Labor cost is inclusive in cosmetic facility fees
+        
+        // Even for cosmetic, calculate internal costs to track true efficiency
+        internalRoomCost = calculateORCost(duration + turnover);
+        laborCost = calculateLaborCost(duration + turnover);
+        
         totalValue = (facilityFee + anesthesiaRevenue + supplyCosts) - writeOff;
-        // Anesthesia and Supplies are pass-through
-        netProfit = totalValue - (laborCost + supplyCosts + anesthesiaRevenue);
+        
+        // Actual margin is Revenue minus all costs (including internal room/labor)
+        netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
     } else {
         cptTotal = calculateMedicareRevenue(surgery.cpt_codes || surgery.cptCodes || [], cptCodes, settings?.apply_medicare_mppr || false);
         internalRoomCost = calculateORCost(duration + turnover); // Full room usage cost
