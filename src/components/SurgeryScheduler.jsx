@@ -474,9 +474,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             const anesthesiaNote = `Self-Pay Anesthesia${rateName}: $${formData.anesthesiaFee.toLocaleString()}`;
             notes = notes ? `${notes}; ${anesthesiaNote}` : anesthesiaNote;
         }
-        if (notes) {
-            surgeryData.notes = notes;
-        }
+        surgeryData.notes = notes || null; // Force null if empty to clear DB field
 
         surgeryData.write_off = formData.writeOff || 0;
 
@@ -620,7 +618,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             actualStartTime: formatTimeForInput(surgery.actual_start_time),
             actualEndTime: formatTimeForInput(surgery.actual_end_time),
             actualDurationMinutes: surgery.actual_duration_minutes || 0,
-            applyFixedCosmeticFee: surgery.notes ? surgery.notes.includes('Fixed Facility Fee Case') : false,
+            applyFixedCosmeticFee: false, // Per request: always off by default when starting edit
             writeOff: surgery.write_off || 0
         });
 

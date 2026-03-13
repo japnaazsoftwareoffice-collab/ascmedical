@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue, getSurgeryMetrics } from '../utils/hospitalUtils';
+import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue, getSurgeryMetrics, formatDateLocal } from '../utils/hospitalUtils';
 import './ORUtilization.css';
 
 const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
     const [selectedOR, setSelectedOR] = useState('all'); // 'all' or specific OR number
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
 
@@ -62,7 +62,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 metrics.internalRoomCost = 0;
             }
 
-            const duration = parseInt(surgery.duration_minutes || surgery.durationMinutes || 0);
+            const duration = parseInt(surgery.actual_duration_minutes || surgery.duration_minutes || surgery.durationMinutes || 0);
             const turnover = parseInt(surgery.turnover_time || surgery.turnoverTime || 0);
 
             totalOperationCost += metrics.totalRevenue;

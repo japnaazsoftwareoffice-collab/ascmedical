@@ -370,7 +370,11 @@ function App() {
         supplies_cost: parseFloat(newSurgery.supplies_cost || newSurgery.suppliesCost || 0),
         implants_cost: parseFloat(newSurgery.implants_cost || newSurgery.implantsCost || 0),
         medications_cost: parseFloat(newSurgery.medications_cost || newSurgery.medicationsCost || 0),
-        status: 'scheduled'
+        actual_start_time: newSurgery.actual_start_time || newSurgery.actualStartTime || null,
+        actual_end_time: newSurgery.actual_end_time || newSurgery.actualEndTime || null,
+        actual_duration_minutes: parseInt(newSurgery.actual_duration_minutes || newSurgery.actualDurationMinutes || 0) || null,
+        write_off: parseFloat(newSurgery.write_off || newSurgery.writeOff || 0),
+        status: newSurgery.status || 'scheduled'
       };
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
@@ -527,8 +531,26 @@ function App() {
         }
       }
 
-      await db.updateSurgery(id, updates);
-      await loadAllData(); // Reload surgeries from database
+        // Merge updates with current surgery to ensure consistency
+        const mergedSurgery = {
+          ...currentSurgery,
+          ...updates
+        };
+
+        // Filter out joined objects and non-column fields that would cause database errors
+        const { patients, surgeons, claims, ...validFields } = mergedSurgery;
+        
+        // Remove anything else that might be an object/array unless it's cpt_codes or similar known JSON fields
+        const cleanedData = Object.keys(validFields).reduce((acc, key) => {
+            const val = validFields[key];
+            if (key === 'cpt_codes' || (typeof val !== 'object' && !Array.isArray(val)) || val === null) {
+                acc[key] = val;
+            }
+            return acc;
+        }, {});
+
+        await db.updateSurgery(id, cleanedData);
+        await loadAllData(); // Reload surgeries from database
     } catch (error) {
       console.error('Error updating surgery:', error);
       await Swal.fire({
@@ -936,11 +958,7 @@ function App() {
           <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 1.5rem;">
             Please enter actual times and costs for final reporting.
           </p>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-            <div>
-              <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual Start</label>
-              <input id="swal-start" type="time" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.start_time || '07:30'}">
-            </div>
+          <div style="display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem;">
             <div>
               <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual End</label>
               <input id="swal-end" type="time" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}">
@@ -957,12 +975,12 @@ function App() {
         </div>
       `,
       didOpen: () => {
-        const startInput = document.getElementById('swal-start');
+
         const endInput = document.getElementById('swal-end');
         const durInput = document.getElementById('swal-duration');
 
         const updateDuration = () => {
-          const start = startInput.value;
+          const start = "${surgery.start_time ? (String(surgery.start_time).includes(':') ? String(surgery.start_time).slice(0, 5) : `${String(surgery.start_time).slice(0, 2)}:${String(surgery.start_time).slice(2)}`) : '07:30'}";
           const end = endInput.value;
           if (start && end) {
             const [sH, sM] = start.split(':').map(Number);
@@ -973,7 +991,6 @@ function App() {
           }
         };
 
-        startInput.addEventListener('change', updateDuration);
         endInput.addEventListener('change', updateDuration);
         updateDuration();
       },
@@ -982,7 +999,6 @@ function App() {
       confirmButtonColor: '#3b82f6',
       preConfirm: () => {
         return {
-          start: document.getElementById('swal-start').value,
           end: document.getElementById('swal-end').value,
           duration: document.getElementById('swal-duration').value,
           supplies: document.getElementById('swal-supplies').value
@@ -1013,7 +1029,7 @@ function App() {
       // Update surgery with actual times and financial snapshot
       const updates = {
         status: 'completed',
-        actual_start_time: formValues.start,
+        actual_start_time: surgery.start_time,
         actual_end_time: formValues.end,
         actual_duration_minutes: actualDuration,
         supplies_cost: parseFloat(formValues.supplies) || 0,

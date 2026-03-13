@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatDateLocal } from '../utils/hospitalUtils';
 import './SurgerySchedule.css';
 
 const SurgerySchedule = ({ surgeries = [], cptCodes = [] }) => {
@@ -46,7 +47,7 @@ const SurgerySchedule = ({ surgeries = [], cptCodes = [] }) => {
 
     // Filter surgeries for a specific date
     const getSurgeriesForDate = (date) => {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatDateLocal(date);
         return surgeries.filter(s => s.date === dateStr).sort((a, b) => {
             const timeA = a.start_time || '00:00';
             const timeB = b.start_time || '00:00';

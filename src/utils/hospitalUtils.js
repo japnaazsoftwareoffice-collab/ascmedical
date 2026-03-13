@@ -242,8 +242,8 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         let anesthesiaFee = 0;
 
         if (surgery.notes) {
-            const facilityMatch = surgery.notes.match(/(?:Facility|Cosmetic|CSC|Faculty)\s+Fee:?\s*\$?\s*([\d,.]+)/i);
-            const anesthesiaMatch = surgery.notes.match(/(?:Anesthesia|Quantum)\s*(?:Fee)?:\s*\$?\s*([\d,.]+)/i);
+            const facilityMatch = surgery.notes.match(/(?:Facility|Cosmetic|CSC|Faculty)(?:\s+Fee)?:\s*\$?\s*([\d,.]+)/i);
+            const anesthesiaMatch = surgery.notes.match(/(?:Anesthesia|Quantum)(?:\s+Fee)?:\s*\$?\s*([\d,.]+)/i);
             facilityFee = facilityMatch ? parseFloat(facilityMatch[1].replace(/,/g, '')) : 0;
             anesthesiaFee = anesthesiaMatch ? parseFloat(anesthesiaMatch[1].replace(/,/g, '')) : 0;
         }

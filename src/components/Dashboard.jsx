@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/supabase';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency, getSurgeryMetrics, isDateInRange } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, getSurgeryMetrics, isDateInRange, formatDateLocal } from '../utils/hospitalUtils';
 import AIAnalystModal from './AIAnalystModal';
 import './Dashboard.css';
 import { jsPDF } from 'jspdf';
@@ -139,15 +139,15 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         // Filter Surgeries using string-based comparison to avoid timezone issues
         const currentSurgeries = surgeries.filter(s => {
             return isDateInRange(s.date,
-                currentStart.toISOString().split('T')[0],
-                currentEnd.toISOString().split('T')[0]
+                formatDateLocal(currentStart),
+                formatDateLocal(currentEnd)
             );
         });
 
         const prevSurgeries = surgeries.filter(s => {
             return isDateInRange(s.date,
-                prevStart.toISOString().split('T')[0],
-                prevEnd.toISOString().split('T')[0]
+                formatDateLocal(prevStart),
+                formatDateLocal(prevEnd)
             );
         });
 
@@ -175,7 +175,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         const getRelevantSurgeries = () => {
             if (outcomeView === 'daily') {
                 return surgeries.filter(s => {
-                    const sDate = new Date(s.date).toISOString().split('T')[0];
+                    const sDate = s.date; // already YYYY-MM-DD
                     return sDate === selectedDate;
                 });
             }
