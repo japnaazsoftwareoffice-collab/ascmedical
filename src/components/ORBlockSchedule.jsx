@@ -4,7 +4,7 @@ import { db } from '../lib/supabase';
 import './ORBlockSchedule.css';
 
 // Rooms displayed in the grid
-const ROOMS = ['OR 1'];
+const ROOMS = ['OR 1', 'OR 2', 'OR 3', 'OR 4', 'OR 5'];
 
 /** Helper: format a Date object as YYYY‑MM‑DD */
 const formatDate = date => {
@@ -433,7 +433,7 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
             }
 
             <div className="schedule-grid-wrapper">
-                <div className="schedule-grid">
+                <div className="schedule-grid" style={{ '--rooms-count': ROOMS.length }}>
                     {/* Header */}
                     <div className="grid-header-row">
                         <div className="grid-header-cell">Date</div>

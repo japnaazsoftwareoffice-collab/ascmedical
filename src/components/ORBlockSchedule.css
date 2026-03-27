@@ -92,11 +92,9 @@
 /* Grid */
 .schedule-grid {
     display: grid;
-    /* Date column + 5 Room columns */
-    /* Use minmax to ensure columns don't get too small */
-    grid-template-columns: minmax(150px, 200px) repeat(5, minmax(180px, 1fr));
-    min-width: 1100px;
-    /* Ensure total width is enough to prevent squishing */
+    /* 1 Date column + N Room columns */
+    grid-template-columns: minmax(150px, 200px) repeat(var(--rooms-count, 5), minmax(180px, 1fr));
+    min-width: calc(200px + (var(--rooms-count, 5) * 180px));
 }
 
 .grid-header-row,
