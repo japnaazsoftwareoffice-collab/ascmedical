@@ -92,9 +92,9 @@
 /* Grid */
 .schedule-grid {
     display: grid;
-    /* 1 Date column + N Room columns */
-    grid-template-columns: minmax(150px, 200px) repeat(var(--rooms-count, 5), minmax(180px, 1fr));
-    min-width: calc(200px + (var(--rooms-count, 5) * 180px));
+    /* 1 Date column (narrow) + N Room columns */
+    grid-template-columns: 90px repeat(var(--rooms-count, 1), minmax(180px, 1fr));
+    min-width: calc(90px + (var(--rooms-count, 1) * 180px));
 }
 
 .grid-header-row,
@@ -120,7 +120,9 @@
 .row-label {
     background: #f1f5f9;
     font-weight: 600;
-    padding: 1rem;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0.75rem;
     border-bottom: 1px solid #cbd5e1;
     border-right: 1px solid #cbd5e1;
     display: flex;
@@ -365,16 +367,31 @@
 }
 
 
+.date-text {
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.month-name {
+    display: block;
+    font-size: 0.65rem;
+    opacity: 0.6;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
 .week-label {
     display: block;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: #64748b;
     font-weight: 600;
-    margin-top: 0.4rem;
+    margin-top: 0.2rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     background: #f1f5f9;
-    padding: 2px 6px;
+    padding: 2px 4px;
     border-radius: 4px;
     width: fit-content;
 }

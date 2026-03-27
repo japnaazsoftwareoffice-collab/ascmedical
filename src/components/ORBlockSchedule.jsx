@@ -4,7 +4,7 @@ import { db } from '../lib/supabase';
 import './ORBlockSchedule.css';
 
 // Rooms displayed in the grid
-const ROOMS = ['OR 1', 'OR 2', 'OR 3', 'OR 4', 'OR 5'];
+const ROOMS = ['OR 1'];
 
 /** Helper: format a Date object as YYYY‑MM‑DD */
 const formatDate = date => {
@@ -77,7 +77,7 @@ const calcDuration = (start, end) => {
 const getWeekOfMonth = (date) => {
     const day = date.getDate();
     const week = Math.ceil(day / 7);
-    const map = { 1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth', 5: 'Fifth' };
+    const map = { 1: 'Week 1', 2: 'Week 2', 3: 'Week 3', 4: 'Week 4', 5: 'Week 5' };
     return map[week] || 'First';
 };
 
@@ -462,8 +462,13 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                     return (
                                         <div key={day} className="grid-row">
                                             <div className="row-label">
-                                                {day} {dayName}
-                                                <span className="week-label">{getWeekOfMonth(dateObj)} Week</span>
+                                                <span className="date-text">
+                                                    <span className="month-name">
+                                                        {dateObj.toLocaleString('default', { month: 'short' })}
+                                                    </span>
+                                                    {day}
+                                                </span>
+                                                <span className="week-label">{getWeekOfMonth(dateObj)}</span>
                                             </div>
                                             {ROOMS.map(room => {
                                                 const blocks = getCellBlocks(dateStr, room);
@@ -493,7 +498,7 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                                                                                 <div className="cell-time" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
                                                                                     {block.start_time && block.end_time
                                                                                         ? `${toInputTime(block.start_time)} - ${toInputTime(block.end_time)}`
-                                                                                        : 'All Day Block'}
+                                                                                        : 'All Day'}
                                                                                 </div>
                                                                             </div>
                                                                         </React.Fragment>
