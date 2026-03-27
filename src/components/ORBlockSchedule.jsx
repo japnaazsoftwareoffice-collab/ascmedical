@@ -4,7 +4,7 @@ import { db } from '../lib/supabase';
 import './ORBlockSchedule.css';
 
 // Rooms displayed in the grid
-const ROOMS = ['OR 1', 'OR 2', 'OR 3', 'OR 4', 'Procedure Room'];
+const ROOMS = ['OR 1'];
 
 /** Helper: format a Date object as YYYY‑MM‑DD */
 const formatDate = date => {
@@ -119,9 +119,9 @@ const ORBlockSchedule = ({ surgeons = [], embedded = false }) => {
                 const d = String(today.getDate()).padStart(2, '0');
                 const mock = [
                     { id: 1, date: `${y}-${m}-${d}`, room_name: 'OR 1', provider_name: 'Burmiester', start_time: '1200', end_time: '1600' },
-                    { id: 2, date: `${y}-${m}-${d}`, room_name: 'OR 2', provider_name: 'Prysi', start_time: '0730', end_time: '1300' },
+                    { id: 2, date: `${y}-${m}-${d}`, room_name: 'OR 1', provider_name: 'Prysi', start_time: '0730', end_time: '1300' },
                     { id: 3, date: `${y}-${m}-02`, room_name: 'OR 1', provider_name: 'McGee', start_time: '0730', end_time: '1600' },
-                    { id: 4, date: `${y}-${m}-02`, room_name: 'OR 2', provider_name: 'Naples Plastic', start_time: '0730', end_time: '1600' }
+                    { id: 4, date: `${y}-${m}-02`, room_name: 'OR 1', provider_name: 'Naples Plastic', start_time: '0730', end_time: '1600' }
                 ];
                 setSchedule(mock);
                 setLoading(false);

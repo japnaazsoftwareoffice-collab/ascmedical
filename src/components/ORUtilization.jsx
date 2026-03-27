@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue, getSurgeryMetrics, formatDateLocal } from '../utils/hospitalUtils';
+import Papa from 'papaparse';
 import './ORUtilization.css';
 
 const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
@@ -8,11 +9,11 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
 
     // Constants
-    const OR_COUNT = 4;
+    const OR_COUNT = 1;
     const OR_START_HOUR = 7; // 7 AM
-    const OR_END_HOUR = 16; // 4 PM
-    const TOTAL_MINUTES_PER_OR = (OR_END_HOUR - OR_START_HOUR) * 60; // 540 minutes (9 hours)
-    const TOTAL_FACILITY_MINUTES = TOTAL_MINUTES_PER_OR * OR_COUNT; // 2160 minutes total
+    const OR_END_HOUR = 15; // 3 PM (8 hour day)
+    const TOTAL_MINUTES_PER_OR = (OR_END_HOUR - OR_START_HOUR) * 60; // 480 minutes (8 hours)
+    const TOTAL_FACILITY_MINUTES = TOTAL_MINUTES_PER_OR * OR_COUNT; // 480 minutes total
 
     // Calculate utilization and financials for selected date
     const utilizationData = useMemo(() => {
@@ -187,6 +188,68 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         };
     }, [utilizationData, selectedOR]);
 
+    const handleExportCSV = () => {
+        // 1. Prepare Summary Data
+        const netProfit = filteredMetrics.revenue - filteredMetrics.cost - filteredMetrics.laborCost - filteredMetrics.suppliesCost;
+        const summaryData = [
+            { 'Dashboard Summary': 'Metric', 'Value': 'Value' },
+            { 'Dashboard Summary': 'Date', 'Value': selectedDate },
+            { 'Dashboard Summary': 'Room Filter', 'Value': selectedOR === 'all' ? 'All ORs' : `OR ${selectedOR}` },
+            { 'Dashboard Summary': 'Overall Utilization', 'Value': filteredMetrics.utilization.toFixed(1) + '%' },
+            { 'Dashboard Summary': 'Total Surgeries', 'Value': filteredMetrics.surgeries },
+            { 'Dashboard Summary': 'Time Used', 'Value': formatDuration(filteredMetrics.minutesUsed) },
+            { 'Dashboard Summary': 'Available Capacity', 'Value': filteredMetrics.totalCapacity - filteredMetrics.minutesUsed > 0 ? formatDuration(filteredMetrics.totalCapacity - filteredMetrics.minutesUsed) : '0m' },
+            { 'Dashboard Summary': 'Total Revenue', 'Value': formatCurrency(filteredMetrics.revenue) },
+            { 'Dashboard Summary': 'Total Cost', 'Value': formatCurrency(filteredMetrics.cost + filteredMetrics.laborCost + filteredMetrics.suppliesCost) },
+            { 'Dashboard Summary': 'Net Profit/Loss', 'Value': formatCurrency(netProfit) },
+            { 'Dashboard Summary': 'Efficiency Ratio', 'Value': (filteredMetrics.revenue / (filteredMetrics.cost + filteredMetrics.laborCost + filteredMetrics.suppliesCost || 1)).toFixed(2) + 'x' }
+        ];
+
+        // 2. Prepare Surgery Details Data
+        const dataToExport = [];
+        const targetORs = selectedOR === 'all' 
+            ? utilizationData.orUtilization 
+            : utilizationData.orUtilization.filter(or => or.orNumber === parseInt(selectedOR));
+
+        targetORs.forEach(or => {
+            or.surgeries.forEach(s => {
+                dataToExport.push({
+                    'OR Room': or.orName,
+                    'Date': selectedDate,
+                    'Patient Name': s.patientName,
+                    'Surgeon': s.doctorName,
+                    'Start Time': s.startTime ? formatTime(s.startTime) : 'N/A',
+                    'Duration (min)': s.duration,
+                    'Turnover (min)': s.turnover,
+                    'Total Time (min)': s.duration + s.turnover,
+                    'Revenue': s.revenue.toFixed(2),
+                    'Cost': s.cost.toFixed(2),
+                    'Labor Cost': s.laborCost.toFixed(2),
+                    'Supplies Cost': s.suppliesCost.toFixed(2),
+                    'Net Profit': (s.revenue - s.cost - s.laborCost - s.suppliesCost).toFixed(2),
+                    'Status': s.hasActualTimes ? 'Actual' : 'Planned'
+                });
+            });
+        });
+
+        // 3. Combine and Export
+        const summaryCsv = Papa.unparse(summaryData);
+        const surgeriesCsv = Papa.unparse(dataToExport);
+        
+        const finalCsv = summaryCsv + '\n\n' + 'SURGERY DETAILS' + '\n' + surgeriesCsv;
+        
+        const blob = new Blob([finalCsv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `OR_Utilization_Report_${selectedDate}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const formatTime = (time24) => {
         if (!time24) return 'N/A';
         const [hours, minutes] = time24.split(':');
@@ -206,6 +269,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
     };
 
     const getUtilizationColor = (percent) => {
+        if (percent > 100) return '#8b5cf6'; // Purple - Over Capacity/Overtime
         if (percent >= 90) return '#10b981'; // Green - excellent
         if (percent >= 70) return '#3b82f6'; // Blue - good
         if (percent >= 50) return '#f97316'; // Orange - moderate
@@ -213,6 +277,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
     };
 
     const getUtilizationBg = (percent) => {
+        if (percent > 100) return '#f5f3ff'; // Purple bg
         if (percent >= 90) return '#ecfdf5'; // Green bg
         if (percent >= 70) return '#eff6ff'; // Blue bg
         if (percent >= 50) return '#fff7ed'; // Orange bg
@@ -220,6 +285,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
     };
 
     const getUtilizationLabel = (percent) => {
+        if (percent > 100) return 'Over Capacity';
         if (percent >= 90) return 'Excellent';
         if (percent >= 70) return 'Good';
         if (percent >= 50) return 'Moderate';
@@ -244,9 +310,6 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                         >
                             <option value="all">All ORs</option>
                             <option value="1">OR 1</option>
-                            <option value="2">OR 2</option>
-                            <option value="3">OR 3</option>
-                            <option value="4">OR 4</option>
                         </select>
                     </div>
                     <div className="date-picker">
@@ -270,6 +333,25 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                             Include Labor/Supplies
                         </label>
                     </div>
+                    <button 
+                        onClick={handleExportCSV}
+                        className="btn-action"
+                        style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px', 
+                            background: '#10b981', 
+                            color: 'white', 
+                            border: 'none', 
+                            padding: '8px 16px', 
+                            borderRadius: '8px', 
+                            fontWeight: '600', 
+                            cursor: 'pointer',
+                            fontSize: '0.85rem'
+                        }}
+                    >
+                        <span>📥</span> Export CSV
+                    </button>
                 </div>
             </div>
 
@@ -391,8 +473,18 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 <div className="stat-card">
                     <div className="stat-content">
                         <div className="stat-label">Available Capacity</div>
-                        <div className="stat-value">{formatDuration(filteredMetrics.totalCapacity - filteredMetrics.minutesUsed)}</div>
-                        <div className="stat-sublabel">{((filteredMetrics.totalCapacity - filteredMetrics.minutesUsed) / filteredMetrics.totalCapacity * 100).toFixed(1)}% remaining</div>
+                        <div className="stat-value">
+                            {filteredMetrics.totalCapacity - filteredMetrics.minutesUsed > 0 
+                                ? formatDuration(filteredMetrics.totalCapacity - filteredMetrics.minutesUsed)
+                                : '0m'
+                            }
+                        </div>
+                        <div className="stat-sublabel">
+                            {filteredMetrics.totalCapacity - filteredMetrics.minutesUsed > 0
+                                ? `${((filteredMetrics.totalCapacity - filteredMetrics.minutesUsed) / filteredMetrics.totalCapacity * 100).toFixed(1)}% remaining`
+                                : '0% remaining (Over Capacity)'
+                            }
+                        </div>
                     </div>
                     <div className="stat-icon icon-green">
                         📊
@@ -405,8 +497,8 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 <h3>Operating Room Details</h3>
                 <div className="or-info-badge">
                     {selectedOR === 'all'
-                        ? `${OR_COUNT} Rooms • 7 AM - 4 PM (9 hours)`
-                        : `OR ${selectedOR} • 7 AM - 4 PM (9 hours)`}
+                        ? `${OR_COUNT} Room • 7 AM - 3 PM (8 hours)`
+                        : `OR ${selectedOR} • 7 AM - 3 PM (8 hours)`}
                 </div>
             </div>
 
@@ -441,7 +533,12 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                             </div>
                             <div className="progress-labels">
                                 <span>{formatDuration(or.minutesUsed)} used</span>
-                                <span>{formatDuration(TOTAL_MINUTES_PER_OR - or.minutesUsed)} available</span>
+                                <span>
+                                    {TOTAL_MINUTES_PER_OR - or.minutesUsed > 0 
+                                        ? `${formatDuration(TOTAL_MINUTES_PER_OR - or.minutesUsed)} available`
+                                        : '0m available'
+                                    }
+                                </span>
                             </div>
                         </div>
 
@@ -463,7 +560,12 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                             <div className="mini-stat">
                                 <div className="mini-stat-icon">📊</div>
                                 <div>
-                                    <div className="mini-stat-value">{formatDuration(TOTAL_MINUTES_PER_OR - or.minutesUsed)}</div>
+                                    <div className="mini-stat-value">
+                                        {TOTAL_MINUTES_PER_OR - or.minutesUsed > 0 
+                                            ? formatDuration(TOTAL_MINUTES_PER_OR - or.minutesUsed)
+                                            : '0m'
+                                        }
+                                    </div>
                                     <div className="mini-stat-label">Available</div>
                                 </div>
                             </div>
