@@ -11,21 +11,21 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
 
     const handleDateChange = (val) => {
         if (!val) return;
-        
+
+        let d = new Date(val + 'T00:00:00');
+        if (isNaN(d.getTime())) return;
+
         let newDate = val;
         
-        if (viewType === 'week' && val.length === 10) {
+        if (viewType === 'week') {
             // Snap to Monday of that week
-            const d = new Date(val + 'T00:00:00');
             const day = d.getDay();
             const diff = d.getDate() - day + (day === 0 ? -6 : 1);
             d.setDate(diff);
             newDate = formatDateLocal(d);
         } else if (viewType === 'month' && val.length === 7) {
-            // Convert YYYY-MM to YYYY-MM-01 for internal state consistency
             newDate = `${val}-01`;
         } else if (viewType === 'year' && val.length === 4) {
-            // Convert YYYY to YYYY-01-01
             newDate = `${val}-01-01`;
         }
         
@@ -421,7 +421,9 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                                 value={selectedDate}
                                 onChange={(e) => handleDateChange(e.target.value)}
                                 className="date-input"
-                                title="Pick a date to select its full week (starts Monday)"
+                                min="2024-01-01"
+                                step="7"
+                                title="Select a week (Mondays only)"
                             />
                         )}
                         {viewType === 'month' && (
