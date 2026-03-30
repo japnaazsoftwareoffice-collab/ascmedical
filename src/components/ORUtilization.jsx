@@ -7,6 +7,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
     const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
     const [selectedOR, setSelectedOR] = useState('all'); // 'all' or specific OR number
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    const [viewType, setViewType] = useState('day'); // 'day', 'week', 'month', 'year'
 
     // Constants
     const OR_COUNT = 1;
@@ -15,7 +16,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
     const TOTAL_MINUTES_PER_OR = (OR_END_HOUR - OR_START_HOUR) * 60; // 480 minutes (8 hours)
     const TOTAL_FACILITY_MINUTES = TOTAL_MINUTES_PER_OR * OR_COUNT; // 480 minutes total
 
-    // Calculate utilization and financials for selected date
+    // Calculate utilization and financials for selected period
     const utilizationData = useMemo(() => {
         if (!surgeries) return {
             orUtilization: [],
@@ -25,11 +26,58 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             totalOperationCost: 0,
             totalORCost: 0,
             totalLaborCost: 0,
-            totalSuppliesCost: 0
+            totalSuppliesCost: 0,
+            capacityInPeriod: TOTAL_FACILITY_MINUTES
         };
 
-        // Filter surgeries for selected date
-        const dateSurgeries = surgeries.filter(s => s.date === selectedDate);
+        const selected = new Date(selectedDate + 'T00:00:00'); // Ensure local time
+        
+        // Helper to get start and end of week
+        const getWeekRange = (date) => {
+            const start = new Date(date);
+            const day = start.getDay(); // 0 is Sunday
+            const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Monday as start
+            start.setDate(diff);
+            start.setHours(0, 0, 0, 0);
+            
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
+            return { start, end };
+        };
+
+        const { start: weekStart, end: weekEnd } = getWeekRange(selected);
+
+        // Filter surgeries for selected period
+        const periodSurgeries = surgeries.filter(s => {
+            const surgeryDate = new Date(s.date + 'T00:00:00');
+            
+            if (viewType === 'day') {
+                return s.date === selectedDate;
+            } else if (viewType === 'week') {
+                return surgeryDate >= weekStart && surgeryDate <= weekEnd;
+            } else if (viewType === 'month') {
+                return surgeryDate.getMonth() === selected.getMonth() && 
+                       surgeryDate.getFullYear() === selected.getFullYear();
+            } else if (viewType === 'year') {
+                return surgeryDate.getFullYear() === selected.getFullYear();
+            }
+            return false;
+        });
+
+        // Determine capacity based on view type (Assuming 5-day work week for simplicity)
+        let daysInPeriod = 1;
+        if (viewType === 'week') daysInPeriod = 5;
+        else if (viewType === 'month') {
+            // Calculate working days in that month (approximate or precise)
+            // For simplicity, let's use 22 for month and 260 for year unless we want to be very precise
+            daysInPeriod = 22; 
+        } else if (viewType === 'year') {
+            daysInPeriod = 260;
+        }
+
+        const capacityInPeriod = TOTAL_FACILITY_MINUTES * daysInPeriod;
+        const orCapacityInPeriod = TOTAL_MINUTES_PER_OR * daysInPeriod;
 
         let totalOperationCost = 0;
         let totalORCost = 0;
@@ -43,21 +91,18 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             minutesUsed: 0,
             turnoverMinutes: 0,
             surgeries: [],
-            utilizationPercent: 0
+            utilizationPercent: 0,
+            capacity: orCapacityInPeriod
         }));
 
         // Assign surgeries to ORs and calculate costs
-        dateSurgeries.forEach((surgery, index) => {
-            const orIndex = surgery.or_room ? surgery.or_room - 1 : index % OR_COUNT;
+        periodSurgeries.forEach((surgery, index) => {
+            const orIndex = surgery.or_room ? surgery.or_room - 1 : 0; // Standardized to use room 1 if missing
 
-            // Use unified metrics calculation
             const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
 
-            // Adjust metrics based on whether we include Labor & Supplies
             if (!includeLaborSupplies) {
-                // Remove supplies from the revenue side (user wants room + cpt only)
                 metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
-                // Zero out the cost side for display
                 metrics.laborCost = 0;
                 metrics.supplyCosts = 0;
                 metrics.internalRoomCost = 0;
@@ -71,26 +116,20 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             totalLaborCost += metrics.laborCost;
             totalSuppliesCost += metrics.supplyCosts;
 
-            // Determine Patient Name
+            // Patient/Doctor name logic (keeping existing)
             let patientName = surgery.patient_name;
             if (!patientName && surgery.patients) {
-                if (surgery.patients.name) {
-                    patientName = surgery.patients.name;
-                } else {
+                if (surgery.patients.name) patientName = surgery.patients.name;
+                else {
                     const first = surgery.patients.firstname || surgery.patients.first_name || '';
                     const last = surgery.patients.lastname || surgery.patients.last_name || '';
-                    if (first && last) {
-                        patientName = `${first} ${last}`;
-                    }
+                    if (first && last) patientName = `${first} ${last}`;
                 }
             }
             patientName = patientName || 'Unknown Patient';
 
-            // Determine Doctor Name
             let doctorName = surgery.doctor_name;
-            if (!doctorName && surgery.surgeons) {
-                doctorName = formatSurgeonName(surgery.surgeons);
-            }
+            if (!doctorName && surgery.surgeons) doctorName = formatSurgeonName(surgery.surgeons);
             doctorName = doctorName || 'Unknown Surgeon';
 
             if (orIndex >= 0 && orIndex < OR_COUNT) {
@@ -98,6 +137,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 orData[orIndex].turnoverMinutes += turnover;
                 orData[orIndex].surgeries.push({
                     id: surgery.id,
+                    date: surgery.date,
                     patientName: patientName,
                     doctorName: doctorName,
                     startTime: surgery.actual_start_time || surgery.start_time,
@@ -113,27 +153,32 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             }
         });
 
-        // Calculate utilization percentages
+        // Sort surgeries within ORs by date and then time
         orData.forEach(or => {
-            or.utilizationPercent = (or.minutesUsed / TOTAL_MINUTES_PER_OR) * 100;
+            or.surgeries.sort((a, b) => {
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                return (a.startTime || '').localeCompare(b.startTime || '');
+            });
+            or.utilizationPercent = (or.minutesUsed / orCapacityInPeriod) * 100;
         });
 
         const totalMinutesUsed = orData.reduce((sum, or) => sum + or.minutesUsed, 0);
         const totalTurnoverMinutes = orData.reduce((sum, or) => sum + or.turnoverMinutes, 0);
-        const totalUtilization = (totalMinutesUsed / TOTAL_FACILITY_MINUTES) * 100;
+        const totalUtilization = (totalMinutesUsed / capacityInPeriod) * 100;
 
         return {
             orUtilization: orData,
             totalUtilization,
-            totalSurgeries: dateSurgeries.length,
+            totalSurgeries: periodSurgeries.length,
             totalMinutesUsed,
             totalTurnoverMinutes,
             totalOperationCost,
             totalORCost,
             totalLaborCost,
-            totalSuppliesCost
+            totalSuppliesCost,
+            capacityInPeriod
         };
-    }, [surgeries, cptCodes, selectedDate, includeLaborSupplies]);
+    }, [surgeries, cptCodes, selectedDate, includeLaborSupplies, viewType]);
 
     // Calculate filtered metrics based on selected OR
     const filteredMetrics = useMemo(() => {
@@ -147,7 +192,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 minutesUsed: utilizationData.totalMinutesUsed,
                 turnoverMinutes: utilizationData.totalTurnoverMinutes,
                 utilization: utilizationData.totalUtilization,
-                totalCapacity: TOTAL_FACILITY_MINUTES
+                totalCapacity: utilizationData.capacityInPeriod
             };
         }
 
@@ -165,7 +210,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 minutesUsed: 0,
                 turnoverMinutes: 0,
                 utilization: 0,
-                totalCapacity: TOTAL_MINUTES_PER_OR
+                totalCapacity: utilizationData.capacityInPeriod
             };
         }
 
@@ -184,7 +229,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             minutesUsed: orStats.minutesUsed,
             turnoverMinutes: orStats.turnoverMinutes,
             utilization: orStats.utilizationPercent,
-            totalCapacity: TOTAL_MINUTES_PER_OR
+            totalCapacity: orStats.capacity
         };
     }, [utilizationData, selectedOR]);
 
@@ -193,7 +238,8 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         const netProfit = filteredMetrics.revenue - filteredMetrics.cost - filteredMetrics.laborCost - filteredMetrics.suppliesCost;
         const summaryData = [
             { 'Dashboard Summary': 'Metric', 'Value': 'Value' },
-            { 'Dashboard Summary': 'Date', 'Value': selectedDate },
+            { 'Dashboard Summary': 'Period Type', 'Value': viewType.charAt(0).toUpperCase() + viewType.slice(1) },
+            { 'Dashboard Summary': 'Reference Date', 'Value': selectedDate },
             { 'Dashboard Summary': 'Room Filter', 'Value': selectedOR === 'all' ? 'All ORs' : `OR ${selectedOR}` },
             { 'Dashboard Summary': 'Overall Utilization', 'Value': filteredMetrics.utilization.toFixed(1) + '%' },
             { 'Dashboard Summary': 'Total Surgeries', 'Value': filteredMetrics.surgeries },
@@ -215,7 +261,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             or.surgeries.forEach(s => {
                 dataToExport.push({
                     'OR Room': or.orName,
-                    'Date': selectedDate,
+                    'Date': s.date,
                     'Patient Name': s.patientName,
                     'Surgeon': s.doctorName,
                     'Start Time': s.startTime ? formatTime(s.startTime) : 'N/A',
@@ -243,7 +289,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         const url = URL.createObjectURL(blob);
         
         link.setAttribute('href', url);
-        link.setAttribute('download', `OR_Utilization_Report_${selectedDate}.csv`);
+        link.setAttribute('download', `OR_Utilization_Report_${viewType}_${selectedDate}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -299,14 +345,32 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 <div className="header-left">
                     <h2 className="page-title">OR Utilization Dashboard</h2>
                 </div>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <div className="header-actions">
+                    <div className="view-toggle-container">
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'day' ? 'active' : ''}`}
+                            onClick={() => setViewType('day')}
+                        >Day</button>
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'week' ? 'active' : ''}`}
+                            onClick={() => setViewType('week')}
+                        >Week</button>
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'month' ? 'active' : ''}`}
+                            onClick={() => setViewType('month')}
+                        >Month</button>
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'year' ? 'active' : ''}`}
+                            onClick={() => setViewType('year')}
+                        >Year</button>
+                    </div>
                     <div className="date-picker">
                         <span>🏥</span>
                         <select
                             value={selectedOR}
                             onChange={(e) => setSelectedOR(e.target.value)}
                             className="date-input"
-                            style={{ minWidth: '150px' }}
+                            style={{ minWidth: '120px' }}
                         >
                             <option value="all">All ORs</option>
                             <option value="1">OR 1</option>
@@ -449,7 +513,13 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                         <div className="stat-label">Total Surgeries</div>
                         <div className="stat-value">{filteredMetrics.surgeries}</div>
                         <div className="stat-sublabel">
-                            {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {(() => {
+                                const d = new Date(selectedDate + 'T00:00:00');
+                                if (viewType === 'day') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                if (viewType === 'week') return 'Current Week';
+                                if (viewType === 'month') return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                                if (viewType === 'year') return d.getFullYear();
+                            })()}
                         </div>
                     </div>
                     <div className="stat-icon icon-purple">
@@ -497,8 +567,8 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                 <h3>Operating Room Details</h3>
                 <div className="or-info-badge">
                     {selectedOR === 'all'
-                        ? `${OR_COUNT} Room • 7 AM - 3 PM (8 hours)`
-                        : `OR ${selectedOR} • 7 AM - 3 PM (8 hours)`}
+                        ? `${OR_COUNT} Room • ${viewType.charAt(0).toUpperCase() + viewType.slice(1)} View`
+                        : `OR ${selectedOR} • ${viewType.charAt(0).toUpperCase() + viewType.slice(1)} View`}
                 </div>
             </div>
 
@@ -580,7 +650,10 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                                 <div className="surgeries-items">
                                     {or.surgeries.map((surgery, idx) => (
                                         <div key={idx} className="surgery-item">
-                                            {surgery.startTime && <div className="surgery-time">{formatTime(surgery.startTime)}</div>}
+                                            <div className="surgery-time-badge">
+                                                {viewType !== 'day' && <span className="surgery-date-small">{new Date(surgery.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}</span>}
+                                                {surgery.startTime && <div className="surgery-time">{formatTime(surgery.startTime)}</div>}
+                                            </div>
                                             <div className="surgery-details">
                                                 <div className="surgery-patient">{surgery.patientName}</div>
                                                 <div className="surgery-doctor">{surgery.doctorName}</div>
