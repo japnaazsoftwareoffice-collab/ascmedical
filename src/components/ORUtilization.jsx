@@ -9,6 +9,34 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
     const [viewType, setViewType] = useState('day'); // 'day', 'week', 'month', 'year'
 
+    const handleDateChange = (val) => {
+        if (!val) return;
+        
+        let newDate = val;
+        
+        if (viewType === 'week' && val.length === 10) {
+            // Snap to Monday of that week
+            const d = new Date(val + 'T00:00:00');
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            d.setDate(diff);
+            newDate = formatDateLocal(d);
+        } else if (viewType === 'month' && val.length === 7) {
+            // Convert YYYY-MM to YYYY-MM-01 for internal state consistency
+            newDate = `${val}-01`;
+        } else if (viewType === 'year' && val.length === 4) {
+            // Convert YYYY to YYYY-01-01
+            newDate = `${val}-01-01`;
+        }
+        
+        setSelectedDate(newDate);
+    };
+
+    // Auto-sync date when view type changes
+    React.useEffect(() => {
+        handleDateChange(selectedDate);
+    }, [viewType]);
+
     // Constants
     const OR_COUNT = 1;
     const OR_START_HOUR = 7; // 7 AM
@@ -30,7 +58,8 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             capacityInPeriod: TOTAL_FACILITY_MINUTES
         };
 
-        const selected = new Date(selectedDate + 'T00:00:00'); // Ensure local time
+        const dateToParse = selectedDate.length === 7 ? selectedDate + '-01' : (selectedDate.length === 4 ? selectedDate + '-01-01' : selectedDate);
+        const selected = new Date(dateToParse + 'T00:00:00'); 
         
         // Helper to get start and end of week
         const getWeekRange = (date) => {
@@ -378,12 +407,42 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                     </div>
                     <div className="date-picker">
                         <span>📅</span>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="date-input"
-                        />
+                        {viewType === 'day' && (
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                            />
+                        )}
+                        {viewType === 'week' && (
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                                title="Pick a date to select its full week (starts Monday)"
+                            />
+                        )}
+                        {viewType === 'month' && (
+                            <input
+                                type="month"
+                                value={selectedDate.substring(0, 7)}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                            />
+                        )}
+                        {viewType === 'year' && (
+                            <select
+                                value={selectedDate.substring(0, 4)}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                            >
+                                {Array.from({ length: 7 }, (_, i) => 2024 + i).map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                         <input
