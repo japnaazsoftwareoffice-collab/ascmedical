@@ -32,6 +32,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
             return allMenuItems.filter(item => permissions.includes(item.permission));
         } else if (user.role === 'surgeon') {
             return [
+                { id: 'surgeon-dashboard', icon: '📊', label: 'My Dashboard' },
                 { id: 'my-schedule', icon: '📅', label: 'My Schedule' },
                 { id: 'patients', icon: '👥', label: 'My Patients' },
                 { id: 'scheduler', icon: '➕', label: 'Schedule Surgery' }
@@ -72,7 +73,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
                     {user.role === 'patient' && '👤'}
                 </div>
                 <div className="user-info">
-                    <div className="user-name">{user.name}</div>
+                    <div className="user-name">{user.full_name || user.name || user.email}</div>
                     <div className="user-email">{user.email}</div>
                 </div>
             </div>

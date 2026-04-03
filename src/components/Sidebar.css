@@ -1,5 +1,6 @@
 .sidebar {
-    width: 310px;
+    width: 260px;
+    min-width: 260px;
     background-color: #0f172a;
     color: #94a3b8;
     display: flex;
@@ -10,7 +11,7 @@
     top: 0;
     border-right: 1px solid #1e293b;
     z-index: 50;
-    transition: width 0.3s ease;
+    overflow: hidden;
 }
 
 .sidebar-header {

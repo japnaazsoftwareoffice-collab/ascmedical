@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import './SurgeonSchedule.css';
 
 const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
-    const [filter, setFilter] = useState('upcoming');
+    const [filter, setFilter] = useState('all');
 
 
     const filteredSurgeries = useMemo(() => {
@@ -17,6 +17,7 @@ const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
                 surgery.doctor_name === surgeon.name;
 
             if (!isMySurgery) return false;
+            if (filter === 'all') return true;
 
             const surgeryDate = new Date(surgery.date);
             surgeryDate.setHours(0, 0, 0, 0);
@@ -34,8 +35,13 @@ const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
 
 
     const getPatientName = (patientId) => {
-        const patient = patients?.find(p => p.id === patientId);
-        return patient?.name || 'Unknown Patient';
+        const p = patients?.find(p => p.id === patientId);
+        if (!p) return 'Unknown Patient';
+        if (p.full_name) return p.full_name;
+        if (p.name) return p.name;
+        const first = p.firstname || p.first_name || '';
+        const last = p.lastname || p.last_name || '';
+        return (first + ' ' + last).trim() || 'Patient ' + patientId;
     };
 
     const getCPTDetails = (codes) => {
@@ -76,9 +82,20 @@ const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
             <div className="page-header">
                 <div>
                     <h2 className="page-title">My Surgery Schedule</h2>
-                    <p className="page-subtitle">View and manage your upcoming surgeries</p>
+                    <p className="page-subtitle">
+                        {filter === 'all' ? 'View and manage all your surgeries' : 
+                         filter === 'upcoming' ? 'View and manage your upcoming surgeries' :
+                         filter === 'past' ? 'View your past surgery history' :
+                         "View today's surgery schedule"}
+                    </p>
                 </div>
                 <div className="filter-tabs">
+                    <button
+                        className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
+                        onClick={() => setFilter('all')}
+                    >
+                        All
+                    </button>
                     <button
                         className={`filter-tab ${filter === 'today' ? 'active' : ''}`}
                         onClick={() => setFilter('today')}
@@ -163,7 +180,7 @@ const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
 
             <div className="content-card">
                 <div className="card-header">
-                    <h3>{filter === 'today' ? "Today's Schedule" : filter === 'upcoming' ? 'Upcoming Surgeries' : 'Past Surgeries'}</h3>
+                    <h3>{filter === 'all' ? 'All Surgeries' : filter === 'today' ? "Today's Schedule" : filter === 'upcoming' ? 'Upcoming Surgeries' : 'Past Surgeries'}</h3>
                     <span className="count-badge">{filteredSurgeries.length} surgeries</span>
                 </div>
 
@@ -174,52 +191,55 @@ const SurgeonSchedule = ({ surgeries, surgeon, patients, cptCodes }) => {
                         <p>You have no {filter} surgeries scheduled</p>
                     </div>
                 ) : (
-                    <div className="surgeries-list">
-                        {filteredSurgeries.map((surgery) => (
-                            <div key={surgery.id} className="surgery-card">
-                                <div className="surgery-header">
-                                    <div className="surgery-date-time">
-                                        <div className="surgery-date">{formatDate(surgery.date)}</div>
-                                        <div className="surgery-time">{surgery.start_time} • {surgery.duration_minutes} min</div>
-                                    </div>
-                                    <div className={`status-badge status-${surgery.status}`}>
-                                        {getStatusBadge(surgery.status)}
-                                    </div>
-                                </div>
-
-                                <div className="surgery-body">
-                                    <div className="surgery-patient">
-                                        <span className="label">Patient:</span>
-                                        <span className="value">{getPatientName(surgery.patient_id)}</span>
-                                    </div>
-
-                                    <div className="surgery-procedures">
-                                        <span className="label">Procedures:</span>
-                                        <div className="cpt-list">
-                                            {getCPTDetails(surgery.cpt_codes).map((cpt, idx) => (
-                                                <div key={idx} className="cpt-item">
-                                                    <span className="cpt-code">{cpt.code}</span>
-                                                    <span className="cpt-desc">{cpt.description}</span>
-                                                    <span className="cpt-amount">${parseFloat(cpt.reimbursement).toLocaleString()}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div className="surgery-total">
-                                        <span className="label">Total Revenue:</span>
-                                        <span className="total-amount">${calculateTotalRevenue(surgery.cpt_codes).toLocaleString()}</span>
-                                    </div>
-
-                                    {surgery.notes && (
-                                        <div className="surgery-notes">
-                                            <span className="label">Notes:</span>
-                                            <p>{surgery.notes}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                    <div className="table-responsive">
+                        <table className="clean-table">
+                            <thead>
+                                <tr>
+                                    <th>Date & Time</th>
+                                    <th>Patient</th>
+                                    <th>Procedures</th>
+                                    <th>Total Revenue</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredSurgeries.map((surgery) => (
+                                    <tr key={surgery.id}>
+                                        <td>
+                                            <div className="date-cell">
+                                                <strong>{formatDate(surgery.date)}</strong>
+                                                <div className="text-muted">{surgery.start_time} ({surgery.duration_minutes} min)</div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div className="patient-cell">
+                                                {getPatientName(surgery.patient_id)}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div className="procedures-cell">
+                                                {surgery.cpt_codes?.slice(0, 2).map((code, idx) => (
+                                                    <span key={idx} className="category-tag" style={{marginRight: '4px'}}>
+                                                        {code}
+                                                    </span>
+                                                ))}
+                                                {surgery.cpt_codes?.length > 2 && (
+                                                    <span className="text-muted">+{surgery.cpt_codes.length - 2} more</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="amount-cell">
+                                            <strong>${calculateTotalRevenue(surgery.cpt_codes).toLocaleString()}</strong>
+                                        </td>
+                                        <td>
+                                            <div className={`status-badge status-${surgery.status}`}>
+                                                {getStatusBadge(surgery.status)}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>

@@ -13,6 +13,7 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
         license_number: '',
         phone: '',
         email: '',
+        password: '',
         countryCode: '+1'
     });
     const [errors, setErrors] = useState({});
@@ -26,6 +27,7 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
             license_number: '',
             phone: '',
             email: '',
+            password: '',
             countryCode: '+1'
         });
         setErrors({});
@@ -83,6 +85,7 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
             license_number: surgeon.license_number || '',
             phone: phone,
             email: surgeon.email || '',
+            password: surgeon.password || 'surgeon123',
             countryCode: countryCode
         });
         setErrors({});
@@ -171,6 +174,11 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
             newErrors.email = 'Invalid email format (no numbers in domain name)';
         }
 
+        // Password: Required
+        if (!formData.password || !formData.password.trim()) {
+            newErrors.password = 'Password is required';
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -195,7 +203,8 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
             specialty: formData.specialty,
             license_number: formData.license_number,
             phone: fullPhone,
-            email: formData.email
+            email: formData.email,
+            password: formData.password
         };
 
         try {
@@ -415,6 +424,18 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
                                         className={`form-input ${errors.email ? 'error-border' : ''}`}
                                     />
                                     {errors.email && <span className="error-text">{errors.email}</span>}
+                                </div>
+                                <div className="form-group">
+                                    <label>Password <span className="required-star">*</span></label>
+                                    <input
+                                        type="password"
+                                        name="password"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        className={`form-input ${errors.password ? 'error-border' : ''}`}
+                                        placeholder="Set login password"
+                                    />
+                                    {errors.password && <span className="error-text">{errors.password}</span>}
                                 </div>
                             </div>
                             <div className="modal-actions">

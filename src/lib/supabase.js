@@ -21,6 +21,18 @@ export const db = {
         return data;
     },
 
+    async loginAsSurgeon(email, password) {
+        const { data, error } = await supabase
+            .from('surgeons')
+            .select('*')
+            .eq('email', email)
+            .eq('password', password)
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
     async getUsers() {
         const { data, error } = await supabase
             .from('users')

@@ -37,21 +37,21 @@
 }
 
 .patient-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #fff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 1.5rem;
     transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 .patient-card:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: #667eea;
     transform: translateY(-4px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 12px 30px rgba(102, 126, 234, 0.15);
 }
 
 .patient-header {
@@ -81,15 +81,15 @@
 .patient-name {
     font-size: 1.1rem;
     font-weight: 600;
-    color: white;
+    color: #1e293b;
     margin-bottom: 0.25rem;
 }
 
 .patient-mrn {
     font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.5);
+    color: #64748b;
     font-family: 'Courier New', monospace;
-    background: rgba(255, 255, 255, 0.05);
+    background: #f1f5f9;
     padding: 0.1rem 0.5rem;
     border-radius: 4px;
     display: inline-block;
@@ -100,8 +100,20 @@
     flex-direction: column;
     gap: 0.75rem;
     padding: 1rem;
-    background: rgba(0, 0, 0, 0.2);
+    background: #f8fafc;
     border-radius: 12px;
+}
+
+.detail-row .label {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.detail-row .value {
+    font-size: 0.9rem;
+    color: #1e293b;
+    font-weight: 500;
 }
 
 .detail-row {
@@ -126,8 +138,9 @@
 }
 
 .surgery-preview .date {
-    color: white;
+    color: #1e293b;
     font-weight: 500;
+    font-size: 0.9rem;
 }
 
 .surgery-preview .status {

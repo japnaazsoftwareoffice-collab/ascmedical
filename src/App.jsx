@@ -24,6 +24,7 @@ import RolePermissionManagement from './components/RolePermissionManagement';
 import SupplyManager from './components/SupplyManager';
 
 import ManagerDashboard from './components/ManagerDashboard';
+import SurgeonDashboard from './components/SurgeonDashboard';
 import CancellationRescheduling from './components/CancellationRescheduling';
 import InstructionPanel from './components/InstructionPanel';
 
@@ -77,7 +78,7 @@ function App() {
       if (user.role === 'admin') {
         setView('dashboard');
       } else if (user.role === 'surgeon') {
-        setView('my-schedule');
+        setView('surgeon-dashboard');
       } else if (user.role === 'manager') {
         setView('manager-dashboard');
       } else if (user.role === 'patient') {
@@ -225,12 +226,52 @@ function App() {
           setUser(userData);
           return;
         }
+
+        // Check if it's one of our registered surgeons
+        const matchingSurgeon = surgeons.find(s => s.email === email);
+        if (matchingSurgeon) {
+          const expectedPassword = matchingSurgeon.password || 'surgeon123';
+          if (password === expectedPassword) {
+            setUser({
+              email,
+              role: 'surgeon',
+              full_name: matchingSurgeon.name,
+              id: `surgeon-user-${matchingSurgeon.id}`,
+              surgeon_id: matchingSurgeon.id
+            });
+            return;
+          }
+        }
+
         throw new Error('Invalid credentials');
       }
 
-      // Try database login
-      const userData = await db.login(email, password);
-      setUser(userData);
+      // Try database login (users table first)
+      try {
+        const userData = await db.login(email, password);
+        setUser(userData);
+        return;
+      } catch (dbErr) {
+        // Users table login failed — try surgeons table directly
+        try {
+          const surgeonData = await db.loginAsSurgeon(email, password);
+          if (surgeonData) {
+            const surgeonFullName = surgeonData.name ||
+              `${surgeonData.firstname || ''} ${surgeonData.lastname || ''}`.trim();
+            setUser({
+              email,
+              role: 'surgeon',
+              full_name: surgeonFullName,
+              id: `surgeon-user-${surgeonData.id}`,
+              surgeon_id: surgeonData.id
+            });
+            return;
+          }
+        } catch (surgeonErr) {
+          // Not found in surgeons table either — fall through to error
+        }
+        throw new Error('Invalid email or password');
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError('Invalid email or password');
@@ -307,12 +348,23 @@ function App() {
       });
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        setPatients(patients.map(p => p.id === sanitized.id ? sanitized : p));
+        const patientWithLocalNameMock = {
+          ...sanitized,
+          name: sanitized.name || `${sanitized.firstname || sanitized.first_name || ''} ${sanitized.lastname || sanitized.last_name || ''}`.trim()
+        };
+        setPatients(patients.map(p => p.id === patientWithLocalNameMock.id ? patientWithLocalNameMock : p));
         return;
       }
 
-      await db.updatePatient(sanitized.id, sanitized);
-      setPatients(patients.map(p => p.id === sanitized.id ? sanitized : p));
+      // Strip 'name' for the database call
+      const { name, ...dbData } = sanitized;
+      await db.updatePatient(dbData.id, dbData);
+      
+      const patientWithLocalName = {
+        ...sanitized,
+        name: name || `${sanitized.firstname || sanitized.first_name || ''} ${sanitized.lastname || sanitized.last_name || ''}`.trim()
+      };
+      setPatients(patients.map(p => p.id === patientWithLocalName.id ? patientWithLocalName : p));
     } catch (err) {
       console.error('Error updating patient:', err);
       await Swal.fire({
@@ -432,7 +484,10 @@ function App() {
         return surgeonWithId;
       }
 
-      const addedSurgeon = await db.addSurgeon(newSurgeon);
+      // Remove 'name' only — virtual/UI field not in the DB schema
+      const { name: virtualName, ...dbData } = newSurgeon;
+      const addedSurgeon = await db.addSurgeon(dbData);
+      
       const surgeonWithName = {
         ...addedSurgeon,
         name: addedSurgeon.name || `${addedSurgeon.firstname || addedSurgeon.first_name || ''} ${addedSurgeon.lastname || addedSurgeon.last_name || ''}`.trim()
@@ -455,18 +510,24 @@ function App() {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-      const surgeonWithName = {
-        ...updatedSurgeon,
-        name: updatedSurgeon.name || `${updatedSurgeon.firstname || updatedSurgeon.first_name || ''} ${updatedSurgeon.lastname || updatedSurgeon.last_name || ''}`.trim()
-      };
-
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        const surgeonWithName = {
+          ...updatedSurgeon,
+          name: updatedSurgeon.name || `${updatedSurgeon.firstname || updatedSurgeon.first_name || ''} ${updatedSurgeon.lastname || updatedSurgeon.last_name || ''}`.trim()
+        };
         setSurgeons(surgeons.map(s => s.id === surgeonWithName.id ? surgeonWithName : s));
         return;
       }
 
-      await db.updateSurgeon(surgeonWithName.id, surgeonWithName);
-      setSurgeons(surgeons.map(s => s.id === surgeonWithName.id ? surgeonWithName : s));
+      // Strip 'name' only — not in surgeons DB schema
+      const { name, ...dbData } = updatedSurgeon;
+      await db.updateSurgeon(dbData.id, dbData);
+      
+      const surgeonWithLocalName = {
+        ...updatedSurgeon,
+        name: name || `${updatedSurgeon.firstname || updatedSurgeon.first_name || ''} ${updatedSurgeon.lastname || updatedSurgeon.last_name || ''}`.trim()
+      };
+      setSurgeons(surgeons.map(s => s.id === surgeonWithLocalName.id ? surgeonWithLocalName : s));
     } catch (err) {
       console.error('Error updating surgeon:', err);
       await Swal.fire({
@@ -915,8 +976,15 @@ function App() {
 
   const handleUpdateStaff = async (updatedStaff) => {
     try {
-      await db.updateStaff(updatedStaff.id, updatedStaff);
-      setStaff(staff.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+      // Strip 'name' if present for the database call
+      const { name, ...dbData } = updatedStaff;
+      await db.updateStaff(dbData.id, dbData);
+      
+      const staffWithLocalName = {
+        ...updatedStaff,
+        name: name || `${updatedStaff.firstname || ''} ${updatedStaff.lastname || ''}`.trim()
+      };
+      setStaff(staff.map(s => s.id === staffWithLocalName.id ? staffWithLocalName : s));
     } catch (err) {
       console.error('Error updating staff:', err);
       await Swal.fire({
@@ -1282,6 +1350,7 @@ function App() {
     // 2. Role-specific views (Surgeon/Patient)
     // Surgeon
     if (user.role === 'surgeon') {
+      if (view === 'surgeon-dashboard') return <SurgeonDashboard user={user} surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
       if (view === 'my-schedule') return <SurgeonSchedule surgeries={surgeries} surgeon={currentSurgeon} patients={patients} cptCodes={filteredCptCodes} />;
       if (view === 'patients') return <SurgeonPatients patients={patients} surgeries={surgeries} surgeon={currentSurgeon} />;
       if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} onSchedule={handleScheduleSurgery} />;

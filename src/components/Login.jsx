@@ -114,7 +114,7 @@ const Login = ({ onLogin }) => {
                     <div className="demo-credentials">
                         <p><strong>Admin:</strong> admin@hospital.com / admin123</p>
                         <p><strong>Manager:</strong> manager@hospital.com / manager123</p>
-                        <p><strong>Surgeon:</strong> surgeon@hospital.com / surgeon123</p>
+                        <p><strong>Surgeon:</strong> surgeon@hospital.com / surgeon123 (or any surgeon email from Management)</p>
                         <p><strong>Patient:</strong> patient@hospital.com / patient123</p>
                     </div>
                 </div>
