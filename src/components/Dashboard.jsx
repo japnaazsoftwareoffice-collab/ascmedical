@@ -15,9 +15,9 @@ const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'templat
 const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'kemMSpgMmsNS0Hcu5';
 
 const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
-    const [timeframe, setTimeframe] = useState('daily'); // daily, weekly, monthly
+    const [viewType, setViewType] = useState('day'); // day, week, month, year
     const [outcomeView, setOutcomeView] = useState('all'); // all, daily
     const [stats, setStats] = useState({
         totalSurgeries: 0,
@@ -32,7 +32,8 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
     const [topSurgeons, setTopSurgeons] = useState({
         daily: null,
         weekly: null,
-        monthly: null
+        monthly: null,
+        yearly: null
     });
     const [utilizationData, setUtilizationData] = useState([]);
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
@@ -54,6 +55,34 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [emailAddress, setEmailAddress] = useState('');
     const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+    const handleDateChange = (val) => {
+        if (!val) return;
+
+        let d = new Date(val + 'T00:00:00');
+        if (isNaN(d.getTime())) return;
+
+        let newDate = val;
+        
+        if (viewType === 'week') {
+            // Snap to Monday of that week
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            d.setDate(diff);
+            newDate = formatDateLocal(d);
+        } else if (viewType === 'month' && val.length === 7) {
+            newDate = `${val}-01`;
+        } else if (viewType === 'year' && val.length === 4) {
+            newDate = `${val}-01-01`;
+        }
+        
+        setSelectedDate(newDate);
+    };
+
+    useEffect(() => {
+        // Auto-sync date when view type changes
+        handleDateChange(selectedDate);
+    }, [viewType]);
 
     useEffect(() => {
         // Initialize EmailJS
@@ -111,14 +140,14 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         let currentStart, currentEnd, prevStart, prevEnd;
 
         // Determine Date Ranges
-        if (timeframe === 'daily') {
+        if (viewType === 'day') {
             currentStart = new Date(now);
             currentEnd = new Date(now);
 
             prevStart = new Date(now);
             prevStart.setDate(now.getDate() - 1);
             prevEnd = new Date(prevStart);
-        } else if (timeframe === 'weekly') {
+        } else if (viewType === 'week') {
             currentStart = new Date(now);
             currentStart.setDate(now.getDate() - now.getDay()); // Sunday
             currentEnd = new Date(currentStart);
@@ -128,12 +157,18 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             prevStart.setDate(currentStart.getDate() - 7);
             prevEnd = new Date(prevStart);
             prevEnd.setDate(prevStart.getDate() + 6);
-        } else if (timeframe === 'monthly') {
+        } else if (viewType === 'month') {
             currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
             currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
             prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        } else if (viewType === 'year') {
+            currentStart = new Date(now.getFullYear(), 0, 1);
+            currentEnd = new Date(now.getFullYear(), 11, 31);
+
+            prevStart = new Date(now.getFullYear() - 1, 0, 1);
+            prevEnd = new Date(now.getFullYear() - 1, 11, 31);
         }
 
         // Filter Surgeries using string-based comparison to avoid timezone issues
@@ -235,6 +270,10 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         const mStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1); mStart.setHours(0, 0, 0, 0);
         const mEnd = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0); mEnd.setHours(23, 59, 59, 999);
 
+        // Yearly Range for Top Surgeon
+        const yStart = new Date(dateObj.getFullYear(), 0, 1); yStart.setHours(0, 0, 0, 0);
+        const yEnd = new Date(dateObj.getFullYear(), 11, 31); yEnd.setHours(23, 59, 59, 999);
+
         const dailySurgs = surgeries.filter(s => isDateInRange(s.date, selectedDate, selectedDate));
         const weeklySurgs = surgeries.filter(s => isDateInRange(s.date,
             wStart.toISOString().split('T')[0],
@@ -244,11 +283,16 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             mStart.toISOString().split('T')[0],
             mEnd.toISOString().split('T')[0]
         ));
+        const yearlySurgs = surgeries.filter(s => isDateInRange(s.date,
+            yStart.toISOString().split('T')[0],
+            yEnd.toISOString().split('T')[0]
+        ));
 
         setTopSurgeons({
             daily: calculateTopSurgeon(dailySurgs),
             weekly: calculateTopSurgeon(weeklySurgs),
-            monthly: calculateTopSurgeon(monthlySurgs)
+            monthly: calculateTopSurgeon(monthlySurgs),
+            yearly: calculateTopSurgeon(yearlySurgs)
         });
 
         // Calculate Utilization for Pie Chart (Current View)
@@ -293,7 +337,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
 
         setUtilizationData(calculateUtilization(currentSurgeries));
 
-    }, [surgeries, selectedDate, cptCodes, timeframe, outcomeView, includeLaborSupplies]);
+    }, [surgeries, selectedDate, cptCodes, viewType, outcomeView, includeLaborSupplies]);
 
     // Helper for consistent colors
     const generateColor = (str) => {
@@ -314,7 +358,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
 
         doc.setFontSize(11);
         doc.setTextColor(100);
-        doc.text(`Date: ${selectedDate} | View: ${timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}`, 14, 30);
+        doc.text(`Date: ${selectedDate} | View: ${viewType.charAt(0).toUpperCase() + viewType.slice(1)}`, 14, 30);
 
         // 1. Financial Summary
         doc.setFontSize(14);
@@ -344,7 +388,8 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             body: [
                 ['Daily', topSurgeons.daily ? topSurgeons.daily.name : 'N/A', topSurgeons.daily ? formatCurrency(topSurgeons.daily.profit) : '-'],
                 ['Weekly', topSurgeons.weekly ? topSurgeons.weekly.name : 'N/A', topSurgeons.weekly ? formatCurrency(topSurgeons.weekly.profit) : '-'],
-                ['Monthly', topSurgeons.monthly ? topSurgeons.monthly.name : 'N/A', topSurgeons.monthly ? formatCurrency(topSurgeons.monthly.profit) : '-']
+                ['Monthly', topSurgeons.monthly ? topSurgeons.monthly.name : 'N/A', topSurgeons.monthly ? formatCurrency(topSurgeons.monthly.profit) : '-'],
+                ['Yearly', topSurgeons.yearly ? topSurgeons.yearly.name : 'N/A', topSurgeons.yearly ? formatCurrency(topSurgeons.yearly.profit) : '-']
             ],
             theme: 'grid',
             headStyles: { fillColor: [39, 174, 96] }
@@ -482,14 +527,64 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             <div className="dashboard-header">
                 <div className="header-left">
                     <h2 className="page-title">Dashboard</h2>
-                    <div className="date-picker">
+                    <div className="view-toggle-container" style={{ marginLeft: '1rem' }}>
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'day' ? 'active' : ''}`}
+                            onClick={() => setViewType('day')}
+                        >Day</button>
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'week' ? 'active' : ''}`}
+                            onClick={() => setViewType('week')}
+                        >Week</button>
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'month' ? 'active' : ''}`}
+                            onClick={() => setViewType('month')}
+                        >Month</button>
+                        <button 
+                            className={`view-toggle-btn ${viewType === 'year' ? 'active' : ''}`}
+                            onClick={() => setViewType('year')}
+                        >Year</button>
+                    </div>
+                    <div className="date-picker" style={{ marginLeft: '1rem' }}>
                         <span className="icon">📅</span>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="date-input"
-                        />
+                        {viewType === 'day' && (
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                            />
+                        )}
+                        {viewType === 'week' && (
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                                min="2024-01-01"
+                                step="7"
+                                title="Select a week (Mondays only)"
+                            />
+                        )}
+                        {viewType === 'month' && (
+                            <input
+                                type="month"
+                                value={selectedDate.substring(0, 7)}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                            />
+                        )}
+                        {viewType === 'year' && (
+                            <select
+                                value={selectedDate.substring(0, 4)}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                className="date-input"
+                            >
+                                {Array.from({ length: 7 }, (_, i) => 2024 + i).map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '1rem', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                         <input
@@ -559,7 +654,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                         <div className="mini-stat-card">
                             <div className="mini-stat-icon cases">🏥</div>
                             <div className="mini-stat-info">
-                                <span className="mini-stat-label">Cases {timeframe === 'daily' ? 'Today' : timeframe === 'weekly' ? 'This Week' : 'This Month'}</span>
+                                <span className="mini-stat-label">Cases {viewType === 'day' ? 'Today' : viewType === 'week' ? 'This Week' : viewType === 'month' ? 'This Month' : 'This Year'}</span>
                                 <span className="mini-stat-value">{stats.totalSurgeries}</span>
                             </div>
                         </div>
@@ -603,6 +698,17 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                                 </div>
                             ) : <div className="ts-empty">No surgeries this month</div>}
                         </div>
+                        <div className="top-surgeon-card">
+                            <div className="ts-header">Yearly Top Performer</div>
+                            {topSurgeons.yearly ? (
+                                <div className="ts-content">
+                                    <div className="ts-name">{topSurgeons.yearly.name}</div>
+                                    <div className={`ts-profit ${topSurgeons.yearly.profit >= 0 ? 'positive' : 'negative'}`}>
+                                        {topSurgeons.yearly.profit > 0 ? '+' : ''}{formatCurrency(topSurgeons.yearly.profit)}
+                                    </div>
+                                </div>
+                            ) : <div className="ts-empty">No surgeries this year</div>}
+                        </div>
                     </div>
                 </div>
 
@@ -613,22 +719,28 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                             <h3>Case Profitability Analysis</h3>
                             <div className="chart-actions">
                                 <button
-                                    className={`chart-action-btn ${timeframe === 'daily' ? 'active' : ''}`}
-                                    onClick={() => setTimeframe('daily')}
+                                    className={`chart-action-btn ${viewType === 'day' ? 'active' : ''}`}
+                                    onClick={() => setViewType('day')}
                                 >
-                                    Daily
+                                    Day
                                 </button>
                                 <button
-                                    className={`chart-action-btn ${timeframe === 'weekly' ? 'active' : ''}`}
-                                    onClick={() => setTimeframe('weekly')}
+                                    className={`chart-action-btn ${viewType === 'week' ? 'active' : ''}`}
+                                    onClick={() => setViewType('week')}
                                 >
-                                    Weekly
+                                    Week
                                 </button>
                                 <button
-                                    className={`chart-action-btn ${timeframe === 'monthly' ? 'active' : ''}`}
-                                    onClick={() => setTimeframe('monthly')}
+                                    className={`chart-action-btn ${viewType === 'month' ? 'active' : ''}`}
+                                    onClick={() => setViewType('month')}
                                 >
-                                    Monthly
+                                    Month
+                                </button>
+                                <button
+                                    className={`chart-action-btn ${viewType === 'year' ? 'active' : ''}`}
+                                    onClick={() => setViewType('year')}
+                                >
+                                    Year
                                 </button>
                             </div>
                         </div>
@@ -722,7 +834,7 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                     {/* OR Utilization Chart */}
                     <div className="chart-card utilization-chart-card">
                         <div className="chart-header">
-                            <h3>OR Utilization by Surgeon ({timeframe})</h3>
+                            <h3>OR Utilization by Surgeon ({viewType})</h3>
                         </div>
                         <div className="utilization-chart-container">
                             {utilizationData.length === 0 ? (

@@ -91,6 +91,37 @@
     cursor: pointer;
 }
 
+/* View Toggle */
+.view-toggle-container {
+    display: flex;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 50px;
+    border: 1px solid #e2e8f0;
+}
+
+.view-toggle-btn {
+    padding: 6px 20px;
+    border-radius: 50px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.view-toggle-btn:hover {
+    color: #1e293b;
+}
+
+.view-toggle-btn.active {
+    background: white;
+    color: #3b82f6;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
 /* Action Buttons */
 .btn-action {
     background: white;
