@@ -14,6 +14,7 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
         { id: 'or-schedule', icon: '🗓️', label: 'OR Block Schedule', permission: 'view_or_blocks' },
         { id: 'surgery-schedule-sidebar', icon: '🗓️', label: 'Surgery Schedule', permission: 'view_surgery_schedule' },
         { id: 'surgeons', icon: '👨‍⚕️', label: 'Surgeon Management', permission: 'manage_surgeons' },
+        { id: 'surgeon-dashboard', icon: '🩺', label: 'Surgeon Dashboard', permission: 'view_surgeon_dashboard' },
         { id: 'staff', icon: '👩‍⚕️', label: 'Nurses & Staff', permission: 'manage_staff' },
         { id: 'users', icon: '🔐', label: 'User Management', permission: 'manage_users' },
         { id: 'roles-permissions', icon: '🛡️', label: 'Roles & Permissions', permission: 'manage_permissions' },
@@ -23,7 +24,10 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
         { id: 'auto-cpt', icon: '🔄', label: 'CPT Auto-Updater', permission: 'use_auto_updater' },
         { id: 'supply-manager', icon: '📦', label: 'Supply Manager', permission: 'manage_supplies' },
         { id: 'settings', icon: '🔧', label: 'Settings', permission: 'manage_settings' },
-        { id: 'instruction-panel', icon: '🤖', label: 'Instruction Panel', permission: 'manage_chatbot' }
+        { id: 'instruction-panel', icon: '🤖', label: 'Instruction Panel', permission: 'manage_chatbot' },
+        { id: 'audit-logs', icon: '📜', label: 'Audit Logs', permission: 'view_audit_logs' },
+        { id: 'cost-analysis', icon: '📊', label: 'Cost Analytics', permission: 'view_cost_analysis' },
+        { id: 'ai-analyst', icon: '✨', label: 'AI Analyst', permission: 'use_ai_analyst' }
     ];
 
     const getMenuItems = () => {

@@ -27,6 +27,9 @@ import ManagerDashboard from './components/ManagerDashboard';
 import SurgeonDashboard from './components/SurgeonDashboard';
 import CancellationRescheduling from './components/CancellationRescheduling';
 import InstructionPanel from './components/InstructionPanel';
+import AuditLogs from './components/AuditLogs';
+import CostAnalysis from './components/CostAnalysis';
+import AIAnalystModal from './components/AIAnalystModal';
 
 import Swal from 'sweetalert2';
 import { db } from './lib/supabase';
@@ -1344,6 +1347,30 @@ function App() {
     if (view === 'auto-cpt' && hasPerm('use_auto_updater')) return <CPTAutoUpdate />;
 
     if (view === 'instruction-panel' && hasPerm('manage_chatbot')) return <InstructionPanel />;
+
+    if (view === 'audit-logs' && hasPerm('view_audit_logs')) return <AuditLogs />;
+
+    if (view === 'surgeon-dashboard' && (user.role === 'surgeon' || hasPerm('view_surgeon_dashboard'))) {
+      return <SurgeonDashboard user={user} surgeries={surgeries} cptCodes={filteredCptCodes} surgeons={surgeons} settings={settings} procedureGroupItems={procedureGroupItems} />;
+    }
+
+    if (view === 'cost-analysis' && hasPerm('view_cost_analysis')) {
+      return <CostAnalysis surgeries={surgeries} cptCodes={filteredCptCodes} surgeons={surgeons} settings={settings} procedureGroupItems={procedureGroupItems} />;
+    }
+
+    if (view === 'ai-analyst' && hasPerm('use_ai_analyst')) {
+      return (
+        <div style={{ padding: '20px', height: '100%' }}>
+          <AIAnalystModal 
+            isOpen={true} 
+            onClose={() => setView('dashboard')} 
+            surgeries={surgeries} 
+            cptCodes={filteredCptCodes} 
+            settings={settings} 
+          />
+        </div>
+      );
+    }
 
     if (view === 'settings' && hasPerm('manage_settings')) return <Settings onUpdate={loadAllData} />;
 

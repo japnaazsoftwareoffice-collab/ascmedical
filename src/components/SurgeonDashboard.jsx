@@ -11,13 +11,24 @@ import {
 } from 'recharts';
 import './SurgeonDashboard.css';
 
-const SurgeonDashboard = ({ user, surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
+const SurgeonDashboard = ({ user, surgeries, cptCodes, surgeons = [], settings, procedureGroupItems = [] }) => {
     const [viewType, setViewType] = useState('month');
     const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    
+    // Support for non-surgeon viewing multiple surgeons
+    const [selectedSurgeonId, setSelectedSurgeonId] = useState(user.surgeon_id || null);
 
-    // 1. Surgeon name
-    const surgeonName = useMemo(() => user.full_name || user.name || 'Unknown Surgeon', [user]);
+    // Filter by surgeon
+    const currentSurgeon = useMemo(() => {
+        if (user.role === 'admin' || user.role === 'manager') {
+            return surgeons.find(s => s.id === parseInt(selectedSurgeonId)) || (surgeons.length > 0 ? surgeons[0] : null);
+        }
+        return surgeons.find(s => s.id === user.surgeon_id) || user;
+    }, [user, selectedSurgeonId, surgeons]);
+
+    const surgeonName = useMemo(() => currentSurgeon?.full_name || currentSurgeon?.name || 'Unknown Surgeon', [currentSurgeon]);
+    const activeSurgeonId = currentSurgeon?.id || user.surgeon_id;
 
     // 2. Compute date range from viewType + selectedDate
     const dateRange = useMemo(() => {
@@ -48,10 +59,10 @@ const SurgeonDashboard = ({ user, surgeries, cptCodes, settings, procedureGroupI
     // 3. Filter this surgeon's surgeries within the date range
     const mySurgeries = useMemo(() =>
         surgeries.filter(s =>
-            (s.doctor_name === surgeonName || s.surgeon_id === user.surgeon_id) &&
+            (s.doctor_name === surgeonName || s.surgeon_id === activeSurgeonId) &&
             isDateInRange(s.date, dateRange.start, dateRange.end)
         ),
-        [surgeries, surgeonName, user.surgeon_id, dateRange]
+        [surgeries, surgeonName, activeSurgeonId, dateRange]
     );
 
     // 4. Stats
@@ -116,21 +127,38 @@ const SurgeonDashboard = ({ user, surgeries, cptCodes, settings, procedureGroupI
         const today = formatDateLocal(new Date());
         return surgeries
             .filter(s =>
-                (s.doctor_name === surgeonName || s.surgeon_id === user.surgeon_id) &&
+                (s.doctor_name === surgeonName || s.surgeon_id === activeSurgeonId) &&
                 s.status === 'scheduled' && s.date >= today
             )
             .sort((a, b) => new Date(a.date) - new Date(b.date))
             .slice(0, 5);
-    }, [surgeries, surgeonName, user.surgeon_id]);
+    }, [surgeries, surgeonName, activeSurgeonId]);
 
     return (
         <div className="surgeon-dashboard fade-in">
             <header className="sd-header">
                 <div className="sd-welcome">
-                    <h1>Welcome, {surgeonName}</h1>
-                    <p>Here's your surgical performance and schedule overview.</p>
+                    <h1>{user.role === 'admin' || user.role === 'manager' ? 'Surgeon Analytics' : `Welcome, ${surgeonName}`}</h1>
+                    <p>{user.role === 'admin' || user.role === 'manager' ? `Reviewing performance for ${surgeonName}` : "Here's your surgical performance and schedule overview."}</p>
                 </div>
                 <div className="sd-controls">
+                    {/* Surgeon Selector for Admin/Manager */}
+                    {(user.role === 'admin' || user.role === 'manager') && (
+                        <div className="sd-surgeon-selector">
+                            <span>👩‍⚕️</span>
+                            <select 
+                                value={selectedSurgeonId || ''} 
+                                onChange={(e) => setSelectedSurgeonId(e.target.value)}
+                                className="sd-date-input"
+                                style={{ minWidth: '180px' }}
+                            >
+                                {surgeons.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     {/* Labor/Supplies toggle */}
                     <div className="cost-toggle">
                         <input
