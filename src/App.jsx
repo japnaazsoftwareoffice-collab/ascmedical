@@ -429,7 +429,8 @@ function App() {
         actual_end_time: newSurgery.actual_end_time || newSurgery.actualEndTime || null,
         actual_duration_minutes: parseInt(newSurgery.actual_duration_minutes || newSurgery.actualDurationMinutes || 0) || null,
         write_off: parseFloat(newSurgery.write_off || newSurgery.writeOff || 0),
-        status: newSurgery.status || 'scheduled'
+        status: newSurgery.status || 'scheduled',
+        is_probono: newSurgery.is_probono || newSurgery.isProbono || false
       };
 
       if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
@@ -598,7 +599,8 @@ function App() {
         // Merge updates with current surgery to ensure consistency
         const mergedSurgery = {
           ...currentSurgery,
-          ...updates
+          ...updates,
+          is_probono: updates.is_probono !== undefined ? updates.is_probono : currentSurgery.is_probono
         };
 
         // Filter out joined objects and non-column fields that would cause database errors

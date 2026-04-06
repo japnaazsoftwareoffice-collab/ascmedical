@@ -203,6 +203,7 @@ export const formatCurrency = (amount) => {
 // Calculate all metrics for a surgery consistently across the app
 export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGroupItems = []) => {
     const isCosmetic = surgery.notes && surgery.notes.includes('Fixed Facility Fee Case');
+    const isProbono = !!(surgery.is_probono || surgery.isProbono);
     let cptTotal = 0;
     let orCost = 0; // Billable Facility Fee
     let internalRoomCost = 0;
@@ -264,6 +265,15 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         
         totalValue = (facilityFee + anesthesiaRevenue + supplyCosts) - writeOff;
         
+        // If pro-bono, everything is zeroed out
+        if (isProbono) {
+            totalValue = 0;
+            internalRoomCost = 0;
+            laborCost = 0;
+            supplyCosts = 0;
+            anesthesiaRevenue = 0;
+        }
+
         // Actual margin is Revenue minus all costs (including internal room/labor)
         netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
     } else {
@@ -282,6 +292,15 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         // We DO NOT add a theoretical 'orCost' facility fee on top of CPTs
         totalValue = (cptTotal + anesthesiaRevenue + supplyCosts) - writeOff;
 
+        // If pro-bono, everything is zeroed out
+        if (isProbono) {
+            totalValue = 0;
+            internalRoomCost = 0;
+            laborCost = 0;
+            supplyCosts = 0;
+            anesthesiaRevenue = 0;
+        }
+
         // Anesthesia and supplies are pass-through costs
         netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
     }
@@ -296,6 +315,7 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         internalRoomCost,
         laborCost,
         writeOff,
-        isCosmetic
+        isCosmetic,
+        isProbono
     };
 };

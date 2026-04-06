@@ -40,7 +40,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         actualEndTime: '',
         actualDurationMinutes: 0,
         applyFixedCosmeticFee: false,
-        writeOff: 0
+        writeOff: 0,
+        isProbono: false
     });
 
     // Rescheduling Modal State
@@ -276,17 +277,20 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const calculateSurgeryFinancials = (surgery) => {
         const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
 
-        // Adjust metrics based on whether we include Labor & Supplies
-        if (!includeLaborSupplies) {
+        // Adjust metrics based on display preferences, but keep full transparency for Pro-Bono cases
+        if (!includeLaborSupplies && !metrics.isProbono) {
             // Remove labor/supplies and facility cost from profit calculation
             metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
             // Subtract supply revenue to show only Room + CPT
             metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
-            metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
-            // Zero out values for display consistency
+            // For insurance views, display 0 for hidden costs
+            metrics.totalRevenue = Math.max(0, metrics.totalRevenue - metrics.supplyCosts);
             metrics.laborCost = 0;
             metrics.supplyCosts = 0;
             metrics.internalRoomCost = 0;
+        } else if (metrics.isProbono) {
+            // Pro-Bono always shows 0 revenue
+            metrics.totalRevenue = 0;
         }
 
         return {
@@ -297,7 +301,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             supplyCosts: metrics.supplyCosts,
             internalRoomCost: metrics.internalRoomCost,
             laborCost: metrics.laborCost,
-            isCosmetic: metrics.isCosmetic
+            isCosmetic: metrics.isCosmetic,
+            isProbono: metrics.isProbono
         };
     };
 
@@ -460,7 +465,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             medications_cost: formData.medicationsCost || 0,
             actual_start_time: formData.startTime || null,
             actual_end_time: formData.actualEndTime || null,
-            actual_duration_minutes: formData.actualDurationMinutes || null
+            actual_duration_minutes: formData.actualDurationMinutes || null,
+            is_probono: formData.isProbono
         };
 
         // Note generation logic for fixed fee vs CPT
@@ -530,7 +536,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                 suppliesCost: 0,
                 implantsCost: 0,
                 medicationsCost: 0,
-                turnoverTime: 0
+                turnoverTime: 0,
+                isProbono: false
             });
         } catch (error) {
             // Error is already handled by Swal in handleScheduleSurgery (App.jsx)
@@ -619,7 +626,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             actualEndTime: formatTimeForInput(surgery.actual_end_time),
             actualDurationMinutes: surgery.actual_duration_minutes || 0,
             applyFixedCosmeticFee: false, // Per request: always off by default when starting edit
-            writeOff: surgery.write_off || 0
+            writeOff: surgery.write_off || 0,
+            isProbono: surgery.is_probono || false
         });
 
         setIsFormOpen(true);
@@ -648,7 +656,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             selfPayRateName: '',
             turnoverTime: 60,
             applyFixedCosmeticFee: false,
-            writeOff: 0
+            writeOff: 0,
+            isProbono: false
         });
     };
 
@@ -798,7 +807,6 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
         if (formData.isSelfPayAnesthesia) {
             dummyNotes += `; Self-Pay Anesthesia: $${formData.anesthesiaFee}`;
         }
-
         const dummySurgery = {
             duration_minutes: formData.durationMinutes,
             turnover_time: formData.turnoverTime,
@@ -808,24 +816,29 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             medications_cost: formData.medicationsCost,
             actual_duration_minutes: formData.actualDurationMinutes,
             notes: dummyNotes,
-            write_off: formData.writeOff
+            write_off: formData.writeOff,
+            is_probono: formData.isProbono
         };
 
         const metrics = getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
 
-        // If user wants to exclude Labor & Supplies from the calculation
-        if (!includeLaborSupplies) {
+        // If user wants to exclude Labor & Supplies from the calculation (Insurance View)
+        // BUT for Pro-Bono always show full internal costs for transparency
+        if (!includeLaborSupplies && !metrics.isProbono) {
             // 1. Remove labor/supplies and facility cost from the cost side of profit
             metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
 
             // 2. Remove supplies from the revenue side (user wants room + cpt only)
             metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
-            metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+            metrics.totalRevenue = Math.max(0, metrics.totalRevenue - metrics.supplyCosts);
 
             // 3. Zero out the displayed costs
             metrics.laborCost = 0;
             metrics.supplyCosts = 0;
             metrics.internalRoomCost = 0;
+        } else if (metrics.isProbono) {
+            // Pro-Bono always shows 0 revenue
+            metrics.totalRevenue = 0;
         }
 
         return metrics;
@@ -1129,6 +1142,24 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                                 })()}
                                                                             </div>
                                                                         )}
+                                                                        {(surgery.is_probono || surgery.isProbono) && (
+                                                                            <div style={{ marginTop: '4px' }}>
+                                                                                <span className="badge" style={{
+                                                                                    background: '#fdf2f8',
+                                                                                    color: '#9d174d',
+                                                                                    padding: '2px 8px',
+                                                                                    borderRadius: '4px',
+                                                                                    fontSize: '0.8rem',
+                                                                                    border: '1px solid #f9a8d4',
+                                                                                    display: 'inline-flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '4px',
+                                                                                    fontWeight: '700'
+                                                                                }}>
+                                                                                    💗 Pro-Bono Case
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
                                                                     </td>
                                                                     <td>
                                                                         {(() => {
@@ -1164,6 +1195,20 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                     }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                                                                             {formatCurrency(netProfit)}
+                                                                            {(surgery.is_probono || surgery.isProbono) && (
+                                                                                <span style={{
+                                                                                    fontSize: '0.65rem',
+                                                                                    background: '#fff1f2',
+                                                                                    color: '#e11d48',
+                                                                                    padding: '1px 6px',
+                                                                                    borderRadius: '4px',
+                                                                                    marginTop: '2px',
+                                                                                    border: '1px solid #fb7185',
+                                                                                    fontWeight: '600'
+                                                                                }}>
+                                                                                    💗 Charity Loss
+                                                                                </span>
+                                                                            )}
                                                                             {isCosmeticSurgery && (
                                                                                 <span style={{
                                                                                     fontSize: '0.65rem',
@@ -2054,23 +2099,49 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 Amount will be subtracted from total revenue.
                                             </p>
                                         </div>
+
+                                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem' }}>
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                background: formData.isProbono ? '#fdf2f8' : '#f8fafc',
+                                                padding: '10px 15px',
+                                                borderRadius: '10px',
+                                                border: `2px solid ${formData.isProbono ? '#db2777' : '#e2e8f0'}`,
+                                                transition: 'all 0.2s ease',
+                                                cursor: 'pointer'
+                                            }} onClick={() => setFormData({ ...formData, isProbono: !formData.isProbono })}>
+                                                <input
+                                                    type="checkbox"
+                                                    id="isProbono"
+                                                    checked={formData.isProbono}
+                                                    onChange={(e) => setFormData({ ...formData, isProbono: e.target.checked })}
+                                                    style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer' }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <label htmlFor="isProbono" style={{ fontSize: '0.95rem', fontWeight: '700', cursor: 'pointer', color: formData.isProbono ? '#9d174d' : '#475569', marginBottom: 0 }}>
+                                                    Pro-Bono / Charity Case (Zero Revenue)
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Profitability Guardrails */}
-                                {(formData.selectedCptCodes.length > 0 || formData.applyFixedCosmeticFee) && (
+                                {(formData.selectedCptCodes.length > 0 || formData.applyFixedCosmeticFee || formData.isProbono) && (
                                     <div style={{
                                         marginTop: '2rem',
                                         padding: '1.5rem',
-                                        background: formData.applyFixedCosmeticFee ? '#eff6ff' : (projectedMargin < 0 ? '#fee2e2' : '#f0fdf4'),
-                                        border: `2px solid ${formData.applyFixedCosmeticFee ? '#3b82f6' : (projectedMargin < 0 ? '#dc2626' : '#059669')}`,
+                                        background: formData.isProbono ? '#fdf2f8' : (formData.applyFixedCosmeticFee ? '#eff6ff' : (projectedMargin < 0 ? '#fee2e2' : '#f0fdf4')),
+                                        border: `2px solid ${formData.isProbono ? '#db2777' : (formData.applyFixedCosmeticFee ? '#3b82f6' : (projectedMargin < 0 ? '#dc2626' : '#059669'))}`,
                                         borderRadius: '12px'
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', color: formData.applyFixedCosmeticFee ? '#1e40af' : '#64748b', fontWeight: '700' }}>
-                                                        {formData.applyFixedCosmeticFee ? '💰 Cosmetic Fee Breakdown' : '📊 Financial Projection'}
+                                                    <h4 style={{ margin: 0, fontSize: '1.1rem', color: formData.isProbono ? '#9d174d' : (formData.applyFixedCosmeticFee ? '#1e40af' : '#64748b'), fontWeight: '700' }}>
+                                                        {formData.isProbono ? '💗 Pro-Bono Case Summary' : (formData.applyFixedCosmeticFee ? '💰 Cosmetic Fee Breakdown' : '📊 Financial Projection')}
                                                     </h4>
                                                     {!formData.applyFixedCosmeticFee && (
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
