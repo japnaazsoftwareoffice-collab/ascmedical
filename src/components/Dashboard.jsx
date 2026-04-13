@@ -63,7 +63,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
         if (isNaN(d.getTime())) return;
 
         let newDate = val;
-        
+
         if (viewType === 'week') {
             // Snap to Monday of that week
             const day = d.getDay();
@@ -75,7 +75,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
         } else if (viewType === 'year' && val.length === 4) {
             newDate = `${val}-01-01`;
         }
-        
+
         setSelectedDate(newDate);
     };
 
@@ -392,8 +392,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
             body: [
                 ['Daily', topSurgeons.daily ? topSurgeons.daily.name : 'N/A', topSurgeons.daily ? formatCurrency(topSurgeons.daily.profit) : '-'],
                 ['Weekly', topSurgeons.weekly ? topSurgeons.weekly.name : 'N/A', topSurgeons.weekly ? formatCurrency(topSurgeons.weekly.profit) : '-'],
-                ['Monthly', topSurgeons.monthly ? topSurgeons.monthly.name : 'N/A', topSurgeons.monthly ? formatCurrency(topSurgeons.monthly.profit) : '-'],
-                ['Yearly', topSurgeons.yearly ? topSurgeons.yearly.name : 'N/A', topSurgeons.yearly ? formatCurrency(topSurgeons.yearly.profit) : '-']
+                ['Monthly', topSurgeons.monthly ? topSurgeons.monthly.name : 'N/A', topSurgeons.monthly ? formatCurrency(topSurgeons.monthly.profit) : '-']
             ],
             theme: 'grid',
             headStyles: { fillColor: [39, 174, 96] }
@@ -426,7 +425,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
             c.patientMrn,
             c.date,
             formatCurrency(c.revenue),
-            c.isProbono ? 'PR-BONO' : 'REGULAR'
+            c.isProbono ? 'PR-BONO' : '-'
         ]);
 
         autoTable(doc, {
@@ -532,19 +531,19 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
                 <div className="header-left">
                     <h2 className="page-title">Dashboard</h2>
                     <div className="view-toggle-container" style={{ marginLeft: '1rem' }}>
-                        <button 
+                        <button
                             className={`view-toggle-btn ${viewType === 'day' ? 'active' : ''}`}
                             onClick={() => setViewType('day')}
                         >Day</button>
-                        <button 
+                        <button
                             className={`view-toggle-btn ${viewType === 'week' ? 'active' : ''}`}
                             onClick={() => setViewType('week')}
                         >Week</button>
-                        <button 
+                        <button
                             className={`view-toggle-btn ${viewType === 'month' ? 'active' : ''}`}
                             onClick={() => setViewType('month')}
                         >Month</button>
-                        <button 
+                        <button
                             className={`view-toggle-btn ${viewType === 'year' ? 'active' : ''}`}
                             onClick={() => setViewType('year')}
                         >Year</button>
