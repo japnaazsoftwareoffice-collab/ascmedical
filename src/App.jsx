@@ -1240,7 +1240,7 @@ function App() {
     const hasPerm = (perm) => userPermissions.includes(perm);
 
     // 1. Permission-based rendering (Unified for Admin & Manager)
-    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
+    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} patients={patients} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
 
     // Manager Dashboard - Check permission
     if (view === 'manager-dashboard' && (user.role === 'manager' || hasPerm('view_manager_dashboard'))) {

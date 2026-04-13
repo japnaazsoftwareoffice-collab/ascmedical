@@ -14,7 +14,7 @@ const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_1
 const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_7bwe5or';
 const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'kemMSpgMmsNS0Hcu5';
 
-const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
+const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGroupItems = [] }) => {
     const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [viewType, setViewType] = useState('day'); // day, week, month, year
@@ -117,8 +117,14 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
                     usage[code] = (usage[code] || 0) + 1;
                 });
 
+                const patient = patients.find(p => p.id === surgery.patient_id);
+                const patientMrn = patient ? patient.mrn : (surgery.patient_id || 'N/A');
+
                 perCaseData.push({
                     id: surgery.id,
+                    patientMrn: patientMrn,
+                    date: surgery.date,
+                    isProbono: !!(surgery.is_probono || surgery.isProbono),
                     revenue: metrics.totalRevenue,
                     cost: metrics.internalRoomCost + metrics.laborCost + metrics.supplyCosts,
                     laborCost: metrics.laborCost,
@@ -357,8 +363,8 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         doc.text('Financial Dashboard Report', 14, 22);
 
         doc.setFontSize(11);
-        doc.setTextColor(100);
-        doc.text(`Date: ${selectedDate} | View: ${viewType.charAt(0).toUpperCase() + viewType.slice(1)}`, 14, 30);
+        const monthName = new Date(selectedDate + 'T00:00:00').toLocaleString('default', { month: 'long', year: 'numeric' });
+        doc.text(`Date: ${selectedDate} (${monthName}) | View: ${viewType.charAt(0).toUpperCase() + viewType.slice(1)}`, 14, 30);
 
         // 1. Financial Summary
         doc.setFontSize(14);
@@ -370,8 +376,6 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
             head: [['Metric', 'Value']],
             body: [
                 ['Total Revenue', formatCurrency(stats.totalRevenue)],
-                ['Total Cost', formatCurrency(stats.totalCost)],
-                ['Net Profit', formatCurrency(stats.netProfit)],
                 ['Total Surgeries', stats.totalSurgeries.toString()]
             ],
             theme: 'striped',
@@ -419,15 +423,15 @@ const Dashboard = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) 
         doc.text('Case Profitability Detail', 14, finalY);
 
         const caseRows = chartData.map((c, index) => [
-            `Case #${index + 1}`,
+            c.patientMrn,
+            c.date,
             formatCurrency(c.revenue),
-            formatCurrency(c.cost),
-            formatCurrency(c.profit)
+            c.isProbono ? 'PR-BONO' : 'REGULAR'
         ]);
 
         autoTable(doc, {
             startY: finalY + 5,
-            head: [['Case ID', 'Revenue', 'Cost', 'Profit']],
+            head: [['Patient MRN No.', 'Schedule Date', 'Revenue', 'Probono']],
             body: caseRows.length > 0 ? caseRows : [['No surgeries', '-', '-', '-']],
             theme: 'striped',
             headStyles: { fillColor: [142, 68, 173] }
