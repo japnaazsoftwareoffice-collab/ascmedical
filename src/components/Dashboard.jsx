@@ -133,6 +133,9 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
                 });
             });
 
+            // Sort cases by date ascending
+            perCaseData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
             return {
                 revenue: totalRevenue,
                 cost: totalCost,
