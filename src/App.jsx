@@ -1034,27 +1034,26 @@ function App() {
           <div style="display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem;">
             <div>
               <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual End</label>
-              <input id="swal-end" type="time" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}">
+              <input id="swal-end" type="time" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.actual_end_time || new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}">
             </div>
           </div>
           <div style="margin-bottom: 1rem;">
             <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Actual Duration (Auto-calc/Override)</label>
-            <input id="swal-duration" type="number" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.duration_minutes || 60}">
-          </div>
-          <div style="margin-bottom: 0;">
-            <label style="display:block; font-weight:600; font-size: 0.9rem; margin-bottom:0.25rem; color: #1e293b;">Total Supplies Cost ($)</label>
-            <input id="swal-supplies" type="number" step="0.01" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.supplies_cost || 0}">
+            <input id="swal-duration" type="number" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${surgery.actual_duration_minutes || surgery.duration_minutes || 60}">
           </div>
         </div>
       `,
       didOpen: () => {
-
         const endInput = document.getElementById('swal-end');
         const durInput = document.getElementById('swal-duration');
 
         const updateDuration = () => {
-          const start = "${surgery.start_time ? (String(surgery.start_time).includes(':') ? String(surgery.start_time).slice(0, 5) : `${String(surgery.start_time).slice(0, 2)}:${String(surgery.start_time).slice(2)}`) : '07:30'}";
+          // Use actual_start_time if available, otherwise start_time
+          const baseStartTime = surgery.actual_start_time || surgery.start_time || '07:30';
+          const startStr = String(baseStartTime);
+          const start = startStr.includes(':') ? startStr.slice(0, 5) : (startStr.length === 4 ? `${startStr.slice(0, 2)}:${startStr.slice(2)}` : startStr);
           const end = endInput.value;
+          
           if (start && end) {
             const [sH, sM] = start.split(':').map(Number);
             const [eH, eM] = end.split(':').map(Number);
@@ -1065,7 +1064,10 @@ function App() {
         };
 
         endInput.addEventListener('change', updateDuration);
-        updateDuration();
+        // Only auto-update duration if it hasn't been set yet or if user changes the end time
+        if (!surgery.actual_duration_minutes) {
+          updateDuration();
+        }
       },
       showCancelButton: true,
       confirmButtonText: 'Calculate & Complete',
@@ -1073,8 +1075,7 @@ function App() {
       preConfirm: () => {
         return {
           end: document.getElementById('swal-end').value,
-          duration: document.getElementById('swal-duration').value,
-          supplies: document.getElementById('swal-supplies').value
+          duration: document.getElementById('swal-duration').value
         };
       }
     });
@@ -1084,16 +1085,17 @@ function App() {
     try {
       const actualDuration = parseInt(formValues.duration) || 0;
 
-      // Calculate metrics with actual values
+      // Calculate metrics with actual values (keeping existing supplies cost from record)
       const metrics = getSurgeryMetrics({
         ...surgery,
         actual_duration_minutes: actualDuration,
-        supplies_cost: parseFloat(formValues.supplies) || 0
+        supplies_cost: surgery.supplies_cost || 0
       }, cptCodes, settings, procedureGroupItems);
 
       const actualRoomCost = metrics.internalRoomCost;
       const actualLaborCost = metrics.laborCost;
-      const suppliesCost = metrics.supplyCosts;
+      const totalSuppliesCost = metrics.supplyCosts;
+      const cosmeticAnesthesiaFee = metrics.anesthesiaRevenue;
       const expectedReimbursement = metrics.totalRevenue;
       const netMargin = metrics.netProfit;
       const reimbursementSource = metrics.isCosmetic ? 'Cosmetic Facility' : 'Insurance/CPT';
@@ -1102,10 +1104,9 @@ function App() {
       // Update surgery with actual times and financial snapshot
       const updates = {
         status: 'completed',
-        actual_start_time: surgery.start_time,
+        actual_start_time: surgery.actual_start_time || surgery.start_time,
         actual_end_time: formValues.end,
         actual_duration_minutes: actualDuration,
-        supplies_cost: parseFloat(formValues.supplies) || 0,
         actual_room_cost: actualRoomCost,
         actual_labor_cost: actualLaborCost,
         expected_reimbursement: expectedReimbursement,
@@ -1132,39 +1133,47 @@ function App() {
                 </div>
               ` : ''}
               <hr style="margin: 0.25rem 0; border: none; border-top: 1px dotted #e2e8f0;">
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: #64748b;">Internal Room Cost:</span>
-                <strong style="color: #dc2626;">-$${actualRoomCost.toLocaleString()}</strong>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: #64748b;">Labor Cost:</span>
-                <strong style="color: #dc2626;">-$${actualLaborCost.toLocaleString()}</strong>
-              </div>
-              <div style="font-size: 0.75rem; color: #94a3b8; margin-top: -0.25rem; padding-left: 0.5rem;">
-                ✓ ${laborCostSource}
-              </div>
-              ${cosmeticAnesthesiaFee > 0 ? `
+              
+              ${metrics.isCosmetic ? `
                 <div style="display: flex; justify-content: space-between;">
-                  <span style="color: #64748b;">Anesthesia Cost:</span>
-                  <strong style="color: #dc2626;">-$${cosmeticAnesthesiaFee.toLocaleString()}</strong>
+                  <span style="color: #64748b;">Internal Room Cost:</span>
+                  <strong style="color: #dc2626;">-$${actualRoomCost.toLocaleString()}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #64748b;">Labor Cost:</span>
+                  <strong style="color: #dc2626;">-$${actualLaborCost.toLocaleString()}</strong>
                 </div>
                 <div style="font-size: 0.75rem; color: #94a3b8; margin-top: -0.25rem; padding-left: 0.5rem;">
-                  ✓ Quantum (Pass-through)
+                  ✓ ${laborCostSource}
                 </div>
-              ` : ''}
-              ${totalSuppliesCost > 0 ? `
-                <div style="display: flex; justify-content: space-between;">
-                  <span style="color: #64748b;">Supplies Cost:</span>
-                  <strong style="color: #dc2626;">-$${totalSuppliesCost.toLocaleString()}</strong>
+                ${cosmeticAnesthesiaFee > 0 ? `
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #64748b;">Anesthesia Cost:</span>
+                    <strong style="color: #dc2626;">-$${cosmeticAnesthesiaFee.toLocaleString()}</strong>
+                  </div>
+                  <div style="font-size: 0.75rem; color: #94a3b8; margin-top: -0.25rem; padding-left: 0.5rem;">
+                    ✓ Quantum (Pass-through)
+                  </div>
+                ` : ''}
+                ${totalSuppliesCost > 0 ? `
+                  <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #64748b;">Supplies Cost:</span>
+                    <strong style="color: #dc2626;">-$${totalSuppliesCost.toLocaleString()}</strong>
+                  </div>
+                ` : ''}
+                <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e2e8f0;">
+              ` : `
+                <div style="font-size: 0.85rem; color: #64748b; font-style: italic; margin-bottom: 0.5rem;">
+                  Note: Internal costs (Room/Labor) are excluded from this view.
                 </div>
-              ` : ''}
-              <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e2e8f0;">
+              `}
+
               <div style="display: flex; justify-content: space-between; font-size: 1.1rem;">
-                <span style="color: #1e293b; font-weight: 600;">Net Margin:</span>
-                <strong style="color: ${netMargin >= 0 ? '#059669' : '#dc2626'};">$${netMargin.toLocaleString()}</strong>
+                <span style="color: #1e293b; font-weight: 600;">Actual Margin:</span>
+                <strong style="color: ${netMargin >= 0 ? '#059669' : '#dc2626'};">$${(metrics.isCosmetic ? netMargin : expectedReimbursement).toLocaleString()}</strong>
               </div>
               <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #64748b;">
-                Margin: ${expectedReimbursement > 0 ? ((netMargin / expectedReimbursement) * 100).toFixed(1) : 0}%
+                Margin: ${expectedReimbursement > 0 ? (((metrics.isCosmetic ? netMargin : expectedReimbursement) / expectedReimbursement) * 100).toFixed(1) : 0}%
               </div>
             </div>
           </div>
@@ -1324,7 +1333,7 @@ function App() {
 
     if (view === 'analysis' && hasPerm('view_analytics')) return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
 
-    if (view === 'scorecard' && hasPerm('view_scorecards')) return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} />;
+    if (view === 'scorecard' && hasPerm('view_scorecards')) return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
 
     if (view === 'cpt' && hasPerm('manage_cpt_codes')) {
       return <CPTManager cptCodes={cptCodes} showAllCPTs={showAllCPTs} setShowAllCPTs={setShowAllCPTs} onAddCPT={handleAddCPT} onUpdateCPT={handleUpdateCPT} onDeleteCPT={handleDeleteCPT} onRefreshCPTCodes={loadAllData} />;

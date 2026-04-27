@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { calculateORCost, calculateMedicareRevenue, formatCurrency } from '../utils/hospitalUtils';
+import { calculateORCost, calculateMedicareRevenue, formatCurrency, getSurgeryMetrics } from '../utils/hospitalUtils';
 import './Management.css';
 
 const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGroupItems = [] }) => {
@@ -42,10 +42,9 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
             const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
 
             if (!includeLaborSupplies) {
-                // Logic for Room + CPT only
-                metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
-                metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
-                metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+                // Simplified View: Profit = Revenue (excluding all internal costs)
+                metrics.totalRevenue = Math.max(0, metrics.totalRevenue - metrics.supplyCosts);
+                metrics.netProfit = metrics.totalRevenue;
                 metrics.laborCost = 0;
                 metrics.supplyCosts = 0;
                 metrics.internalRoomCost = 0;

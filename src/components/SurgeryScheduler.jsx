@@ -832,10 +832,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
             metrics.totalRevenue = Math.max(0, metrics.totalRevenue - metrics.supplyCosts);
 
-            // 3. Zero out the displayed costs
+            // 3. Zero out the displayed costs as they are not required in this view
             metrics.laborCost = 0;
             metrics.supplyCosts = 0;
             metrics.internalRoomCost = 0;
+
+            // 4. Set profit to equal revenue as per user request ("customer is that profit value")
+            metrics.netProfit = metrics.totalRevenue;
         } else if (metrics.isProbono) {
             // Pro-Bono always shows 0 revenue
             metrics.totalRevenue = 0;

@@ -104,9 +104,14 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
                     metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
                     metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
                     metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+                    
+                    // Zero out the displayed costs
                     metrics.laborCost = 0;
                     metrics.supplyCosts = 0;
                     metrics.internalRoomCost = 0;
+                    
+                    // Set profit to equal revenue
+                    metrics.netProfit = metrics.totalRevenue;
                 }
 
                 totalRevenue += metrics.totalRevenue;
