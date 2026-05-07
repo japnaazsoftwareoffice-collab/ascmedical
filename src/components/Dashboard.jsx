@@ -99,7 +99,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
             filteredSurgeries.forEach(surgery => {
                 const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
 
-                if (!includeLaborSupplies) {
+                if (!includeLaborSupplies && !metrics.isProbono) {
                     // Logic for Room + CPT only
                     metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
                     metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
@@ -109,9 +109,9 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
                     metrics.laborCost = 0;
                     metrics.supplyCosts = 0;
                     metrics.internalRoomCost = 0;
-                    
-                    // Set profit to equal revenue
-                    metrics.netProfit = metrics.totalRevenue;
+                } else if (metrics.isProbono) {
+                    // Pro-Bono always shows 0 revenue
+                    metrics.totalRevenue = 0;
                 }
 
                 totalRevenue += metrics.totalRevenue;
