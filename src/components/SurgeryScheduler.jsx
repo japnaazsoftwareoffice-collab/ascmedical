@@ -993,8 +993,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                 const monthSurgeries = surgeriesByMonth[monthKey];
                                 const isExpanded = expandedMonths.has(monthKey);
                                 const monthTotal = monthSurgeries.reduce((sum, surgery) => {
-                                    const { totalValue } = calculateSurgeryFinancials(surgery);
-                                    return sum + totalValue;
+                                    const { netProfit } = calculateSurgeryFinancials(surgery);
+                                    return sum + netProfit;
                                 }, 0);
 
                                 return (
@@ -1060,7 +1060,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                             <th>Room Occupancy</th>
                                                             <th>CPT Total</th>
                                                             <th>Facility Fee</th>
-                                                            <th>Total Value</th>
+                                                            <th>Revenue</th>
                                                             <th>Net Profit</th>
                                                             <th>Status</th>
                                                             <th>Actions</th>
@@ -1190,7 +1190,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                     </td>
                                                                     <td style={{ fontWeight: '600', color: isCosmeticSurgery ? '#cbd5e1' : '#059669' }}>{isCosmeticSurgery ? '---' : formatCurrency(cptTotal)}</td>
                                                                     <td style={{ fontWeight: '600', color: !isCosmeticSurgery ? '#cbd5e1' : '#059669' }}>{!isCosmeticSurgery ? '---' : formatCurrency(orCost)}</td>
-                                                                    <td style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.05rem' }}>{formatCurrency(totalValue)}</td>
+                                                                    <td style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.05rem' }}>{formatCurrency(netProfit)}</td>
                                                                     <td style={{
                                                                         fontWeight: '700',
                                                                         color: netProfit >= 0 ? '#059669' : '#dc2626',

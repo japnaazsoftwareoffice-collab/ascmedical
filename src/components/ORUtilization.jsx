@@ -297,7 +297,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                     'Duration (min)': s.duration,
                     'Turnover (min)': s.turnover,
                     'Total Time (min)': s.duration + s.turnover,
-                    'Revenue': s.revenue.toFixed(2),
+                    'Revenue': (s.revenue - s.cost - s.laborCost - s.suppliesCost).toFixed(2),
                     'Cost': s.cost.toFixed(2),
                     'Labor Cost': s.laborCost.toFixed(2),
                     'Supplies Cost': s.suppliesCost.toFixed(2),

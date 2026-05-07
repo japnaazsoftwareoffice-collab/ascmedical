@@ -429,12 +429,14 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
 
         doc.text('Case Profitability Detail', 14, finalY);
 
+        console.log("PDF Case Rows mapping - raw chartData:", chartData);
         const caseRows = chartData.map((c, index) => [
             c.patientMrn,
             c.date,
-            formatCurrency(c.revenue),
+            formatCurrency(c.profit),
             c.isProbono ? 'PR-BONO' : '-'
         ]);
+        console.log("Generated PDF Case Rows (Net Profit shown under Revenue column):", caseRows);
 
         autoTable(doc, {
             startY: finalY + 5,
