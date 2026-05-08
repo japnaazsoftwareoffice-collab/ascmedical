@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
     formatCurrency,
     getSurgeryMetrics,
@@ -11,10 +11,18 @@ import {
 } from 'recharts';
 import './SurgeonDashboard.css';
 
-const SurgeonDashboard = ({ user, surgeries, cptCodes, surgeons = [], settings, procedureGroupItems = [] }) => {
+const SurgeonDashboard = ({ user, surgeries, cptCodes, surgeons = [], settings, procedureGroupItems = [], billing = [] }) => {
     const [viewType, setViewType] = useState('month');
     const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
-    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(() => {
+        return typeof window !== 'undefined' ? localStorage.getItem('includeLaborSupplies') === 'true' : false;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('includeLaborSupplies', String(includeLaborSupplies));
+        }
+    }, [includeLaborSupplies]);
     
     // Support for non-surgeon viewing multiple surgeons
     const [selectedSurgeonId, setSelectedSurgeonId] = useState(user.surgeon_id || null);
@@ -71,14 +79,28 @@ const SurgeonDashboard = ({ user, surgeries, cptCodes, surgeons = [], settings, 
         const scheduled = mySurgeries.filter(s => s.status === 'scheduled');
         const cancelled = mySurgeries.filter(s => s.status === 'cancelled');
         const rescheduled = mySurgeries.filter(s => s.status === 'rescheduled');
-        let totalRevenue = 0, totalCost = 0, totalMinutes = 0;
+        let totalRevenue = 0, totalCost = 0, totalProfit = 0, totalMinutes = 0;
 
         completed.forEach(s => {
-            const m = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems);
-            const rev = includeLaborSupplies ? m.totalRevenue : m.totalRevenue - m.supplyCosts;
-            const cost = includeLaborSupplies ? (m.internalRoomCost + m.laborCost + m.supplyCosts) : m.internalRoomCost;
-            totalRevenue += rev;
-            totalCost += cost;
+            const m = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems, billing);
+            
+            if (!includeLaborSupplies && !m.isProbono) {
+                // Simplified View
+                m.netProfit = m.netProfit + m.laborCost + m.supplyCosts + m.internalRoomCost;
+                m.netProfit = m.netProfit - m.supplyCosts;
+                m.laborCost = 0;
+                m.supplyCosts = 0;
+                m.internalRoomCost = 0;
+            } else if (m.isProbono) {
+                m.netProfit = 0;
+            }
+
+            // Actual Billing is Net Profit
+            m.totalRevenue = m.netProfit;
+
+            totalRevenue += m.totalRevenue;
+            totalCost += (m.internalRoomCost + m.laborCost + m.supplyCosts);
+            totalProfit += m.netProfit;
             totalMinutes += (s.actual_duration_minutes || s.duration_minutes || 0);
         });
 
@@ -89,7 +111,7 @@ const SurgeonDashboard = ({ user, surgeries, cptCodes, surgeons = [], settings, 
             cancelledCount: cancelled.length,
             rescheduledCount: rescheduled.length,
             revenue: totalRevenue,
-            profit: totalRevenue - totalCost,
+            profit: totalProfit,
             avgRevenuePerCase: completed.length > 0 ? totalRevenue / completed.length : 0,
             totalMinutes
         };
@@ -106,13 +128,23 @@ const SurgeonDashboard = ({ user, surgeries, cptCodes, surgeons = [], settings, 
                     ? date.toLocaleString('default', { month: 'short', day: 'numeric' })
                     : s.date;
             if (!grouped[key]) grouped[key] = { name: key, revenue: 0, profit: 0, cases: 0 };
-            const m = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems);
+            const m = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems, billing);
+
+            if (!includeLaborSupplies && !m.isProbono) {
+                m.netProfit = m.netProfit + m.laborCost + m.supplyCosts + m.internalRoomCost;
+                m.netProfit = m.netProfit - m.supplyCosts;
+            } else if (m.isProbono) {
+                m.netProfit = 0;
+            }
+
+            m.totalRevenue = m.netProfit;
+
             grouped[key].revenue += m.totalRevenue;
             grouped[key].profit += m.netProfit;
             grouped[key].cases += 1;
         });
         return Object.values(grouped);
-    }, [mySurgeries, viewType, cptCodes, settings, procedureGroupItems]);
+    }, [mySurgeries, viewType, cptCodes, settings, procedureGroupItems, includeLaborSupplies]);
 
     // 6. Status pie
     const statusData = [

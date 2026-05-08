@@ -14,7 +14,7 @@ const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_1
 const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_7bwe5or';
 const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'kemMSpgMmsNS0Hcu5';
 
-const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGroupItems = [] }) => {
+const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGroupItems = [], billing = [] }) => {
     const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [viewType, setViewType] = useState('day'); // day, week, month, year
@@ -36,7 +36,15 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
         yearly: null
     });
     const [utilizationData, setUtilizationData] = useState([]);
-    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(() => {
+        return typeof window !== 'undefined' ? localStorage.getItem('includeLaborSupplies') === 'true' : false;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('includeLaborSupplies', String(includeLaborSupplies));
+        }
+    }, [includeLaborSupplies]);
 
     const [isExporting, setIsExporting] = useState(false);
 
@@ -97,22 +105,24 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
             const perCaseData = [];
 
             filteredSurgeries.forEach(surgery => {
-                const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+                const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems, billing);
 
                 if (!includeLaborSupplies && !metrics.isProbono) {
                     // Logic for Room + CPT only
                     metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
                     metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
-                    metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
                     
                     // Zero out the displayed costs
                     metrics.laborCost = 0;
                     metrics.supplyCosts = 0;
                     metrics.internalRoomCost = 0;
                 } else if (metrics.isProbono) {
-                    // Pro-Bono always shows 0 revenue
-                    metrics.totalRevenue = 0;
+                    // Pro-Bono always shows 0 revenue/profit
+                    metrics.netProfit = 0;
                 }
+
+                // Rule: Actual Billing Amount is Net Profit
+                metrics.totalRevenue = metrics.netProfit;
 
                 totalRevenue += metrics.totalRevenue;
                 totalCost += (metrics.internalRoomCost + metrics.laborCost + metrics.supplyCosts);
@@ -144,7 +154,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
             return {
                 revenue: totalRevenue,
                 cost: totalCost,
-                profit: totalRevenue - totalCost,
+                profit: totalRevenue, // Profit is the sum of net profits, which is equal to totalRevenue now
                 usage,
                 perCaseData
             };
@@ -249,7 +259,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
             const profits = {};
             subset.forEach(s => {
                 const name = s.doctor_name || 'Unknown';
-                const metrics = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems);
+                const metrics = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems, billing);
 
                 if (!includeLaborSupplies) {
                     metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
@@ -806,8 +816,8 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
                                         className="donut-chart"
                                         style={{
                                             background: `conic-gradient(
-                                                #10b981 0% ${Math.max(0, (stats.netProfit / stats.totalRevenue) * 100)}%,
-                                                #ef4444 ${Math.max(0, (stats.netProfit / stats.totalRevenue) * 100)}% 100%
+                                                #10b981 0% ${Math.max(0, (stats.netProfit + stats.totalCost > 0 ? (stats.netProfit / (stats.netProfit + stats.totalCost)) * 100 : 0))}%,
+                                                #ef4444 ${Math.max(0, (stats.netProfit + stats.totalCost > 0 ? (stats.netProfit / (stats.netProfit + stats.totalCost)) * 100 : 0))}% 100%
                                             )`
                                         }}
                                     >
@@ -815,7 +825,7 @@ const Dashboard = ({ surgeries, patients = [], cptCodes, settings, procedureGrou
                                             <div className="donut-center-text">
                                                 <span className="donut-label">Margin</span>
                                                 <span className="donut-value">
-                                                    {stats.totalRevenue > 0 ? Math.round((stats.netProfit / stats.totalRevenue) * 100) : 0}%
+                                                    {stats.netProfit + stats.totalCost > 0 ? Math.round((stats.netProfit / (stats.netProfit + stats.totalCost)) * 100) : 0}%
                                                 </span>
                                             </div>
                                         </div>

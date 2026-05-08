@@ -201,7 +201,7 @@ export const formatCurrency = (amount) => {
 };
 
 // Calculate all metrics for a surgery consistently across the app
-export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGroupItems = []) => {
+export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGroupItems = [], billing = []) => {
     const isCosmetic = surgery.notes && surgery.notes.includes('Fixed Facility Fee Case');
     const isProbono = !!(surgery.is_probono || surgery.isProbono);
     let cptTotal = 0;
@@ -303,6 +303,15 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
 
         // Anesthesia and supplies are pass-through costs
         netProfit = totalValue - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
+    }
+
+    // Unification: Match with actual billing record to enforce Net Profit = Actual Billing Cost
+    const caseBilling = Array.isArray(billing) ? billing.find(b => b.surgery_id === surgery.id) : null;
+    const actualBillingCost = caseBilling ? parseFloat(caseBilling.total_amount || 0) : null;
+
+    if (actualBillingCost !== null) {
+        totalValue = actualBillingCost;
+        netProfit = actualBillingCost - (internalRoomCost + laborCost + supplyCosts + anesthesiaRevenue);
     }
 
     return {

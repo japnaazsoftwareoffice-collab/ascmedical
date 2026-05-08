@@ -582,7 +582,7 @@ function App() {
           cpt_codes: updates.cpt_codes || updates.selectedCptCodes || currentSurgery.cpt_codes || []
         };
 
-        const metrics = getSurgeryMetrics(mergedSurgery, cptCodes, settings, procedureGroupItems);
+        const metrics = getSurgeryMetrics(mergedSurgery, cptCodes, settings, procedureGroupItems, billing);
 
         // Update the fields for the database
         updates.actual_room_cost = metrics.internalRoomCost;
@@ -1090,7 +1090,25 @@ function App() {
         ...surgery,
         actual_duration_minutes: actualDuration,
         supplies_cost: surgery.supplies_cost || 0
-      }, cptCodes, settings, procedureGroupItems);
+      }, cptCodes, settings, procedureGroupItems, billing);
+
+      // Read global Simplified View setting from localStorage
+      const isSimplified = typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('includeLaborSupplies') !== 'true' : true;
+
+      if (isSimplified && !metrics.isProbono) {
+        // Apply identical adjustment as done in main dashboards and scheduler
+        metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+        metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
+        
+        metrics.laborCost = 0;
+        metrics.supplyCosts = 0;
+        metrics.internalRoomCost = 0;
+        metrics.anesthesiaRevenue = 0; // Hide anesthesia pass-throughs in simplified view
+        metrics.totalRevenue = metrics.netProfit;
+      } else if (metrics.isProbono) {
+        metrics.netProfit = 0;
+        metrics.totalRevenue = 0;
+      }
 
       const actualRoomCost = metrics.internalRoomCost;
       const actualLaborCost = metrics.laborCost;
@@ -1098,7 +1116,7 @@ function App() {
       const cosmeticAnesthesiaFee = metrics.anesthesiaRevenue;
       const expectedReimbursement = metrics.totalRevenue;
       const netMargin = metrics.netProfit;
-      const reimbursementSource = metrics.isCosmetic ? 'Cosmetic Facility' : 'Insurance/CPT';
+      const reimbursementSource = metrics.isCosmetic ? (isSimplified ? 'Cosmetic Facility Fee' : 'Cosmetic Facility') : 'Insurance/CPT';
       const laborCostSource = 'ASC Standard (30% Facility)';
 
       // Update surgery with actual times and financial snapshot
@@ -1134,7 +1152,7 @@ function App() {
               ` : ''}
               <hr style="margin: 0.25rem 0; border: none; border-top: 1px dotted #e2e8f0;">
               
-              ${metrics.isCosmetic ? `
+              ${(metrics.isCosmetic && !isSimplified) ? `
                 <div style="display: flex; justify-content: space-between;">
                   <span style="color: #64748b;">Internal Room Cost:</span>
                   <strong style="color: #dc2626;">-$${actualRoomCost.toLocaleString()}</strong>
@@ -1164,7 +1182,7 @@ function App() {
                 <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e2e8f0;">
               ` : `
                 <div style="font-size: 0.85rem; color: #64748b; font-style: italic; margin-bottom: 0.5rem;">
-                  Note: Internal costs (Room/Labor) are excluded from this view.
+                  Note: Internal costs (Room/Labor/Supplies) are excluded from this view.
                 </div>
               `}
 
@@ -1249,7 +1267,7 @@ function App() {
     const hasPerm = (perm) => userPermissions.includes(perm);
 
     // 1. Permission-based rendering (Unified for Admin & Manager)
-    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} patients={patients} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
+    if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} patients={patients} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
 
     // Manager Dashboard - Check permission
     if (view === 'manager-dashboard' && (user.role === 'manager' || hasPerm('view_manager_dashboard'))) {
@@ -1304,7 +1322,7 @@ function App() {
     }
 
     if (view === 'scheduler' && hasPerm('manage_surgeries')) {
-      return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} procedureGroupItems={procedureGroupItems} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} />;
+      return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} surgeries={surgeries} settings={settings} procedureGroupItems={procedureGroupItems} onSchedule={handleScheduleSurgery} onUpdate={handleUpdateSurgery} onDelete={handleDeleteSurgery} onComplete={handleCompleteSurgery} billing={billing} />;
     }
 
     if (view === 'cancellation-rescheduling' && hasPerm('manage_surgeries')) {
@@ -1331,9 +1349,9 @@ function App() {
 
     if (view === 'roles-permissions' && hasPerm('manage_permissions')) return <RolePermissionManagement />;
 
-    if (view === 'analysis' && hasPerm('view_analytics')) return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} />;
+    if (view === 'analysis' && hasPerm('view_analytics')) return <ORUtilization surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} billing={billing} />;
 
-    if (view === 'scorecard' && hasPerm('view_scorecards')) return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
+    if (view === 'scorecard' && hasPerm('view_scorecards')) return <SurgeonScorecard surgeries={surgeries} surgeons={surgeons} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
 
     if (view === 'cpt' && hasPerm('manage_cpt_codes')) {
       return <CPTManager cptCodes={cptCodes} showAllCPTs={showAllCPTs} setShowAllCPTs={setShowAllCPTs} onAddCPT={handleAddCPT} onUpdateCPT={handleUpdateCPT} onDeleteCPT={handleDeleteCPT} onRefreshCPTCodes={loadAllData} />;
@@ -1362,11 +1380,11 @@ function App() {
     if (view === 'audit-logs' && hasPerm('view_audit_logs')) return <AuditLogs />;
 
     if (view === 'surgeon-dashboard' && (user.role === 'surgeon' || hasPerm('view_surgeon_dashboard'))) {
-      return <SurgeonDashboard user={user} surgeries={surgeries} cptCodes={filteredCptCodes} surgeons={surgeons} settings={settings} procedureGroupItems={procedureGroupItems} />;
+      return <SurgeonDashboard user={user} surgeries={surgeries} cptCodes={filteredCptCodes} surgeons={surgeons} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
     }
 
     if (view === 'cost-analysis' && hasPerm('view_cost_analysis')) {
-      return <CostAnalysis surgeries={surgeries} cptCodes={filteredCptCodes} surgeons={surgeons} settings={settings} procedureGroupItems={procedureGroupItems} />;
+      return <CostAnalysis surgeries={surgeries} cptCodes={filteredCptCodes} surgeons={surgeons} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
     }
 
     if (view === 'ai-analyst' && hasPerm('use_ai_analyst')) {
@@ -1388,10 +1406,10 @@ function App() {
     // 2. Role-specific views (Surgeon/Patient)
     // Surgeon
     if (user.role === 'surgeon') {
-      if (view === 'surgeon-dashboard') return <SurgeonDashboard user={user} surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} />;
+      if (view === 'surgeon-dashboard') return <SurgeonDashboard user={user} surgeries={surgeries} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
       if (view === 'my-schedule') return <SurgeonSchedule surgeries={surgeries} surgeon={currentSurgeon} patients={patients} cptCodes={filteredCptCodes} />;
       if (view === 'patients') return <SurgeonPatients patients={patients} surgeries={surgeries} surgeon={currentSurgeon} />;
-      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} onSchedule={handleScheduleSurgery} />;
+      if (view === 'scheduler') return <SurgeryScheduler patients={patients} surgeons={surgeons} cptCodes={filteredCptCodes} onSchedule={handleScheduleSurgery} billing={billing} />;
     }
 
     // Patient

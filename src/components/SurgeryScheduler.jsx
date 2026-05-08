@@ -16,7 +16,7 @@ const selfPayRates = [
     { name: 'Total Shoulder', price: 3200 }
 ];
 
-const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settings, procedureGroupItems = [], onSchedule, onUpdate, onDelete, onComplete }) => {
+const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settings, procedureGroupItems = [], onSchedule, onUpdate, onDelete, onComplete, billing = [] }) => {
     // Initial fees for default 60 mins
     const initialFees = calculateCosmeticFees(60);
 
@@ -64,7 +64,15 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const [expandedMonths, setExpandedMonths] = useState(new Set([formatDateLocal(new Date()).slice(0, 7)]));
     const [selectedProcedureGroup, setSelectedProcedureGroup] = useState('');
     const [cptSearchQuery, setCptSearchQuery] = useState('');
-    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(() => {
+        return typeof window !== 'undefined' ? localStorage.getItem('includeLaborSupplies') === 'true' : false;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('includeLaborSupplies', String(includeLaborSupplies));
+        }
+    }, [includeLaborSupplies]);
 
     // Extract unique procedure groups
     const uniqueProcedureGroups = useMemo(() => {
@@ -275,7 +283,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     // Helper to calculate financials for any surgery object consistently
     // Unified metrics calculation for consistent financial reporting
     const calculateSurgeryFinancials = (surgery) => {
-        const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+        const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems, billing);
 
         // Adjust metrics based on display preferences, but keep full transparency for Pro-Bono cases
         if (!includeLaborSupplies && !metrics.isProbono) {
@@ -283,15 +291,18 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
             // Subtract supply revenue to show only Room + CPT
             metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
-            // For insurance views, display 0 for hidden costs
-            metrics.totalRevenue = Math.max(0, metrics.totalRevenue - metrics.supplyCosts);
+            
+            // Zero out the displayed costs
             metrics.laborCost = 0;
             metrics.supplyCosts = 0;
             metrics.internalRoomCost = 0;
         } else if (metrics.isProbono) {
-            // Pro-Bono always shows 0 revenue
-            metrics.totalRevenue = 0;
+            // Pro-Bono always shows 0 revenue/profit
+            metrics.netProfit = 0;
         }
+
+        // Rule: Actual Billing Amount is Net Profit
+        metrics.totalRevenue = metrics.netProfit;
 
         return {
             cptTotal: metrics.cptRevenue,
@@ -820,7 +831,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
             is_probono: formData.isProbono
         };
 
-        const metrics = getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems);
+        const metrics = getSurgeryMetrics(dummySurgery, cptCodes, settings, procedureGroupItems, billing);
 
         // If user wants to exclude Labor & Supplies from the calculation (Insurance View)
         // BUT for Pro-Bono always show full internal costs for transparency
@@ -830,19 +841,18 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
 
             // 2. Remove supplies from the revenue side (user wants room + cpt only)
             metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
-            metrics.totalRevenue = Math.max(0, metrics.totalRevenue - metrics.supplyCosts);
 
             // 3. Zero out the displayed costs as they are not required in this view
             metrics.laborCost = 0;
             metrics.supplyCosts = 0;
             metrics.internalRoomCost = 0;
-
-            // 4. Set profit to equal revenue as per user request ("customer is that profit value")
-            metrics.netProfit = metrics.totalRevenue;
         } else if (metrics.isProbono) {
-            // Pro-Bono always shows 0 revenue
-            metrics.totalRevenue = 0;
+            // Pro-Bono always shows 0 revenue/profit
+            metrics.netProfit = 0;
         }
+
+        // Rule: Actual Billing Amount is Net Profit
+        metrics.totalRevenue = metrics.netProfit;
 
         return metrics;
     }, [formData, isCosmeticSurgeon, cptCodes, settings, procedureGroupItems, includeLaborSupplies]);

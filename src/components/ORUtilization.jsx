@@ -1,12 +1,20 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue, getSurgeryMetrics, formatDateLocal } from '../utils/hospitalUtils';
 import Papa from 'papaparse';
 import './ORUtilization.css';
 
-const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = [] }) => {
+const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = [], billing = [] }) => {
     const [selectedDate, setSelectedDate] = useState(formatDateLocal(new Date()));
     const [selectedOR, setSelectedOR] = useState('all'); // 'all' or specific OR number
-    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(() => {
+        return typeof window !== 'undefined' ? localStorage.getItem('includeLaborSupplies') === 'true' : false;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('includeLaborSupplies', String(includeLaborSupplies));
+        }
+    }, [includeLaborSupplies]);
     const [viewType, setViewType] = useState('day'); // 'day', 'week', 'month', 'year'
 
     const handleDateChange = (val) => {
@@ -112,6 +120,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         let totalORCost = 0;
         let totalLaborCost = 0;
         let totalSuppliesCost = 0;
+        let totalProfit = 0;
 
         // Initialize OR data
         const orData = Array.from({ length: OR_COUNT }, (_, i) => ({
@@ -128,19 +137,26 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         periodSurgeries.forEach((surgery, index) => {
             const orIndex = surgery.or_room ? surgery.or_room - 1 : 0; // Standardized to use room 1 if missing
 
-            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems, billing);
 
-            if (!includeLaborSupplies) {
-                metrics.totalRevenue = metrics.totalRevenue - metrics.supplyCosts;
+            if (!includeLaborSupplies && !metrics.isProbono) {
+                metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+                metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
                 metrics.laborCost = 0;
                 metrics.supplyCosts = 0;
                 metrics.internalRoomCost = 0;
+            } else if (metrics.isProbono) {
+                metrics.netProfit = 0;
             }
+
+            // Rule: Actual Billing Amount is Net Profit
+            metrics.totalRevenue = metrics.netProfit;
 
             const duration = parseInt(surgery.actual_duration_minutes || surgery.duration_minutes || surgery.durationMinutes || 0);
             const turnover = parseInt(surgery.turnover_time || surgery.turnoverTime || 0);
 
             totalOperationCost += metrics.totalRevenue;
+            totalProfit += metrics.netProfit;
             totalORCost += metrics.internalRoomCost;
             totalLaborCost += metrics.laborCost;
             totalSuppliesCost += metrics.supplyCosts;
@@ -177,6 +193,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                     cost: metrics.internalRoomCost,
                     laborCost: metrics.laborCost,
                     suppliesCost: metrics.supplyCosts,
+                    netProfit: metrics.netProfit,
                     hasActualTimes: !!surgery.actual_duration_minutes
                 });
             }
@@ -202,6 +219,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
             totalMinutesUsed,
             totalTurnoverMinutes,
             totalOperationCost,
+            totalProfit,
             totalORCost,
             totalLaborCost,
             totalSuppliesCost,
@@ -214,6 +232,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         if (selectedOR === 'all') {
             return {
                 revenue: utilizationData.totalOperationCost,
+                profit: utilizationData.totalProfit,
                 cost: utilizationData.totalORCost,
                 laborCost: utilizationData.totalLaborCost,
                 suppliesCost: utilizationData.totalSuppliesCost,
@@ -232,6 +251,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         if (!orStats) {
             return {
                 revenue: 0,
+                profit: 0,
                 cost: 0,
                 laborCost: 0,
                 suppliesCost: 0,
@@ -245,12 +265,14 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
 
         // Calculate revenue and costs for this specific OR
         const orRevenue = orStats.surgeries.reduce((sum, s) => sum + s.revenue, 0);
+        const orProfit = orStats.surgeries.reduce((sum, s) => sum + s.netProfit, 0);
         const orCost = orStats.surgeries.reduce((sum, s) => sum + s.cost, 0);
         const orLaborCost = orStats.surgeries.reduce((sum, s) => sum + s.laborCost, 0);
         const orSuppliesCost = orStats.surgeries.reduce((sum, s) => sum + s.suppliesCost, 0);
 
         return {
             revenue: orRevenue,
+            profit: orProfit,
             cost: orCost,
             laborCost: orLaborCost,
             suppliesCost: orSuppliesCost,
@@ -264,7 +286,7 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
 
     const handleExportCSV = () => {
         // 1. Prepare Summary Data
-        const netProfit = filteredMetrics.revenue - filteredMetrics.cost - filteredMetrics.laborCost - filteredMetrics.suppliesCost;
+        const netProfit = filteredMetrics.profit;
         const summaryData = [
             { 'Dashboard Summary': 'Metric', 'Value': 'Value' },
             { 'Dashboard Summary': 'Period Type', 'Value': viewType.charAt(0).toUpperCase() + viewType.slice(1) },
@@ -297,11 +319,11 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                     'Duration (min)': s.duration,
                     'Turnover (min)': s.turnover,
                     'Total Time (min)': s.duration + s.turnover,
-                    'Revenue': (s.revenue - s.cost - s.laborCost - s.suppliesCost).toFixed(2),
+                    'Revenue': s.revenue.toFixed(2),
                     'Cost': s.cost.toFixed(2),
                     'Labor Cost': s.laborCost.toFixed(2),
                     'Supplies Cost': s.suppliesCost.toFixed(2),
-                    'Net Profit': (s.revenue - s.cost - s.laborCost - s.suppliesCost).toFixed(2),
+                    'Net Profit': s.netProfit.toFixed(2),
                     'Status': s.hasActualTimes ? 'Actual' : 'Planned'
                 });
             });
@@ -516,14 +538,9 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
                     <div className="stat-content">
                         <div className="stat-label">Net Profit/Loss</div>
                         <div className="stat-value" style={{
-                            color: (filteredMetrics.revenue - filteredMetrics.cost - filteredMetrics.laborCost - filteredMetrics.suppliesCost) > 0 ? '#10b981' : '#ef4444'
+                            color: filteredMetrics.profit > 0 ? '#10b981' : '#ef4444'
                         }}>
-                            {formatCurrency(
-                                filteredMetrics.revenue -
-                                filteredMetrics.cost -
-                                filteredMetrics.laborCost -
-                                filteredMetrics.suppliesCost
-                            )}
+                            {formatCurrency(filteredMetrics.profit)}
                         </div>
                         <div className="stat-sublabel">
                             Revenue - Cost

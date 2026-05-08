@@ -2,10 +2,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { calculateORCost, formatCurrency, getSurgeryMetrics, isDateInRange } from '../utils/hospitalUtils';
 import './CostAnalysis.css';
 
-const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupItems = [] }) => {
+const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupItems = [], billing = [] }) => {
     const [timeframe, setTimeframe] = useState('month');
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(() => {
+        return typeof window !== 'undefined' ? localStorage.getItem('includeLaborSupplies') === 'true' : false;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('includeLaborSupplies', String(includeLaborSupplies));
+        }
+    }, [includeLaborSupplies]);
 
     // Calculate comprehensive analytics
     const analytics = useMemo(() => {
@@ -45,7 +53,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
         let regularRevenue = 0;
 
         filteredSurgeries.forEach(surgery => {
-            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems, billing);
 
             if (!includeLaborSupplies) {
                 // Logic for Room + CPT only
@@ -83,7 +91,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
             cosmeticRevenue,
             regularRevenue
         };
-    }, [surgeries, cptCodes, timeframe, includeLaborSupplies, settings, procedureGroupItems]);
+    }, [surgeries, cptCodes, timeframe, includeLaborSupplies, settings, procedureGroupItems, billing]);
 
     // Category breakdown
     const categoryBreakdown = useMemo(() => {
@@ -92,7 +100,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
         const categoryMap = {};
 
         surgeries.forEach(surgery => {
-            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []);
+            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, [], billing);
 
             if (metrics.isCosmetic) {
                 if (!categoryMap['Cosmetic']) {
@@ -132,7 +140,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
         });
 
         return Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue);
-    }, [surgeries, cptCodes]);
+    }, [surgeries, cptCodes, billing]);
 
     // Surgeon performance
     const surgeonPerformance = useMemo(() => {
@@ -141,7 +149,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
         const surgeonMap = {};
 
         surgeries.forEach(surgery => {
-            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []);
+            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, [], billing);
             const surgeonName = surgery.doctor_name || (surgery.surgeons?.name ? `Dr. ${surgery.surgeons.name}` : 'Unknown');
 
             if (!surgeonMap[surgeonName]) {
@@ -165,7 +173,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
         });
 
         return Object.values(surgeonMap).sort((a, b) => b.revenue - a.revenue);
-    }, [surgeries, cptCodes, surgeons]);
+    }, [surgeries, cptCodes, surgeons, billing]);
 
     // Monthly trend data
     const monthlyTrend = useMemo(() => {
@@ -174,7 +182,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
         const monthMap = {};
 
         surgeries.forEach(surgery => {
-            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, []);
+            const metrics = getSurgeryMetrics(surgery, cptCodes, {}, [], billing);
             const date = new Date(surgery.date);
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
@@ -191,7 +199,7 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
         });
 
         return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
-    }, [surgeries, cptCodes]);
+    }, [surgeries, cptCodes, billing]);
 
     return (
         <div className="page-container fade-in">

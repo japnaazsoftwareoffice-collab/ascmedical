@@ -1,11 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { calculateORCost, calculateMedicareRevenue, formatCurrency, getSurgeryMetrics } from '../utils/hospitalUtils';
 import './Management.css';
 
-const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGroupItems = [] }) => {
+const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGroupItems = [], billing = [] }) => {
     const [sortBy, setSortBy] = useState('netMargin'); // netMargin, cases, efficiency, breaches
     const [sortOrder, setSortOrder] = useState('desc');
-    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(false);
+    const [includeLaborSupplies, setIncludeLaborSupplies] = useState(() => {
+        return typeof window !== 'undefined' ? localStorage.getItem('includeLaborSupplies') === 'true' : false;
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('includeLaborSupplies', String(includeLaborSupplies));
+        }
+    }, [includeLaborSupplies]);
 
     // Calculate scorecard data
     const scorecardData = useMemo(() => {
@@ -28,6 +36,10 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
                     totalORCost: 0,
                     totalLaborCost: 0,
                     totalSuppliesCost: 0,
+                    originalORCost: 0,
+                    originalLaborCost: 0,
+                    originalSuppliesCost: 0,
+                    totalProfit: 0,
                     totalMinutes: 0,
                     tierBreaches: 0,
                     surgeries: []
@@ -39,21 +51,35 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
             stats.surgeries.push(surgery);
 
             // Use unified metrics calculation for consistency
-            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems);
+            const metrics = getSurgeryMetrics(surgery, cptCodes, settings, procedureGroupItems, billing);
 
-            if (!includeLaborSupplies) {
+            const origOR = metrics.internalRoomCost || 0;
+            const origLabor = metrics.laborCost || 0;
+            const origSupplies = metrics.supplyCosts || 0;
+
+            if (!includeLaborSupplies && !metrics.isProbono) {
                 // Simplified View: Profit = Revenue (excluding all internal costs)
-                metrics.totalRevenue = Math.max(0, metrics.totalRevenue - metrics.supplyCosts);
-                metrics.netProfit = metrics.totalRevenue;
+                metrics.netProfit = metrics.netProfit + metrics.laborCost + metrics.supplyCosts + metrics.internalRoomCost;
+                metrics.netProfit = metrics.netProfit - metrics.supplyCosts;
                 metrics.laborCost = 0;
                 metrics.supplyCosts = 0;
                 metrics.internalRoomCost = 0;
+            } else if (metrics.isProbono) {
+                metrics.netProfit = 0;
             }
 
+            // Rule: Actual Billing Amount is Net Profit
+            metrics.totalRevenue = metrics.netProfit;
+
             stats.totalRevenue += metrics.totalRevenue;
+            stats.totalProfit += metrics.netProfit;
             stats.totalORCost += metrics.internalRoomCost;
             stats.totalLaborCost += metrics.laborCost;
             stats.totalSuppliesCost += metrics.supplyCosts;
+            
+            stats.originalORCost += origOR;
+            stats.originalLaborCost += origLabor;
+            stats.originalSuppliesCost += origSupplies;
 
             // Track minutes
             const surgeryDuration = surgery.actual_duration_minutes || surgery.duration_minutes || 0;
@@ -68,7 +94,7 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
         // Calculate derived metrics
         const scorecard = Object.values(surgeonStats).map(stats => {
             const totalCosts = stats.totalORCost + stats.totalLaborCost + stats.totalSuppliesCost;
-            const netMargin = stats.totalRevenue - totalCosts;
+            const netMargin = stats.totalProfit; // Use totalProfit directly!
             const efficiencyRating = stats.totalMinutes > 0
                 ? stats.totalRevenue / stats.totalMinutes
                 : 0;
@@ -265,12 +291,18 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
                                                 Avg: {formatCurrency(surgeon.avgRevenuePerCase)}
                                             </div>
                                         </td>
-                                        <td style={{ color: '#dc2626', fontWeight: '600' }}>
-                                            {formatCurrency(surgeon.totalCosts)}
+                                        <td style={{ color: surgeon.totalCosts > 0 ? '#dc2626' : '#64748b', fontWeight: '600' }}>
+                                            {surgeon.totalCosts > 0 ? (
+                                                formatCurrency(surgeon.totalCosts)
+                                            ) : (
+                                                <span style={{ color: '#94a3b8', fontSize: '0.9rem', fontWeight: '400' }}>
+                                                    Other: {formatCurrency(surgeon.originalORCost + surgeon.originalLaborCost + surgeon.originalSuppliesCost)}
+                                                </span>
+                                            )}
                                             <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '400' }}>
-                                                OR: {formatCurrency(surgeon.totalORCost)} |
-                                                Labor: {formatCurrency(surgeon.totalLaborCost)} |
-                                                Supplies: {formatCurrency(surgeon.totalSuppliesCost)}
+                                                OR: {formatCurrency(surgeon.totalCosts > 0 ? surgeon.totalORCost : surgeon.originalORCost)} |
+                                                Labor: {formatCurrency(surgeon.totalCosts > 0 ? surgeon.totalLaborCost : surgeon.originalLaborCost)} |
+                                                Supplies: {formatCurrency(surgeon.totalCosts > 0 ? surgeon.totalSuppliesCost : surgeon.originalSuppliesCost)}
                                             </div>
                                         </td>
                                         <td style={{
