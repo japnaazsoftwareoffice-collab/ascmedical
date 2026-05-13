@@ -1052,16 +1052,13 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                 <table className="data-table">
                                                     <thead>
                                                         <tr>
+                                                            <th>MRN</th>
                                                             <th>Date</th>
                                                             <th>Time</th>
-                                                            <th>Patient</th>
                                                             <th>Surgeon</th>
                                                             <th>Procedure(s)</th>
                                                             <th>Room Occupancy</th>
-                                                            <th>CPT Total</th>
-                                                            <th>Facility Fee</th>
                                                             <th>Revenue</th>
-                                                            <th>Net Profit</th>
                                                             <th>Status</th>
                                                             <th>Actions</th>
                                                         </tr>
@@ -1069,21 +1066,14 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     <tbody>
                                                         {monthSurgeries.map(surgery => {
                                                             const { cptTotal, orCost, totalValue, netProfit, isCosmetic: isCosmeticSurgery } = calculateSurgeryFinancials(surgery);
+                                                            const patientObj = patients.find(p => String(p.id) === String(surgery.patient_id));
+                                                            const patientMrn = patientObj ? patientObj.mrn : (surgery.patients ? surgery.patients.mrn : (surgery.patient_mrn || surgery.patientMrn || '---'));
 
                                                             return (
                                                                 <tr key={surgery.id}>
+                                                                    <td style={{ fontWeight: '600', color: '#4f46e5' }}>{patientMrn}</td>
                                                                     <td>{surgery.date}</td>
                                                                     <td>{surgery.start_time}</td>
-                                                                    <td>
-                                                                        {surgery.patient_name ||
-                                                                            (surgery.patients ?
-                                                                                (surgery.patients.name || (() => {
-                                                                                    const first = surgery.patients.firstname || surgery.patients.first_name || '';
-                                                                                    const last = surgery.patients.lastname || surgery.patients.last_name || '';
-                                                                                    return first && last ? `${first} ${last}` : 'Unknown';
-                                                                                })())
-                                                                                : 'Unknown')}
-                                                                    </td>
                                                                     <td>
                                                                         {surgery.doctor_name ||
                                                                             (surgery.surgeons ?
@@ -1188,9 +1178,6 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                                             );
                                                                         })()}
                                                                     </td>
-                                                                    <td style={{ fontWeight: '600', color: isCosmeticSurgery ? '#cbd5e1' : '#059669' }}>{isCosmeticSurgery ? '---' : formatCurrency(cptTotal)}</td>
-                                                                    <td style={{ fontWeight: '600', color: !isCosmeticSurgery ? '#cbd5e1' : '#059669' }}>{!isCosmeticSurgery ? '---' : formatCurrency(orCost)}</td>
-                                                                    <td style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.05rem' }}>{formatCurrency(netProfit)}</td>
                                                                     <td style={{
                                                                         fontWeight: '700',
                                                                         color: netProfit >= 0 ? '#059669' : '#dc2626',
