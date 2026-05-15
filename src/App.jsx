@@ -57,6 +57,7 @@ function App() {
   const [supplies, setSupplies] = useState([]);
   const [procedureGroupItems, setProcedureGroupItems] = useState([]);
   const [userPermissions, setUserPermissions] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showAllCPTs, setShowAllCPTs] = useState(false); // Global toggle for CPT visibility
@@ -89,6 +90,73 @@ function App() {
       }
     }
   }, [user]);
+
+  // Check for existing session on load and listen for changes
+  useEffect(() => {
+    // Listen for auth changes
+    const { data: { subscription } } = db.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event, session?.user?.email);
+      
+      if (session?.user) {
+        // Fetch full profile
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('*, surgeons(*), patients(*)')
+            .eq('id', session.user.id)
+            .maybeSingle();
+            
+          if (profile) {
+            setUser(profile);
+            if (!view || view === 'login') setView('dashboard');
+          } else {
+            // Profile not found by ID. Check if it exists by email (Migration Support)
+            const { data: emailProfile } = await supabase
+              .from('users')
+              .select('*, surgeons(*), patients(*)')
+              .eq('email', session.user.email)
+              .maybeSingle();
+
+            if (emailProfile) {
+              console.log('Found profile by email, updating ID to link with Auth account');
+              // Link the profile by updating its ID to match the Auth UID
+              const { data: updatedProfile } = await supabase
+                .from('users')
+                .update({ id: session.user.id })
+                .eq('email', session.user.email)
+                .select('*, surgeons(*), patients(*)')
+                .single();
+              
+              setUser(updatedProfile);
+              if (!view || view === 'login') setView('dashboard');
+            } else if (session.user.email === 'admin@hospital.com') {
+              // ... existing admin logic ...
+              console.log('Detected admin email without profile, auto-assigning admin role');
+              setUser({ 
+                email: session.user.email, 
+                id: session.user.id, 
+                role: 'admin', 
+                full_name: 'System Admin' 
+              });
+              setView('dashboard');
+            } else {
+              setUser({ email: session.user.email, id: session.user.id, role: 'unknown' });
+              setView('profile-setup');
+            }
+          }
+        } catch (err) {
+          console.error('Error in auth flow:', err);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setView('login');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const loadAllData = async () => {
     try {
@@ -144,21 +212,23 @@ function App() {
         staffData,
         permsData,
         suppliesData,
-        procedureGroupItemsData
+        procedureGroupItemsData,
+        auditLogsData
       ] = await Promise.all([
         safeFetch(db.getPatients()),
         safeFetch(db.getSurgeons()),
         safeFetch(db.getCPTCodes()),
         safeFetch(db.getSurgeries()),
         safeFetch(user.role === 'patient' ? db.getBillingByPatient(user.patient_id) : db.getBilling()),
-        safeFetch(user.role === 'admin' ? db.getUsers() : Promise.resolve([])),
+        safeFetch((user.role === 'admin' || user.email === 'admin@hospital.com') ? db.getUsers() : Promise.resolve([])),
         safeFetch(db.getClaims ? db.getClaims() : Promise.resolve([])),
         safeFetch(db.getORBlockSchedule ? db.getORBlockSchedule() : Promise.resolve([])),
         safeFetch(db.getSettings ? db.getSettings() : Promise.resolve(null), null),
         safeFetch(db.getStaff ? db.getStaff() : Promise.resolve([])),
         safeFetch(user ? db.getRolePermissions(user.role) : Promise.resolve([])),
         Promise.resolve([]), // db.getSupplies skipped
-        safeFetch(db.getProcedureGroupItems())
+        safeFetch(db.getProcedureGroupItems()),
+        safeFetch(db.getAuditLogs ? db.getAuditLogs() : Promise.resolve([]))
       ]);
 
       // Transform surgeons to add 'name' property
@@ -179,6 +249,7 @@ function App() {
       setSettings(settingsData);
       setSupplies(suppliesData || []);
       setProcedureGroupItems(procedureGroupItemsData || []);
+      setAuditLogs(auditLogsData || []);
 
       if (user && permsData) {
         // Use permissions from role_permissions table for all roles
@@ -208,91 +279,67 @@ function App() {
     }
   };
 
+  const logActivity = async (action, resourceType, resourceId, details) => {
+    if (!user) return;
+    try {
+      const newLog = await db.addAuditLog({
+        user_email: user.email,
+        action,
+        resource_type: resourceType,
+        resource_id: resourceId,
+        details,
+        ip_address: 'browser-client'
+      });
+      if (newLog) {
+        setAuditLogs(prev => [newLog, ...prev].slice(0, 100));
+      }
+    } catch (err) {
+      console.warn('Audit logging failed:', err);
+    }
+  };
+
   const handleLogin = async (email, password) => {
     try {
       setLoading(true);
       setError(null);
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-
-      // If no database, use mock login
-      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        // Mock login logic
-        const mockUsers = {
-          'admin@hospital.com': { email, role: 'admin', full_name: 'Admin User', id: 1 },
-          'surgeon@hospital.com': { email, role: 'surgeon', full_name: 'Dr. Sarah Williams', id: 2, surgeon_id: 1 },
-          'patient@hospital.com': { email, role: 'patient', full_name: 'John Doe', id: 3, patient_id: 1 }
-        };
-
-        const userData = mockUsers[email];
-        if (userData && password) {
-          setUser(userData);
-          return;
-        }
-
-        // Check if it's one of our registered surgeons
-        const matchingSurgeon = surgeons.find(s => s.email === email);
-        if (matchingSurgeon) {
-          const expectedPassword = matchingSurgeon.password || 'surgeon123';
-          if (password === expectedPassword) {
-            setUser({
-              email,
-              role: 'surgeon',
-              full_name: matchingSurgeon.name,
-              id: `surgeon-user-${matchingSurgeon.id}`,
-              surgeon_id: matchingSurgeon.id
-            });
-            return;
-          }
-        }
-
-        throw new Error('Invalid credentials');
-      }
-
-      // Try database login (users table first)
-      try {
-        const userData = await db.login(email, password);
+      const userData = await db.login(email, password);
+      
+      if (userData) {
         setUser(userData);
-        return;
-      } catch (dbErr) {
-        // Users table login failed — try surgeons table directly
-        try {
-          const surgeonData = await db.loginAsSurgeon(email, password);
-          if (surgeonData) {
-            const surgeonFullName = surgeonData.name ||
-              `${surgeonData.firstname || ''} ${surgeonData.lastname || ''}`.trim();
-            setUser({
-              email,
-              role: 'surgeon',
-              full_name: surgeonFullName,
-              id: `surgeon-user-${surgeonData.id}`,
-              surgeon_id: surgeonData.id
-            });
-            return;
-          }
-        } catch (surgeonErr) {
-          // Not found in surgeons table either — fall through to error
-        }
-        throw new Error('Invalid email or password');
+        setView('dashboard');
+        
+        await Swal.fire({
+          icon: 'success',
+          title: 'Login Successful',
+          text: `Welcome back, ${userData.full_name || userData.email}`,
+          timer: 1500,
+          showConfirmButton: false
+        });
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('Invalid email or password');
-      throw err;
+      let message = 'Invalid email or password.';
+      if (err.message) message = err.message;
+      
+      await Swal.fire({
+        icon: 'error',
+        title: 'Login Failed',
+        text: message
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setView('dashboard');
-    setPatients([]);
-    setSurgeries([]);
-    setSurgeons([]);
-    setCptCodes([]);
-    setBilling([]);
-    setClaims([]);
+  const handleLogout = async () => {
+    try {
+      await db.logout();
+      setUser(null);
+      setView('login');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
   };
 
   const handleAddPatient = async (newPatient) => {
@@ -320,6 +367,7 @@ function App() {
 
       const addedPatient = await db.addPatient(sanitized);
       setPatients([addedPatient, ...patients]);
+      logActivity('Add Patient', 'patient', addedPatient.id, `Created patient: ${sanitized.firstname} ${sanitized.lastname}`);
       return addedPatient;
     } catch (err) {
       console.error('Error adding patient:', err);
@@ -368,6 +416,7 @@ function App() {
         name: name || `${sanitized.firstname || sanitized.first_name || ''} ${sanitized.lastname || sanitized.last_name || ''}`.trim()
       };
       setPatients(patients.map(p => p.id === patientWithLocalName.id ? patientWithLocalName : p));
+      logActivity('Update Patient', 'patient', dbData.id, `Updated patient record for: ${patientWithLocalName.name}`);
     } catch (err) {
       console.error('Error updating patient:', err);
       await Swal.fire({
@@ -391,6 +440,7 @@ function App() {
 
       await db.deletePatient(id);
       setPatients(patients.filter(p => p.id !== id));
+      logActivity('Delete Patient', 'patient', id, `Removed patient record with ID: ${id}`);
     } catch (err) {
       console.error('Error deleting patient:', err);
       await Swal.fire({
@@ -457,6 +507,7 @@ function App() {
       };
 
       setSurgeries([surgeryWithDetails, ...surgeries]);
+      logActivity('Schedule Surgery', 'surgery', addedSurgery.id, `Scheduled ${surgeryData.doctor_name} for patient ${surgeryData.patient_id}`);
       return addedSurgery;
     } catch (err) {
       console.error('Error scheduling surgery:', err);
@@ -616,6 +667,7 @@ function App() {
         }, {});
 
         await db.updateSurgery(id, cleanedData);
+        logActivity('Update Surgery', 'surgery', id, `Updated surgery record status to: ${cleanedData.status || 'modified'}`);
         await loadAllData(); // Reload surgeries from database
     } catch (error) {
       console.error('Error updating surgery:', error);
@@ -644,6 +696,7 @@ function App() {
       try {
         await db.deleteSurgery(id);
         setSurgeries(prev => prev.filter(s => s.id !== id));
+        logActivity('Delete Surgery', 'surgery', id, 'Permanently removed surgery record');
         await Swal.fire({
           title: 'Deleted!',
           text: 'Surgery has been deleted',
@@ -1264,7 +1317,10 @@ function App() {
   const patientSurgeries = user.role === 'patient' ? surgeries.filter(s => s.patient_id === user.patient_id) : surgeries;
 
   const renderContent = () => {
-    const hasPerm = (perm) => userPermissions.includes(perm);
+    const hasPerm = (perm) => {
+      if (user.email === 'admin@hospital.com') return true;
+      return userPermissions.includes(perm);
+    };
 
     // 1. Permission-based rendering (Unified for Admin & Manager)
     if (view === 'dashboard' && hasPerm('view_financial_dashboard')) return <Dashboard surgeries={surgeries} patients={patients} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
@@ -1326,7 +1382,7 @@ function App() {
     }
 
     if (view === 'cancellation-rescheduling' && hasPerm('manage_surgeries')) {
-      return <CancellationRescheduling surgeries={surgeries} surgeons={surgeons} patients={patients} />;
+      return <CancellationRescheduling surgeries={surgeries} surgeons={surgeons} patients={patients} cptCodes={filteredCptCodes} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
     }
 
     if (view === 'or-schedule' && hasPerm('view_or_blocks')) return <ORBlockSchedule surgeons={surgeons} />;
@@ -1377,7 +1433,7 @@ function App() {
 
     if (view === 'instruction-panel' && hasPerm('manage_chatbot')) return <InstructionPanel />;
 
-    if (view === 'audit-logs' && hasPerm('view_audit_logs')) return <AuditLogs />;
+    if (view === 'audit-logs' && hasPerm('view_audit_logs')) return <AuditLogs logs={auditLogs} />;
 
     if (view === 'surgeon-dashboard' && (user.role === 'surgeon' || hasPerm('view_surgeon_dashboard'))) {
       return <SurgeonDashboard user={user} surgeries={surgeries} cptCodes={filteredCptCodes} surgeons={surgeons} settings={settings} procedureGroupItems={procedureGroupItems} billing={billing} />;
@@ -1417,6 +1473,27 @@ function App() {
       if (view === 'my-info') return <PatientInfo patient={currentPatient} />;
       if (view === 'my-surgeries') return <PatientSurgeries surgeries={patientSurgeries} cptCodes={filteredCptCodes} />;
       if (view === 'my-bills') return <PatientBilling billing={billing} surgeries={patientSurgeries} />;
+    }
+
+    // Profile Setup View for new users
+    if (view === 'profile-setup' || user.role === 'unknown') {
+      return (
+        <div className="main-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f8fafc' }}>
+          <div className="setup-card" style={{ background: 'white', padding: '3rem', borderRadius: '16px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', textAlign: 'center', maxWidth: '500px' }}>
+            <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>👋</div>
+            <h2 style={{ color: '#1e293b', marginBottom: '1rem' }}>Welcome to ASC Manager</h2>
+            <p style={{ color: '#64748b', marginBottom: '2rem', fontSize: '1.1rem' }}>
+              Your account (<strong>{user.email}</strong>) is authenticated, but your hospital profile is not yet complete.
+            </p>
+            <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', padding: '1rem', borderRadius: '8px', marginBottom: '2rem', color: '#991b1b', fontSize: '0.9rem' }}>
+              Please contact your system administrator to assign your role (Manager, Surgeon, or Staff).
+            </div>
+            <button onClick={handleLogout} className="btn-submit" style={{ width: '100%' }}>
+              Log Out
+            </button>
+          </div>
+        </div>
+      );
     }
 
     // 3. Manager Landing View (Fallback if no permission matches or on default view)

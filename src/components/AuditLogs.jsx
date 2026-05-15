@@ -1,19 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import './AuditLogs.css';
 
-const AuditLogs = () => {
-    const [logs, setLogs] = useState([
-        { id: 1, user: 'admin@hospital.com', action: 'Update Role Permissions', timestamp: '2026-04-03 14:20:15', details: 'Changed permissions for Surgeon' },
-        { id: 2, user: 'manager@hospital.com', action: 'Schedule Surgery', timestamp: '2026-04-03 15:45:22', details: 'Patient ID: 1045, Dr. Williams' },
-        { id: 3, user: 'admin@hospital.com', action: 'Add New Staff', timestamp: '2026-04-04 09:12:05', details: 'Nurse Jane Cooper (Registration)' },
-        { id: 4, user: 'admin@hospital.com', action: 'Update Settings', timestamp: '2026-04-04 10:05:48', details: 'Modified CPT pricing multipliers' }
-    ]);
+const AuditLogs = ({ logs = [] }) => {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterType, setFilterType] = useState('All');
 
     const getActionType = (action) => {
-        if (action.includes('Update')) return 'update';
-        if (action.includes('Add') || action.includes('Schedule')) return 'add';
-        if (action.includes('Delete')) return 'delete';
+        const a = action.toLowerCase();
+        if (a.includes('update')) return 'update';
+        if (a.includes('add') || a.includes('schedule') || a.includes('create')) return 'add';
+        if (a.includes('delete') || a.includes('remove')) return 'delete';
         return 'other';
+    };
+
+    const filteredLogs = logs.filter(log => {
+        const matchesSearch = (log.user_email?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              log.action?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              log.details?.toLowerCase().includes(searchQuery.toLowerCase()));
+        
+        const actionType = getActionType(log.action);
+        const matchesFilter = filterType === 'All' || 
+                             (filterType === 'Updates' && actionType === 'update') ||
+                             (filterType === 'Creations' && actionType === 'add') ||
+                             (filterType === 'Deletions' && actionType === 'delete');
+                             
+        return matchesSearch && matchesFilter;
+    });
+
+    const formatTimestamp = (ts) => {
+        if (!ts) return '-';
+        const date = new Date(ts);
+        return date.toLocaleString();
     };
 
     return (
@@ -28,12 +45,22 @@ const AuditLogs = () => {
                     <div className="card-header">
                         <h3>Recent Activity</h3>
                         <div className="filters">
-                            <input type="text" placeholder="Search logs..." className="search-input" />
-                            <select className="filter-select">
-                                <option>All Actions</option>
-                                <option>Updates</option>
-                                <option>Creations</option>
-                                <option>Deletions</option>
+                            <input 
+                                type="text" 
+                                placeholder="Search logs..." 
+                                className="search-input" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            <select 
+                                className="filter-select"
+                                value={filterType}
+                                onChange={(e) => setFilterType(e.target.value)}
+                            >
+                                <option value="All">All Actions</option>
+                                <option value="Updates">Updates</option>
+                                <option value="Creations">Creations</option>
+                                <option value="Deletions">Deletions</option>
                             </select>
                         </div>
                     </div>
@@ -49,23 +76,31 @@ const AuditLogs = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {logs.map(log => (
-                                    <tr key={log.id}>
-                                        <td>
-                                            <div className="user-cell">
-                                                <span className="user-icon">👤</span>
-                                                <span className="user-email">{log.user}</span>
-                                            </div>
+                                {filteredLogs.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                                            No audit logs found.
                                         </td>
-                                        <td>
-                                            <span className={`action-badge ${getActionType(log.action)}`}>
-                                                {log.action}
-                                            </span>
-                                        </td>
-                                        <td className="timestamp">{log.timestamp}</td>
-                                        <td className="details">{log.details}</td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    filteredLogs.map(log => (
+                                        <tr key={log.id}>
+                                            <td>
+                                                <div className="user-cell">
+                                                    <span className="user-icon">👤</span>
+                                                    <span className="user-email">{log.user_email}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className={`action-badge ${getActionType(log.action)}`}>
+                                                    {log.action}
+                                                </span>
+                                            </td>
+                                            <td className="timestamp">{formatTimestamp(log.created_at)}</td>
+                                            <td className="details">{log.details}</td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>

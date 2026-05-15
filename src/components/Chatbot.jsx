@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendMessageToGemini } from '../services/gemini';
+import { redactPHI } from '../utils/hospitalUtils';
 import './Chatbot.css';
 
 const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], orBlockSchedule = [] }) => {
@@ -78,8 +79,9 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
         }
 
         if (patients.length > 0) {
-            // Simplified patient list for context
-            contextParts.push(`Patient Directory (Count: ${patients.length}):\n${patients.map(p => `- [ID: ${p.id}] ${p.name} (DOB: ${p.dob}, MRN: ${p.mrn})`).join('\n')}`);
+            // REDACTED patient list for context
+            const redactedPatients = patients.map(p => redactPHI(p));
+            contextParts.push(`Patient Directory (Count: ${patients.length}):\n${redactedPatients.map(p => `- [ID: ${p.id}] ${p.name} (DOB: ${p.dob}, MRN: ${p.mrn})`).join('\n')}`);
         }
 
         if (orBlockSchedule.length > 0) {
@@ -298,6 +300,18 @@ const Chatbot = ({ surgeons = [], cptCodes = [], surgeries = [], patients = [], 
                         <div className="chatbot-title">
                             <span className="status-dot"></span>
                             ASC Assistant
+                            <span style={{ 
+                                marginLeft: '8px', 
+                                fontSize: '0.65rem', 
+                                background: 'rgba(255,255,255,0.2)', 
+                                padding: '2px 6px', 
+                                borderRadius: '4px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                fontWeight: '700'
+                            }}>
+                                🔒 PHI Protected
+                            </span>
                         </div>
                         <button className="chatbot-close" onClick={() => setIsOpen(false)}>
                             ×

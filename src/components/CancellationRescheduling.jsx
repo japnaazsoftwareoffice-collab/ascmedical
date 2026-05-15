@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import './Management.css';
-import { formatCurrency } from '../utils/hospitalUtils';
+import { formatCurrency, getSurgeryMetrics } from '../utils/hospitalUtils';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
-const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
+const CancellationRescheduling = ({ surgeries, surgeons, patients, cptCodes, settings, procedureGroupItems = [], billing = [] }) => {
     const [activeTab, setActiveTab] = useState('cancelled'); // 'cancelled' or 'rescheduled'
     const [outcomeView, setOutcomeView] = useState('all'); // 'all' or 'daily'
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -64,11 +65,38 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
     const cancelledPercentage = total > 0 ? (cancelledCount / total) * 100 : 0;
     const rescheduledPercentage = total > 0 ? (rescheduledCount / total) * 100 : 0;
 
-    // Calculate gradient stops
-    const p1 = completedPercentage;
-    const p2 = p1 + scheduledPercentage;
-    const p3 = p2 + cancelledPercentage;
-    const p4 = p3 + rescheduledPercentage;
+    // Calculate Financial Loss for Cancelled Surgeries
+    const financialImpact = useMemo(() => {
+        const cancelled = surgeries.filter(s => s.status === 'cancelled');
+        let totalRevenueLost = 0;
+        let totalIdleRoomCost = 0;
+        let totalIdleLaborCost = 0;
+
+        cancelled.forEach(s => {
+            const metrics = getSurgeryMetrics(s, cptCodes, settings, procedureGroupItems, billing);
+            totalRevenueLost += metrics.totalRevenue;
+            totalIdleRoomCost += metrics.internalRoomCost;
+            totalIdleLaborCost += metrics.laborCost;
+        });
+
+        return {
+            revenueLost: totalRevenueLost,
+            idleCosts: totalIdleRoomCost + totalIdleLaborCost,
+            totalImpact: totalRevenueLost + totalIdleRoomCost + totalIdleLaborCost,
+            count: cancelled.length
+        };
+    }, [surgeries, cptCodes, settings, procedureGroupItems, billing]);
+
+    const pieData = useMemo(() => {
+        return [
+            { name: 'Completed', value: completedSurgeries, color: '#10b981' },
+            { name: 'Scheduled', value: scheduledSurgeries, color: '#3b82f6' },
+            { name: 'Cancelled', value: cancelledCount, color: '#dc2626' },
+            { name: 'Rescheduled', value: rescheduledCount, color: '#f59e0b' }
+        ].filter(d => d.value > 0);
+    }, [completedSurgeries, scheduledSurgeries, cancelledCount, rescheduledCount]);
+
+    const chartColors = ['#10b981', '#3b82f6', '#dc2626', '#f59e0b'];
 
     return (
         <div className="management-container fade-in">
@@ -194,184 +222,117 @@ const CancellationRescheduling = ({ surgeries, surgeons, patients }) => {
                 </div>
             </div>
 
-            {/* Detailed Pie Chart Modal */}
-            {showChart && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000,
-                    backdropFilter: 'blur(4px)'
-                }} onClick={() => setShowChart(false)}>
-                    <div style={{
-                        background: 'white',
-                        padding: '2rem',
-                        borderRadius: '24px',
-                        width: '90%',
-                        maxWidth: '600px',
-                        position: 'relative',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-                    }} onClick={e => e.stopPropagation()}>
-                        <button
-                            onClick={() => setShowChart(false)}
-                            style={{
-                                position: 'absolute',
-                                top: '1.5rem',
-                                right: '1.5rem',
-                                background: '#f1f5f9',
-                                border: 'none',
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                color: '#64748b',
-                                fontSize: '1.2rem',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            ×
-                        </button>
+            {/* Financial Loss Analysis Section */}
+            <div className="section-header" style={{ marginTop: '2rem' }}>
+                <h3>Financial Impact Analysis</h3>
+                <span className="or-info-badge" style={{ background: '#fef2f2', color: '#dc2626' }}>
+                    Critical Loss Tracking
+                </span>
+            </div>
 
-                        <h3 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#1e293b', textAlign: 'center', fontSize: '1.5rem' }}>Surgery Outcome Analysis</h3>
-
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            gap: '0.75rem',
-                            marginBottom: '2rem',
-                            alignItems: 'center'
-                        }}>
-                            <select
-                                className="filter-select"
-                                style={{
-                                    padding: '0.4rem 0.75rem',
-                                    fontSize: '0.9rem',
-                                    borderRadius: '8px',
-                                    border: '1px solid #e2e8f0',
-                                    background: '#f8fafc'
-                                }}
-                                value={outcomeView}
-                                onChange={(e) => setOutcomeView(e.target.value)}
-                            >
-                                <option value="all">All Time</option>
-                                <option value="daily">Daily View</option>
-                            </select>
-
-                            {outcomeView === 'daily' && (
-                                <input
-                                    type="date"
-                                    className="date-input"
-                                    style={{
-                                        padding: '0.35rem 0.75rem',
-                                        fontSize: '0.9rem',
-                                        borderRadius: '8px',
-                                        border: '1px solid #e2e8f0'
-                                    }}
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                />
-                            )}
+            <div className="stats-grid" style={{ marginBottom: '2rem' }}>
+                <div className="stat-card" style={{ borderLeft: '4px solid #dc2626' }}>
+                    <div className="stat-content">
+                        <div className="stat-label">Potential Revenue Lost</div>
+                        <div className="stat-value" style={{ color: '#dc2626' }}>
+                            {formatCurrency(financialImpact.revenueLost)}
                         </div>
-
-                        {total > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                {/* Chart Container */}
-                                <div style={{
-                                    width: '260px',
-                                    height: '260px',
-                                    borderRadius: '50%',
-                                    background: `conic-gradient(
-                                        #10b981 0% ${p1}%, 
-                                        #3b82f6 ${p1}% ${p2}%, 
-                                        #dc2626 ${p2}% ${p3}%, 
-                                        #f59e0b ${p3}% ${p4}%
-                                    )`,
-                                    marginBottom: '2.5rem',
-                                    position: 'relative',
-                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                                }}>
-                                    {/* Donut Hole */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        background: 'white',
-                                        width: '180px',
-                                        height: '180px',
-                                        borderRadius: '50%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexDirection: 'column',
-                                        boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)'
-                                    }}>
-                                        <span style={{ fontSize: '2.5rem', fontWeight: '800', color: '#1e293b', lineHeight: '1' }}>{total}</span>
-                                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '0.25rem' }}>Total Cases</span>
-                                    </div>
-                                </div>
-
-                                {/* Legend Grid */}
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(2, 1fr)',
-                                    gap: '1.5rem',
-                                    width: '100%',
-                                    maxWidth: '400px'
-                                }}>
-                                    {/* Completed */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#f0fdf4', borderRadius: '12px' }}>
-                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 0 2px #bbf7d0' }}></div>
-                                        <div>
-                                            <div style={{ fontWeight: '700', color: '#166534', fontSize: '1.1rem' }}>{completedSurgeries}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: '500' }}>Completed ({completedPercentage.toFixed(1)}%)</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Scheduled */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#eff6ff', borderRadius: '12px' }}>
-                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 0 2px #bfdbfe' }}></div>
-                                        <div>
-                                            <div style={{ fontWeight: '700', color: '#1e40af', fontSize: '1.1rem' }}>{scheduledSurgeries}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#1d4ed8', fontWeight: '500' }}>Scheduled ({scheduledPercentage.toFixed(1)}%)</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Rescheduled */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#fffbeb', borderRadius: '12px' }}>
-                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 0 2px #fde68a' }}></div>
-                                        <div>
-                                            <div style={{ fontWeight: '700', color: '#92400e', fontSize: '1.1rem' }}>{rescheduledCount}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: '500' }}>Rescheduled ({rescheduledPercentage.toFixed(1)}%)</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Cancelled */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: '#fef2f2', borderRadius: '12px' }}>
-                                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#dc2626', boxShadow: '0 0 0 2px #fecaca' }}></div>
-                                        <div>
-                                            <div style={{ fontWeight: '700', color: '#991b1b', fontSize: '1.1rem' }}>{cancelledCount}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: '500' }}>Cancelled ({cancelledPercentage.toFixed(1)}%)</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                            </div>
-                        ) : (
-                            <p style={{ textAlign: 'center', color: '#64748b' }}>No surgery data available for analysis</p>
-                        )}
+                        <div className="stat-sublabel">From {financialImpact.count} cancelled cases</div>
+                    </div>
+                    <div className="stat-icon" style={{ backgroundColor: '#fef2f2', color: '#dc2626' }}>
+                        💸
                     </div>
                 </div>
-            )}
+
+                <div className="stat-card" style={{ borderLeft: '4px solid #ef4444' }}>
+                    <div className="stat-content">
+                        <div className="stat-label">Idle Resource Costs</div>
+                        <div className="stat-value" style={{ color: '#ef4444' }}>
+                            {formatCurrency(financialImpact.idleCosts)}
+                        </div>
+                        <div className="stat-sublabel">Sunk Room & Labor Expense</div>
+                    </div>
+                    <div className="stat-icon" style={{ backgroundColor: '#fff5f5', color: '#ef4444' }}>
+                        ⏳
+                    </div>
+                </div>
+
+                <div className="stat-card" style={{ borderLeft: '4px solid #1e293b', background: '#f8fafc' }}>
+                    <div className="stat-content">
+                        <div className="stat-label">Total Economic Impact</div>
+                        <div className="stat-value" style={{ color: '#1e293b' }}>
+                            {formatCurrency(financialImpact.totalImpact)}
+                        </div>
+                        <div className="stat-sublabel">Revenue Lost + Idle Expense</div>
+                    </div>
+                    <div className="stat-icon" style={{ backgroundColor: '#f1f5f9', color: '#475569' }}>
+                        📉
+                    </div>
+                </div>
+            </div>
+
+            <div className="or-util-simplified-grid" style={{ marginBottom: '2rem' }}>
+                <div className="chart-card glass-card">
+                    <h3 className="chart-title">Surgery Outcome Distribution</h3>
+                    <div className="utilization-pie-container">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={70}
+                                    outerRadius={100}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                    startAngle={90}
+                                    endAngle={-270}
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <RechartsTooltip 
+                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                />
+                                <Legend verticalAlign="bottom" height={36}/>
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="pie-center-label">
+                            <span className="pie-center-value">{total}</span>
+                            <span className="pie-center-text">Total Cases</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="simplified-metrics-column">
+                    <div className="compact-stat-card" style={{ borderLeft: '4px solid #dc2626' }}>
+                        <div className="compact-stat-info">
+                            <span className="compact-stat-label">Cancellation Rate</span>
+                            <span className="compact-stat-value">{cancelledPercentage.toFixed(1)}%</span>
+                        </div>
+                        <div style={{ fontSize: '1.2rem' }}>🚫</div>
+                    </div>
+                    <div className="compact-stat-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+                        <div className="compact-stat-info">
+                            <span className="compact-stat-label">Reschedule Rate</span>
+                            <span className="compact-stat-value">{rescheduledPercentage.toFixed(1)}%</span>
+                        </div>
+                        <div style={{ fontSize: '1.2rem' }}>🔄</div>
+                    </div>
+                    <div className="compact-stat-card" style={{ borderLeft: '4px solid #10b981' }}>
+                        <div className="compact-stat-info">
+                            <span className="compact-stat-label">Completion Rate</span>
+                            <span className="compact-stat-value">{completedPercentage.toFixed(1)}%</span>
+                        </div>
+                        <div style={{ fontSize: '1.2rem' }}>✅</div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="section-header">
+                <h3>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} List</h3>
+            </div>
         </div>
     );
 };

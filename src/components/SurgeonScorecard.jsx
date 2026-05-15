@@ -71,8 +71,16 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
             // Rule: Actual Billing Amount is Net Profit
             metrics.totalRevenue = metrics.netProfit;
 
-            stats.totalRevenue += metrics.totalRevenue;
-            stats.totalProfit += metrics.netProfit;
+            // Track minutes
+            const surgeryDuration = parseInt(surgery.actual_duration_minutes || surgery.duration_minutes || 0);
+            stats.totalMinutes += surgeryDuration;
+
+            // Metrics for this specific case
+            const caseProfit = metrics.netProfit;
+            const caseRevenue = metrics.totalRevenue;
+
+            stats.totalRevenue += caseRevenue;
+            stats.totalProfit += caseProfit;
             stats.totalORCost += metrics.internalRoomCost;
             stats.totalLaborCost += metrics.laborCost;
             stats.totalSuppliesCost += metrics.supplyCosts;
@@ -80,10 +88,6 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
             stats.originalORCost += origOR;
             stats.originalLaborCost += origLabor;
             stats.originalSuppliesCost += origSupplies;
-
-            // Track minutes
-            const surgeryDuration = surgery.actual_duration_minutes || surgery.duration_minutes || 0;
-            stats.totalMinutes += surgeryDuration;
 
             // Count tier breaches (> 60 minutes)
             if (surgeryDuration > 60) {
@@ -111,7 +115,7 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
                 netMargin,
                 efficiencyRating,
                 avgRevenuePerCase,
-                avgMarginPerCase,
+                avgProfitPerCase: avgMarginPerCase, // Rename for clarity
                 marginPercentage: stats.totalRevenue > 0 ? (netMargin / stats.totalRevenue) * 100 : 0
             };
         });
@@ -238,19 +242,16 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
                                     Total Cases {getSortIcon('totalCases')}
                                 </th>
                                 <th onClick={() => handleSort('totalRevenue')} style={{ cursor: 'pointer' }}>
-                                    Total Revenue {getSortIcon('totalRevenue')}
+                                    Revenue {getSortIcon('totalRevenue')}
+                                </th>
+                                <th onClick={() => handleSort('avgProfitPerCase')} style={{ cursor: 'pointer' }}>
+                                    Profit per Case {getSortIcon('avgProfitPerCase')}
                                 </th>
                                 <th onClick={() => handleSort('totalCosts')} style={{ cursor: 'pointer' }}>
                                     Total Costs {getSortIcon('totalCosts')}
                                 </th>
                                 <th onClick={() => handleSort('netMargin')} style={{ cursor: 'pointer' }}>
                                     Net Margin {getSortIcon('netMargin')}
-                                </th>
-                                <th onClick={() => handleSort('marginPercentage')} style={{ cursor: 'pointer' }}>
-                                    Margin % {getSortIcon('marginPercentage')}
-                                </th>
-                                <th onClick={() => handleSort('tierBreaches')} style={{ cursor: 'pointer' }}>
-                                    Tier Breaches {getSortIcon('tierBreaches')}
                                 </th>
                                 <th onClick={() => handleSort('efficiencyRating')} style={{ cursor: 'pointer' }}>
                                     Efficiency {getSortIcon('efficiencyRating')}
@@ -285,60 +286,59 @@ const SurgeonScorecard = ({ surgeries, surgeons, cptCodes, settings, procedureGr
                                             </span>
                                         </td>
                                         <td style={{ fontWeight: '600' }}>{surgeon.totalCases}</td>
-                                        <td style={{ color: '#059669', fontWeight: '600' }}>
+                                        <td style={{ color: '#059669', fontWeight: '700', fontSize: '1.1rem' }}>
                                             {formatCurrency(surgeon.totalRevenue)}
                                             <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '400' }}>
-                                                Avg: {formatCurrency(surgeon.avgRevenuePerCase)}
+                                                Total for {surgeon.totalCases} cases
                                             </div>
                                         </td>
-                                        <td style={{ color: surgeon.totalCosts > 0 ? '#dc2626' : '#64748b', fontWeight: '600' }}>
-                                            {surgeon.totalCosts > 0 ? (
-                                                formatCurrency(surgeon.totalCosts)
-                                            ) : (
-                                                <span style={{ color: '#94a3b8', fontSize: '0.9rem', fontWeight: '400' }}>
-                                                    Other: {formatCurrency(surgeon.originalORCost + surgeon.originalLaborCost + surgeon.originalSuppliesCost)}
-                                                </span>
+                                        <td>
+                                            <div style={{ color: '#059669', fontWeight: '700', fontSize: '1.1rem' }}>
+                                                {formatCurrency(surgeon.avgProfitPerCase)}
+                                            </div>
+                                            {surgeon.surgeries.some(s => s.notes && s.notes.includes('Fixed Facility Fee Case')) && (
+                                                <div style={{ 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px',
+                                                    background: '#ecfdf5', 
+                                                    color: '#059669', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '6px', 
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '600',
+                                                    border: '1px solid #10b981',
+                                                    marginTop: '4px'
+                                                }}>
+                                                    ✨ Fixed Profit
+                                                </div>
                                             )}
-                                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '400' }}>
-                                                OR: {formatCurrency(surgeon.totalCosts > 0 ? surgeon.totalORCost : surgeon.originalORCost)} |
-                                                Labor: {formatCurrency(surgeon.totalCosts > 0 ? surgeon.totalLaborCost : surgeon.originalLaborCost)} |
-                                                Supplies: {formatCurrency(surgeon.totalCosts > 0 ? surgeon.totalSuppliesCost : surgeon.originalSuppliesCost)}
+                                        </td>
+                                        <td style={{ color: surgeon.totalCosts > 0 ? '#dc2626' : '#64748b' }}>
+                                            {formatCurrency(surgeon.totalCosts)}
+                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>
+                                                Avg: {formatCurrency(surgeon.totalCosts / surgeon.totalCases)}
                                             </div>
                                         </td>
                                         <td style={{
                                             color: surgeon.netMargin >= 0 ? '#059669' : '#dc2626',
                                             fontWeight: '700',
-                                            fontSize: '1.05rem'
+                                            fontSize: '1.1rem'
                                         }}>
                                             {formatCurrency(surgeon.netMargin)}
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '400' }}>
-                                                Avg: {formatCurrency(surgeon.avgMarginPerCase)}
+                                            <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                color: surgeon.marginPercentage >= 20 ? '#059669' : '#f59e0b',
+                                                fontWeight: '600'
+                                            }}>
+                                                Margin: {surgeon.marginPercentage.toFixed(1)}%
                                             </div>
-                                        </td>
-                                        <td style={{
-                                            color: surgeon.marginPercentage >= 20 ? '#059669' :
-                                                surgeon.marginPercentage >= 10 ? '#f59e0b' : '#dc2626',
-                                            fontWeight: '600'
-                                        }}>
-                                            {surgeon.marginPercentage.toFixed(1)}%
-                                        </td>
-                                        <td>
-                                            {surgeon.tierBreaches > 0 ? (
-                                                <span className="badge" style={{
-                                                    background: surgeon.tierBreaches > 5 ? '#fee2e2' : '#fef3c7',
-                                                    color: surgeon.tierBreaches > 5 ? '#991b1b' : '#92400e',
-                                                    padding: '4px 8px',
-                                                    borderRadius: '4px',
-                                                    fontWeight: '600'
-                                                }}>
-                                                    {surgeon.tierBreaches}
-                                                </span>
-                                            ) : (
-                                                <span style={{ color: '#64748b' }}>0</span>
-                                            )}
                                         </td>
                                         <td style={{ fontWeight: '600', color: '#6366f1' }}>
                                             ${surgeon.efficiencyRating.toFixed(2)}/min
+                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                                {surgeon.tierBreaches} breaches
+                                            </div>
                                         </td>
                                     </tr>
                                 ))

@@ -8,29 +8,44 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Database service functions
 export const db = {
-    // ==================== AUTHENTICATION ====================
+    // ==================== AUTHENTICATION (SECURE) ====================
     async login(email, password) {
-        const { data, error } = await supabase
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) throw error;
+        
+        // After auth, fetch the profile from our users table
+        const { data: profile, error: profileError } = await supabase
             .from('users')
             .select('*, surgeons(*), patients(*)')
-            .eq('email', email)
-            .eq('password', password)
+            .eq('id', data.user.id)
             .single();
 
-        if (error) throw error;
-        return data;
+        if (profileError) {
+            // If profile doesn't exist yet, we might need to create it or handle error
+            console.warn('Auth success but profile fetch failed:', profileError);
+            return { ...data.user, role: 'unknown' };
+        }
+
+        return profile;
     },
 
-    async loginAsSurgeon(email, password) {
-        const { data, error } = await supabase
-            .from('surgeons')
-            .select('*')
-            .eq('email', email)
-            .eq('password', password)
-            .single();
-
+    async logout() {
+        const { error } = await supabase.auth.signOut();
         if (error) throw error;
-        return data;
+    },
+
+    async getCurrentSession() {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        return data.session;
+    },
+
+    onAuthStateChange(callback) {
+        return supabase.auth.onAuthStateChange(callback);
     },
 
     async getUsers() {
@@ -47,9 +62,55 @@ export const db = {
     },
 
     async addUser(user) {
+        const { email, password, ...profileData } = user;
+        
+        // 1. Create the Auth user using a temporary client to avoid signing out the Admin
+        const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: { persistSession: false }
+        });
+        
+        const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+            email,
+            password
+        });
+
+        let userId = authData?.user?.id;
+
+        if (authError) {
+            // If user already exists in Auth, we can't get their ID directly for security reasons (email enumeration protection)
+            // But if the Admin is creating them, they likely want to just create the profile record.
+            if (authError.message.includes('already registered')) {
+                console.log('User already in Auth, checking for existing profile...');
+                
+                // Check if they already have a record in users table
+                const { data: existingProfile } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('email', email)
+                    .maybeSingle();
+                
+                if (existingProfile) {
+                    throw new Error('A profile for this email already exists in the users table.');
+                }
+                
+                // Note: If they exist in Auth but NOT in users table, we can't easily get their UID here.
+                // However, our auto-linking logic in App.jsx will fix the link when they first log in!
+                // So we can insert with a temporary UUID or just tell the user to have them log in.
+                userId = crypto.randomUUID(); 
+                console.log('Created profile with temporary ID; will be auto-linked on first login.');
+            } else {
+                throw authError;
+            }
+        }
+
+        // 2. Insert into the users table
         const { data, error } = await supabase
             .from('users')
-            .insert([user])
+            .insert([{
+                ...profileData,
+                id: userId,
+                email: email
+            }])
             .select()
             .single();
 
@@ -879,5 +940,42 @@ export const db = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    // ==================== AUDIT LOGS ====================
+    async getAuditLogs() {
+        const { data, error } = await supabase
+            .from('audit_logs')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+        if (error) {
+            if (error.code === '42P01') return [];
+            throw error;
+        }
+        return data || [];
+    },
+
+    async addAuditLog(log) {
+        const { data, error } = await supabase
+            .from('audit_logs')
+            .insert([{
+                user_email: log.user_email,
+                action: log.action,
+                details: log.details,
+                ip_address: log.ip_address || 'unknown',
+                resource_id: String(log.resource_id || ''),
+                resource_type: log.resource_type || 'unknown'
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error adding audit log:', error);
+            // Don't throw for audit logs - we don't want to break the main UI
+            // if logging fails, though in production we should handle this
+        }
+        return data;
     }
 };

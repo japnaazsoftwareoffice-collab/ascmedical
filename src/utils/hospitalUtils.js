@@ -328,3 +328,39 @@ export const getSurgeryMetrics = (surgery, cptCodes, settings = {}, procedureGro
         isProbono
     };
 };
+/**
+ * Redacts PHI (Protected Health Information) from strings or objects
+ * @param {string|object} data The data to redact
+ * @returns {string|object} The redacted data
+ */
+export const redactPHI = (data) => {
+    if (typeof data === 'string') {
+        // Simple regex-based redaction for names and common patterns could go here, 
+        // but it's safer to redact specific fields in objects.
+        return data;
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => redactPHI(item));
+    }
+
+    if (typeof data === 'object' && data !== null) {
+        const redacted = { ...data };
+        const phiFields = ['name', 'firstname', 'lastname', 'dob', 'mrn', 'address', 'phone', 'email', 'ssn', 'insurance_id'];
+        
+        phiFields.forEach(field => {
+            if (redacted[field]) {
+                if (field === 'name' || field === 'firstname' || field === 'lastname') {
+                    // "John Doe" -> "J*** D***"
+                    const parts = String(redacted[field]).split(' ');
+                    redacted[field] = parts.map(p => p.charAt(0) + '***').join(' ');
+                } else {
+                    redacted[field] = '***REDACTED***';
+                }
+            }
+        });
+        return redacted;
+    }
+
+    return data;
+};

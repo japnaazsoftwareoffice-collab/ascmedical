@@ -84,7 +84,7 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
             setErrors({});
         } catch (error) {
             console.error('Error saving user:', error);
-            Swal.fire('Error', 'Failed to save user', 'error');
+            Swal.fire('Error', error.message || 'Failed to save user', 'error');
         }
     };
 
@@ -214,6 +214,7 @@ const UserManagement = ({ users, patients, surgeons, onAdd, onUpdate, onDelete }
                             >
                                 <option value="">Select Role...</option>
                                 <option value="admin">Admin</option>
+                                <option value="manager">Manager</option>
                                 <option value="surgeon">Surgeon</option>
                                 <option value="patient">Patient</option>
                             </select>

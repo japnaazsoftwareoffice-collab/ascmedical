@@ -31,6 +31,11 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
     ];
 
     const getMenuItems = () => {
+        // FAIL-SAFE: If it's the admin email, show everything even if role/permissions aren't fully loaded
+        if (user.email === 'admin@hospital.com') {
+            return allMenuItems;
+        }
+
         if (user.role === 'admin') {
             // Admins see menu items based on permissions
             return allMenuItems.filter(item => permissions.includes(item.permission));
@@ -66,12 +71,14 @@ const Sidebar = ({ currentView, onViewChange, user, onLogout, permissions = [] }
         <aside className="sidebar">
             <div className="sidebar-header">
                 <span className="logo-text">ASC MANAGER</span>
-                <span className="role-badge">{user.role.toUpperCase()}</span>
+                <span className="role-badge">
+                    {user.email === 'admin@hospital.com' ? 'ADMIN' : user.role.toUpperCase()}
+                </span>
             </div>
 
             <div className="user-profile">
                 <div className="user-avatar">
-                    {user.role === 'admin' && '👨‍💼'}
+                    {(user.role === 'admin' || user.email === 'admin@hospital.com') && '👨‍💼'}
                     {user.role === 'manager' && '📋'}
                     {user.role === 'surgeon' && '👨‍⚕️'}
                     {user.role === 'patient' && '👤'}
