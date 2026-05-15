@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { calculateORCost, formatCurrency, formatSurgeonName, calculateMedicareRevenue, getSurgeryMetrics, formatDateLocal } from '../utils/hospitalUtils';
 import Papa from 'papaparse';
 import './ORUtilization.css';
@@ -389,377 +390,190 @@ const ORUtilization = ({ surgeries, cptCodes, settings, procedureGroupItems = []
         return 'Low';
     };
 
+    const pieData = useMemo(() => {
+        const used = filteredMetrics.minutesUsed;
+        const available = Math.max(0, filteredMetrics.totalCapacity - used);
+        return [
+            { name: 'Used Time', value: used, color: '#3b82f6' },
+            { name: 'Available Time', value: available, color: '#e2e8f0' }
+        ];
+    }, [filteredMetrics]);
+
     return (
         <div className="page-container fade-in">
             {/* Page Header */}
             <div className="dashboard-header">
                 <div className="header-left">
-                    <h2 className="page-title">OR Utilization Dashboard</h2>
+                    <h2 className="page-title">OR Utilization</h2>
+                    <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>Simplified overview of operating room efficiency</p>
                 </div>
                 <div className="header-actions">
                     <div className="view-toggle-container">
-                        <button 
-                            className={`view-toggle-btn ${viewType === 'day' ? 'active' : ''}`}
-                            onClick={() => setViewType('day')}
-                        >Day</button>
-                        <button 
-                            className={`view-toggle-btn ${viewType === 'week' ? 'active' : ''}`}
-                            onClick={() => setViewType('week')}
-                        >Week</button>
-                        <button 
-                            className={`view-toggle-btn ${viewType === 'month' ? 'active' : ''}`}
-                            onClick={() => setViewType('month')}
-                        >Month</button>
-                        <button 
-                            className={`view-toggle-btn ${viewType === 'year' ? 'active' : ''}`}
-                            onClick={() => setViewType('year')}
-                        >Year</button>
+                        {['day', 'week', 'month', 'year'].map(type => (
+                            <button 
+                                key={type}
+                                className={`view-toggle-btn ${viewType === type ? 'active' : ''}`}
+                                onClick={() => setViewType(type)}
+                            >
+                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </button>
+                        ))}
                     </div>
+                    
                     <div className="date-picker">
                         <span>🏥</span>
                         <select
                             value={selectedOR}
                             onChange={(e) => setSelectedOR(e.target.value)}
                             className="date-input"
-                            style={{ minWidth: '120px' }}
                         >
-                            <option value="all">All ORs</option>
+                            <option value="all">All Rooms</option>
                             <option value="1">OR 1</option>
                         </select>
                     </div>
+
                     <div className="date-picker">
                         <span>📅</span>
-                        {viewType === 'day' && (
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => handleDateChange(e.target.value)}
-                                className="date-input"
-                            />
-                        )}
-                        {viewType === 'week' && (
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => handleDateChange(e.target.value)}
-                                className="date-input"
-                                min="2024-01-01"
-                                step="7"
-                                title="Select a week (Mondays only)"
-                            />
-                        )}
-                        {viewType === 'month' && (
-                            <input
-                                type="month"
-                                value={selectedDate.substring(0, 7)}
-                                onChange={(e) => handleDateChange(e.target.value)}
-                                className="date-input"
-                            />
-                        )}
+                        {viewType === 'day' && <input type="date" value={selectedDate} onChange={(e) => handleDateChange(e.target.value)} className="date-input" />}
+                        {viewType === 'week' && <input type="date" value={selectedDate} onChange={(e) => handleDateChange(e.target.value)} className="date-input" step="7" />}
+                        {viewType === 'month' && <input type="month" value={selectedDate.substring(0, 7)} onChange={(e) => handleDateChange(e.target.value)} className="date-input" />}
                         {viewType === 'year' && (
-                            <select
-                                value={selectedDate.substring(0, 4)}
-                                onChange={(e) => handleDateChange(e.target.value)}
-                                className="date-input"
-                            >
-                                {Array.from({ length: 7 }, (_, i) => 2024 + i).map(year => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
+                            <select value={selectedDate.substring(0, 4)} onChange={(e) => handleDateChange(e.target.value)} className="date-input">
+                                {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
                         )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                        <input
-                            type="checkbox"
-                            id="or-util-toggle-costs"
-                            checked={includeLaborSupplies}
-                            onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
-                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                        />
-                        <label htmlFor="or-util-toggle-costs" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                            Include Labor/Supplies
-                        </label>
-                    </div>
-                    <button 
-                        onClick={handleExportCSV}
-                        className="btn-action"
-                        style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: '8px', 
-                            background: '#10b981', 
-                            color: 'white', 
-                            border: 'none', 
-                            padding: '8px 16px', 
-                            borderRadius: '8px', 
-                            fontWeight: '600', 
-                            cursor: 'pointer',
-                            fontSize: '0.85rem'
-                        }}
-                    >
-                        <span>📥</span> Export CSV
+
+                    <button onClick={handleExportCSV} className="btn-action" style={{ background: '#10b981', color: 'white', border: 'none', padding: '10px 18px', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>📥</span> Export
                     </button>
                 </div>
             </div>
 
-            {/* Financial Overview */}
-            <div className="stats-grid" style={{ marginBottom: '1.5rem' }}>
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Total Operation Revenue</div>
-                        <div className="stat-value" style={{ color: '#10b981' }}>
-                            {formatCurrency(filteredMetrics.revenue)}
-                        </div>
-                        <div className="stat-sublabel">
-                            Est. Revenue from Surgeries
-                        </div>
-                    </div>
-                    <div className="stat-icon" style={{ backgroundColor: '#ecfdf5', color: '#10b981' }}>
-                        💰
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Total OR Cost</div>
-                        <div className="stat-value" style={{ color: '#ef4444' }}>
-                            {formatCurrency(filteredMetrics.cost)}
-                        </div>
-                        <div className="stat-sublabel">
-                            Est. Operational Expense
-                        </div>
-                    </div>
-                    <div className="stat-icon" style={{ backgroundColor: '#fef2f2', color: '#ef4444' }}>
-                        📉
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Net Profit/Loss</div>
-                        <div className="stat-value" style={{
-                            color: filteredMetrics.profit > 0 ? '#10b981' : '#ef4444'
-                        }}>
-                            {formatCurrency(filteredMetrics.profit)}
-                        </div>
-                        <div className="stat-sublabel">
-                            Revenue - Cost
-                        </div>
-                    </div>
-                    <div className="stat-icon" style={{ backgroundColor: '#eff6ff', color: '#3b82f6' }}>
-                        ⚖️
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Efficiency Ratio</div>
-                        <div className="stat-value" style={{ color: '#3b82f6' }}>
-                            {(() => {
-                                const totalCosts = filteredMetrics.cost + filteredMetrics.laborCost + filteredMetrics.suppliesCost;
-                                return totalCosts > 0 ? (filteredMetrics.revenue / totalCosts).toFixed(2) : 'N/A';
-                            })()}x
-                        </div>
-                        <div className="stat-sublabel">
-                            Revenue per $1 Cost
-                        </div>
-                    </div>
-                    <div className="stat-icon" style={{ backgroundColor: '#f5f3ff', color: '#8b5cf6' }}>
-                        📈
-                    </div>
-                </div>
-            </div>
-
-            {/* Key Metrics */}
-            <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Overall Utilization</div>
-                        <div className="stat-value">{filteredMetrics.utilization.toFixed(1)}%</div>
-                        <div className="stat-sublabel">{getUtilizationLabel(filteredMetrics.utilization)} Efficiency</div>
-                    </div>
-                    <div className="stat-icon" style={{
-                        backgroundColor: getUtilizationBg(filteredMetrics.utilization),
-                        color: getUtilizationColor(filteredMetrics.utilization)
-                    }}>
-                        🏥
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Total Surgeries</div>
-                        <div className="stat-value">{filteredMetrics.surgeries}</div>
-                        <div className="stat-sublabel">
-                            {(() => {
-                                const d = new Date(selectedDate + 'T00:00:00');
-                                if (viewType === 'day') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                if (viewType === 'week') return 'Current Week';
-                                if (viewType === 'month') return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                                if (viewType === 'year') return d.getFullYear();
-                            })()}
-                        </div>
-                    </div>
-                    <div className="stat-icon icon-purple">
-                        🔪
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Time Used</div>
-                        <div className="stat-value">{formatDuration(filteredMetrics.minutesUsed)}</div>
-                        <div className="stat-sublabel">
-                            {formatDuration(filteredMetrics.minutesUsed - filteredMetrics.turnoverMinutes)} surg + {formatDuration(filteredMetrics.turnoverMinutes)} turn
-                        </div>
-                    </div>
-                    <div className="stat-icon icon-blue">
-                        ⏱️
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-content">
-                        <div className="stat-label">Available Capacity</div>
-                        <div className="stat-value">
-                            {filteredMetrics.totalCapacity - filteredMetrics.minutesUsed > 0 
-                                ? formatDuration(filteredMetrics.totalCapacity - filteredMetrics.minutesUsed)
-                                : '0m'
-                            }
-                        </div>
-                        <div className="stat-sublabel">
-                            {filteredMetrics.totalCapacity - filteredMetrics.minutesUsed > 0
-                                ? `${((filteredMetrics.totalCapacity - filteredMetrics.minutesUsed) / filteredMetrics.totalCapacity * 100).toFixed(1)}% remaining`
-                                : '0% remaining (Over Capacity)'
-                            }
-                        </div>
-                    </div>
-                    <div className="stat-icon icon-green">
-                        📊
-                    </div>
-                </div>
-            </div>
-
-            {/* OR Cards Grid */}
-            <div className="section-header">
-                <h3>Operating Room Details</h3>
-                <div className="or-info-badge">
-                    {selectedOR === 'all'
-                        ? `${OR_COUNT} Room • ${viewType.charAt(0).toUpperCase() + viewType.slice(1)} View`
-                        : `OR ${selectedOR} • ${viewType.charAt(0).toUpperCase() + viewType.slice(1)} View`}
-                </div>
-            </div>
-
-            <div className="or-grid">{utilizationData.orUtilization
-                .filter(or => selectedOR === 'all' || or.orNumber === parseInt(selectedOR))
-                .map((or) => (
-                    <div key={or.orNumber} className="content-card or-card">
-                        <div className="or-card-header-section">
-                            <div className="or-header-top">
-                                <h3 className="or-title">{or.orName}</h3>
-                                <span className="utilization-badge" style={{
-                                    backgroundColor: getUtilizationBg(or.utilizationPercent),
-                                    color: getUtilizationColor(or.utilizationPercent)
-                                }}>
-                                    {or.utilizationPercent.toFixed(1)}%
-                                </span>
-                            </div>
-                            <div className="or-status-label" style={{ color: getUtilizationColor(or.utilizationPercent) }}>
-                                {getUtilizationLabel(or.utilizationPercent)} Utilization
-                            </div>
-                        </div>
-
-                        <div className="or-progress-section">
-                            <div className="progress-bar-container">
-                                <div
-                                    className="progress-bar-fill"
-                                    style={{
-                                        width: `${Math.min(or.utilizationPercent, 100)}%`,
-                                        backgroundColor: getUtilizationColor(or.utilizationPercent)
-                                    }}
-                                />
-                            </div>
-                            <div className="progress-labels">
-                                <span>{formatDuration(or.minutesUsed)} used</span>
-                                <span>
-                                    {TOTAL_MINUTES_PER_OR - or.minutesUsed > 0 
-                                        ? `${formatDuration(TOTAL_MINUTES_PER_OR - or.minutesUsed)} available`
-                                        : '0m available'
-                                    }
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="or-stats-mini">
-                            <div className="mini-stat">
-                                <div className="mini-stat-icon">⏰</div>
-                                <div>
-                                    <div className="mini-stat-value">{formatDuration(or.minutesUsed)}</div>
-                                    <div className="mini-stat-label">Used</div>
-                                </div>
-                            </div>
-                            <div className="mini-stat">
-                                <div className="mini-stat-icon">📋</div>
-                                <div>
-                                    <div className="mini-stat-value">{or.surgeries.length}</div>
-                                    <div className="mini-stat-label">Surgeries</div>
-                                </div>
-                            </div>
-                            <div className="mini-stat">
-                                <div className="mini-stat-icon">📊</div>
-                                <div>
-                                    <div className="mini-stat-value">
-                                        {TOTAL_MINUTES_PER_OR - or.minutesUsed > 0 
-                                            ? formatDuration(TOTAL_MINUTES_PER_OR - or.minutesUsed)
-                                            : '0m'
-                                        }
-                                    </div>
-                                    <div className="mini-stat-label">Available</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="or-surgeries-list">
-                            <div className="surgeries-list-header">
-                                <span>Scheduled Surgeries</span>
-                                <span className="count-badge">{or.surgeries.length}</span>
-                            </div>
-                            {or.surgeries.length > 0 ? (
-                                <div className="surgeries-items">
-                                    {or.surgeries.map((surgery, idx) => (
-                                        <div key={idx} className="surgery-item">
-                                            <div className="surgery-time-badge">
-                                                {viewType !== 'day' && <span className="surgery-date-small">{new Date(surgery.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}</span>}
-                                                {surgery.startTime && <div className="surgery-time">{formatTime(surgery.startTime)}</div>}
-                                            </div>
-                                            <div className="surgery-details">
-                                                <div className="surgery-patient">{surgery.patientName}</div>
-                                                <div className="surgery-doctor">{surgery.doctorName}</div>
-                                            </div>
-                                            <div className="surgery-duration" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    {surgery.hasActualTimes && (
-                                                        <span title="Actual Logged Time" style={{ fontSize: '0.65rem', background: '#ecfdf5', color: '#059669', padding: '1px 5px', borderRadius: '4px', border: '1px solid #10b981', fontWeight: 'bold' }}>ACTUAL</span>
-                                                    )}
-                                                    <span>{formatDuration(surgery.duration)}</span>
-                                                </div>
-                                                {surgery.turnover > 0 && (
-                                                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'normal' }}>
-                                                        + {surgery.turnover}m turn
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
+            {/* Simplified Grid */}
+            <div className="or-util-simplified-grid">
+                {/* Left: Utilization Pie Chart */}
+                <div className="chart-card glass-card">
+                    <h3 className="chart-title">Utilization Breakdown</h3>
+                    <div className="utilization-pie-container">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={70}
+                                    outerRadius={100}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                    startAngle={90}
+                                    endAngle={-270}
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                                     ))}
-                                </div>
-                            ) : (
-                                <div className="empty-state">
-                                    No surgeries scheduled
-                                </div>
-                            )}
+                                </Pie>
+                                <RechartsTooltip 
+                                    formatter={(value) => formatDuration(value)}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="pie-center-label">
+                            <span className="pie-center-value">{filteredMetrics.utilization.toFixed(1)}%</span>
+                            <span className="pie-center-text">Utilized</span>
                         </div>
                     </div>
-                ))}
+                    <div className="chart-legend">
+                        <div className="legend-item">
+                            <div className="legend-color" style={{ backgroundColor: '#3b82f6' }}></div>
+                            <span>Used: {formatDuration(filteredMetrics.minutesUsed)}</span>
+                        </div>
+                        <div className="legend-item">
+                            <div className="legend-color" style={{ backgroundColor: '#e2e8f0' }}></div>
+                            <span>Available: {formatDuration(Math.max(0, filteredMetrics.totalCapacity - filteredMetrics.minutesUsed))}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right: Key Financials & Metrics */}
+                <div className="simplified-metrics-column">
+                    <div className="compact-stat-card">
+                        <div className="compact-stat-info">
+                            <span className="compact-stat-label">Total Revenue</span>
+                            <span className="compact-stat-value" style={{ color: '#10b981' }}>{formatCurrency(filteredMetrics.revenue)}</span>
+                        </div>
+                        <div style={{ fontSize: '1.5rem' }}>💰</div>
+                    </div>
+
+                    <div className="compact-stat-card">
+                        <div className="compact-stat-info">
+                            <span className="compact-stat-label">Net Profit</span>
+                            <span className="compact-stat-value" style={{ color: filteredMetrics.profit >= 0 ? '#10b981' : '#ef4444' }}>
+                                {formatCurrency(filteredMetrics.profit)}
+                            </span>
+                        </div>
+                        <div style={{ fontSize: '1.5rem' }}>📈</div>
+                    </div>
+
+                    <div className="compact-stat-card">
+                        <div className="compact-stat-info">
+                            <span className="compact-stat-label">Total Surgeries</span>
+                            <span className="compact-stat-value">{filteredMetrics.surgeries}</span>
+                        </div>
+                        <div style={{ fontSize: '1.5rem' }}>🏥</div>
+                    </div>
+
+                    <div className="compact-stat-card">
+                        <div className="compact-stat-info">
+                            <span className="compact-stat-label">Efficiency Ratio</span>
+                            <span className="compact-stat-value" style={{ color: '#3b82f6' }}>
+                                {(() => {
+                                    const totalCosts = filteredMetrics.cost + filteredMetrics.laborCost + filteredMetrics.suppliesCost;
+                                    return totalCosts > 0 ? (filteredMetrics.revenue / totalCosts).toFixed(2) : '0.00';
+                                })()}x
+                            </span>
+                        </div>
+                        <div style={{ fontSize: '1.5rem' }}>⚖️</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Compact Surgery List */}
+            <div className="compact-surgery-list">
+                <div className="compact-list-header">
+                    <h3 className="compact-list-title">Scheduled Surgeries</h3>
+                    <div className="or-info-badge">
+                        {filteredMetrics.surgeries} Procedures
+                    </div>
+                </div>
+                <div className="list-content">
+                    {utilizationData.orUtilization
+                        .filter(or => selectedOR === 'all' || or.orNumber === parseInt(selectedOR))
+                        .flatMap(or => or.surgeries)
+                        .length > 0 ? (
+                            utilizationData.orUtilization
+                                .filter(or => selectedOR === 'all' || or.orNumber === parseInt(selectedOR))
+                                .flatMap(or => or.surgeries)
+                                .map((s, idx) => (
+                                    <div key={idx} className="surgery-row">
+                                        <div className="row-time">{s.startTime ? formatTime(s.startTime) : 'N/A'}</div>
+                                        <div className="row-patient">{s.patientName}</div>
+                                        <div className="row-surgeon">{s.doctorName}</div>
+                                        <div className="row-duration">
+                                            {formatDuration(s.duration)}
+                                            {s.hasActualTimes && <span style={{ marginLeft: '4px', fontSize: '0.6rem', color: '#10b981', border: '1px solid #10b981', padding: '1px 3px', borderRadius: '3px' }}>ACT</span>}
+                                        </div>
+                                    </div>
+                                ))
+                        ) : (
+                            <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+                                <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📅</div>
+                                <p>No surgeries found for this period</p>
+                            </div>
+                        )
+                    }
+                </div>
             </div>
         </div>
     );
