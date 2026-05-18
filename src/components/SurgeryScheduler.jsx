@@ -62,6 +62,8 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
     const [orSchedule, setOrSchedule] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState(formatDateLocal(new Date()).slice(0, 7)); // YYYY-MM format
     const [expandedMonths, setExpandedMonths] = useState(new Set([formatDateLocal(new Date()).slice(0, 7)]));
+    const [monthPages, setMonthPages] = useState({});
+    const [surgeriesPerPage, setSurgeriesPerPage] = useState(10);
     const [selectedProcedureGroup, setSelectedProcedureGroup] = useState('');
     const [cptSearchQuery, setCptSearchQuery] = useState('');
     const [includeLaborSupplies, setIncludeLaborSupplies] = useState(() => {
@@ -1000,12 +1002,18 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                             </div>
                         ) : (
                             availableMonths.map(monthKey => {
-                                const monthSurgeries = surgeriesByMonth[monthKey];
+                                const globalMonthSurgeries = surgeriesByMonth[monthKey];
                                 const isExpanded = expandedMonths.has(monthKey);
-                                const monthTotal = monthSurgeries.reduce((sum, surgery) => {
+                                const monthTotal = globalMonthSurgeries.reduce((sum, surgery) => {
                                     const { netProfit } = calculateSurgeryFinancials(surgery);
                                     return sum + netProfit;
                                 }, 0);
+                                
+                                const currentPage = monthPages[monthKey] || 1;
+                                const totalPages = Math.ceil(globalMonthSurgeries.length / surgeriesPerPage);
+                                const indexOfLast = currentPage * surgeriesPerPage;
+                                const indexOfFirst = indexOfLast - surgeriesPerPage;
+                                const currentSurgeries = globalMonthSurgeries.slice(indexOfFirst, indexOfLast);
 
                                 return (
                                     <div key={monthKey} style={{ marginBottom: '1rem', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
@@ -1048,7 +1056,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                     fontSize: '0.85rem',
                                                     fontWeight: '600'
                                                 }}>
-                                                    {monthSurgeries.length} {monthSurgeries.length === 1 ? 'Surgery' : 'Surgeries'}
+                                                    {globalMonthSurgeries.length} {globalMonthSurgeries.length === 1 ? 'Surgery' : 'Surgeries'}
                                                 </span>
                                             </div>
                                             <div style={{ fontSize: '1.2rem', fontWeight: '700' }}>
@@ -1074,7 +1082,7 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {monthSurgeries.map(surgery => {
+                                                        {currentSurgeries.map(surgery => {
                                                             const { cptTotal, orCost, totalValue, netProfit, isCosmetic: isCosmeticSurgery } = calculateSurgeryFinancials(surgery);
                                                             const patientObj = patients.find(p => String(p.id) === String(surgery.patient_id));
                                                             const patientMrn = patientObj ? patientObj.mrn : (surgery.patients ? surgery.patients.mrn : (surgery.patient_mrn || surgery.patientMrn || '---'));
@@ -1304,6 +1312,46 @@ const SurgeryScheduler = ({ patients, surgeons, cptCodes, surgeries = [], settin
                                                         })}
                                                     </tbody>
                                                 </table>
+                                                {globalMonthSurgeries.length > 0 && (
+                                                    <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: '#f8fafc' }}>
+                                                        <div className="limit-box">
+                                                            <label style={{ marginRight: '0.5rem', color: '#64748b' }}>Show:</label>
+                                                            <select 
+                                                                value={surgeriesPerPage} 
+                                                                onChange={(e) => { 
+                                                                    setSurgeriesPerPage(Number(e.target.value)); 
+                                                                    setMonthPages(prev => ({ ...prev, [monthKey]: 1 })); 
+                                                                }}
+                                                                style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #e2e8f0', color: '#1e293b' }}
+                                                            >
+                                                                <option value={10}>10</option>
+                                                                <option value={20}>20</option>
+                                                                <option value={50}>50</option>
+                                                                <option value={100}>100</option>
+                                                            </select>
+                                                            <span style={{ marginLeft: '0.5rem', color: '#64748b' }}>entries</span>
+                                                        </div>
+                                                        <div className="pagination-buttons" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                                            <button 
+                                                                disabled={currentPage === 1} 
+                                                                onClick={() => setMonthPages(prev => ({ ...prev, [monthKey]: Math.max((prev[monthKey] || 1) - 1, 1) }))}
+                                                                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f1f5f9' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: currentPage === 1 ? '#94a3b8' : '#1e293b', fontWeight: '500', transition: 'all 0.2s' }}
+                                                            >
+                                                                Previous
+                                                            </button>
+                                                            <span style={{ margin: '0 0.5rem', color: '#64748b', fontSize: '0.9rem' }}>
+                                                                Page <strong style={{ color: '#1e293b', margin: '0 4px' }}>{currentPage}</strong> of <strong style={{ color: '#1e293b', margin: '0 4px' }}>{totalPages || 1}</strong>
+                                                            </span>
+                                                            <button 
+                                                                disabled={currentPage === totalPages || totalPages === 0} 
+                                                                onClick={() => setMonthPages(prev => ({ ...prev, [monthKey]: Math.min((prev[monthKey] || 1) + 1, totalPages) }))}
+                                                                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', background: currentPage === totalPages || totalPages === 0 ? '#f1f5f9' : 'white', cursor: currentPage === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer', color: currentPage === totalPages || totalPages === 0 ? '#94a3b8' : '#1e293b', fontWeight: '500', transition: 'all 0.2s' }}
+                                                            >
+                                                                Next
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>

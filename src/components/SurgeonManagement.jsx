@@ -5,6 +5,15 @@ import './Management.css';
 
 const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [surgeonsPerPage, setSurgeonsPerPage] = useState(10);
+
+    // Pagination calculations
+    const indexOfLastSurgeon = currentPage * surgeonsPerPage;
+    const indexOfFirstSurgeon = indexOfLastSurgeon - surgeonsPerPage;
+    const currentSurgeons = surgeons.slice(indexOfFirstSurgeon, indexOfLastSurgeon);
+    const totalPages = Math.ceil(surgeons.length / surgeonsPerPage);
+
     const [editingSurgeon, setEditingSurgeon] = useState(null);
     const [formData, setFormData] = useState({
         firstname: '',
@@ -279,7 +288,7 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
                                 <td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>No surgeons found.</td>
                             </tr>
                         ) : (
-                            surgeons.map(surgeon => (
+                            currentSurgeons.map(surgeon => (
                                 <tr key={surgeon.id}>
                                     <td>{formatSurgeonName(surgeon)}</td>
                                     <td>{surgeon.specialty}</td>
@@ -318,6 +327,44 @@ const SurgeonManagement = ({ surgeons, onUpdate, onDelete, onAdd }) => {
                     </tbody>
                 </table>
             </div>
+
+            {surgeons.length > 0 && (
+                <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', padding: '1rem', background: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                    <div className="limit-box">
+                        <label style={{ marginRight: '0.5rem', color: '#64748b' }}>Show:</label>
+                        <select 
+                            value={surgeonsPerPage} 
+                            onChange={(e) => { setSurgeonsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                            style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #e2e8f0', color: '#1e293b' }}
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                        <span style={{ marginLeft: '0.5rem', color: '#64748b' }}>entries</span>
+                    </div>
+                    <div className="pagination-buttons" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button 
+                            disabled={currentPage === 1} 
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f1f5f9' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: currentPage === 1 ? '#94a3b8' : '#1e293b', fontWeight: '500', transition: 'all 0.2s' }}
+                        >
+                            Previous
+                        </button>
+                        <span style={{ margin: '0 0.5rem', color: '#64748b', fontSize: '0.9rem' }}>
+                            Page <strong style={{ color: '#1e293b', margin: '0 4px' }}>{currentPage}</strong> of <strong style={{ color: '#1e293b', margin: '0 4px' }}>{totalPages || 1}</strong>
+                        </span>
+                        <button 
+                            disabled={currentPage === totalPages || totalPages === 0} 
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0', background: currentPage === totalPages || totalPages === 0 ? '#f1f5f9' : 'white', cursor: currentPage === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer', color: currentPage === totalPages || totalPages === 0 ? '#94a3b8' : '#1e293b', fontWeight: '500', transition: 'all 0.2s' }}
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {isModalOpen && (
                 <div className="modal-overlay">

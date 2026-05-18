@@ -208,15 +208,15 @@ const CostAnalysis = ({ surgeries, cptCodes, surgeons, settings, procedureGroupI
                     <h2 className="page-title">Financial Analytics</h2>
                     <p className="page-subtitle">Comprehensive revenue, cost, and performance insights</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', marginLeft: '1rem' }}>
+                <div className="toggle-container">
                     <input
                         type="checkbox"
                         id="cost-analysis-toggle-costs"
+                        className="custom-toggle"
                         checked={includeLaborSupplies}
                         onChange={(e) => setIncludeLaborSupplies(e.target.checked)}
-                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                     />
-                    <label htmlFor="cost-analysis-toggle-costs" style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                    <label htmlFor="cost-analysis-toggle-costs" className="toggle-label">
                         Include Labor/Supplies
                     </label>
                 </div>
